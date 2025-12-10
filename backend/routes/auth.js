@@ -6,19 +6,19 @@ const authController = require('../controllers/authController');
 // Register
 router.post('/register', authController.register);
 
-// Verify OTP (after register)
+// Verify OTP
 router.post('/verify-otp', authController.verifyOtp);
 
 // Login
 router.post('/login', authController.login);
 
-// Google Login (send idToken from client)
-router.post('/google-login', authController.googleLogin);
+// Google Login
+router.post('/google-login', authController.googleLogin); // <--- This route calls the function we just fixed
 
-// Request password reset (send OTP)
+// Request password reset
 router.post('/request-reset', authController.requestPasswordReset);
 
-// Reset password (with OTP)
+// Reset password
 router.post('/reset-password', authController.resetPassword);
 
 module.exports = router;

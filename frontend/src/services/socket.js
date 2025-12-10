@@ -1,18 +1,28 @@
-// frontend/src/services/socket.js
+// frontend/services/socket.js
 import { io } from "socket.io-client";
 
-const PROD = import.meta.env.PROD;
-const BACKEND_WS = PROD ? (import.meta.env.VITE_API_WS || window.location.origin) : (import.meta.env.VITE_API_WS || 'http://localhost:5000');
+// FIX: The backend URL should be the relative origin.
+// Vite's proxy will handle forwarding this to http://localhost:5000
+const BACKEND_WS = window.location.origin;
+
+const auth = {};
+try {
+  const token = localStorage.getItem('token');
+  const meId = localStorage.getItem('meId');
+  if (token) auth.token = token;
+  if (meId) auth.userId = meId;
+} catch {}
 
 const socket = io(BACKEND_WS, {
-  autoConnect: false,
+  autoConnect: false, // We connect manually in main.jsx after auth
   transports: ["websocket", "polling"],
-  path: '/socket.io' // default, ensures same path used by server
+  path: '/socket.io', // This path must match the backend
+  auth
 });
 
+// Update auth details dynamically
+export const updateSocketAuth = (token, userId) => {
+	socket.auth = { token, userId };
+};
+
 export default socket;
-
-
-
-
-

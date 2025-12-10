@@ -1,13 +1,11 @@
 // backend/routes/comments.js
-const express = require('express');
-const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-const commentsController = require('../controllers/commentsController');
+const router = require("express").Router();
+const { protect } = require("../middleware/authMiddleware");
+const comments = require("../controllers/commentsController");
 
-// Add comment to a post
-router.post('/:postId', protect, commentsController.addComment);
-
-// Reply to a comment
-router.post('/reply/:commentId', protect, commentsController.replyToComment);
+router.post("/:postId", protect, comments.create);
+router.get("/:postId", protect, comments.list);
+router.delete("/:commentId", protect, comments.remove);
+router.post("/like/:commentId", protect, comments.toggleLike);
 
 module.exports = router;

@@ -1,196 +1,179 @@
-// frontend/src/components/posts/PostCard.jsx
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { 
+  FaHeart, 
+  FaRegHeart, 
+  FaComment, 
+  FaShare, 
+  FaBookmark, 
+  FaRegBookmark, 
+  FaEllipsisH 
+} from "react-icons/fa";
 import { motion } from "framer-motion";
 import API from "../../services/api";
-import LazyImage from "../ui/LazyImage";
-import { useToast } from "../ui/ToastProvider";
-import ConfirmModal from "../ui/ConfirmModal";
 import { useSelector } from "react-redux";
+import { useToast } from "../ui/ToastProvider";
+import UserAvatar from "../ui/UserAvatar"; 
 
-const PostCard = ({ post: initialPost }) => {
+export default function PostCard({ post: initialPost }) {
+  const myId = useSelector((s) => s.auth.user?._id);
   const [post, setPost] = useState(initialPost);
   const [liking, setLiking] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const toast = useToast();
-  const myId = localStorage.getItem("meId") || (useSelector(s => s.auth?.user?._id) || null);
+  const [saved, setSaved] = useState(false);
+  const { add: addToast } = useToast();
 
   useEffect(() => setPost(initialPost), [initialPost]);
 
-  const likedByMe = !!(post?.likes && post.likes.map(String).includes(myId));
-
-  const toggleLike = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast.add('Login to like posts', { type: 'error' });
-      return;
-    }
-
-    if (!post?._id) return;
-    if (liking) return;
-    setLiking(true);
-
-    const prevLikes = post.likes || [];
-    setPost((p) => {
-      const copy = { ...p };
-      copy.likes = likedByMe ? prevLikes.filter(id => String(id) !== myId) : [...prevLikes, myId];
-      return copy;
-    });
-
+  // --- Voting Logic ---
+  const handleVote = async (index) => {
     try {
-      const res = await API.put(`/posts/like/${post._id}`);
-      const liked = res.data?.liked;
-      setPost((p) => {
-        const copy = { ...p };
-        if (liked) {
-          copy.likes = Array.from(new Set([...(p.likes || []).map(String), myId]));
-        } else {
-          copy.likes = (p.likes || []).map(String).filter(id => id !== myId);
-        }
-        return copy;
-      });
-      toast.add(liked ? "Liked" : "Unliked", { type: "info" });
+      const res = await API.post(`/polls/${post._id}/vote/${index}`);
+      setPost(res.data); // Update local state with new poll data
+      addToast("Vote recorded!", { type: "success" });
     } catch (err) {
-      setPost((p) => ({ ...p, likes: prevLikes }));
-      toast.add(err.userMessage || "Failed to toggle like", { type: "error" });
+      addToast(err.userMessage || "Failed to vote", { type: "error" });
+    }
+  };
+
+  // --- Like Logic ---
+  const toggleLike = async () => {
+    if (!post?._id || liking) return;
+    setLiking(true);
+    
+    // Optimistic Update
+    const isLiked = post.likes.includes(myId);
+    setPost(p => ({
+        ...p,
+        likes: isLiked ? p.likes.filter(id => id !== myId) : [...p.likes, myId]
+    }));
+    
+    try {
+      await API.put(`/posts/like/${post._id}`);
+    } catch (err) {
+      setPost(initialPost); // Revert on failure
     } finally {
       setLiking(false);
     }
   };
 
-  const openComments = () => {
-    if (!post?._id) return;
-    window.dispatchEvent(new CustomEvent("openComments", { detail: post._id }));
-  };
+  // --- Calculations & Helper Variables ---
+  const likedByMe = post?.likes?.includes(myId);
+  const images = post.images || post.media?.filter(m => m.type === 'image').map(m => m.url) || [];
+  const videos = post.videos || post.media?.filter(m => m.type === 'video').map(m => m.url) || [];
 
-  const openView = () => {
-    if (!post?._id) return;
-    window.dispatchEvent(new CustomEvent("openViewPost", { detail: post._id }));
-  };
-
-  // Delete flow
-  const canDelete = (() => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || 'null') || null; // optional stored user
-      const role = user?.role || (useSelector(s => s.auth?.user?.role) || null);
-      const uidFromRedux = useSelector(s => s.auth?.user?._id);
-      // Owner or admin
-      if (!post || !post.user) return false;
-      const ownerId = (post.user._id || post.user) && String(post.user._id || post.user);
-      const currentId = myId || uidFromRedux;
-      if (!currentId) return false;
-      if (ownerId === String(currentId)) return true;
-      if (role === 'admin') return true;
-      // fallback: if auth state has role
-      const authUser = useSelector(s => s.auth?.user);
-      if (authUser?.role === 'admin') return true;
-      return false;
-    } catch (e) {
-      return false;
-    }
-  })();
-
-  const doDelete = async () => {
-    if (!post || !post._id) return;
-    setDeleting(true);
-    try {
-      await API.delete(`/posts/${post._id}`);
-      toast.add('Post deleted', { type: 'info' });
-
-      // notify global listeners (Feed) to remove it from list
-      window.dispatchEvent(new CustomEvent('postDeleted', { detail: post._id }));
-
-      // Optionally close any open post views — signal to PostModal etc.
-      window.dispatchEvent(new CustomEvent('postDeleted:close', { detail: post._id }));
-    } catch (err) {
-      console.error('delete post err', err);
-      toast.add(err.userMessage || 'Failed to delete post', { type: 'error' });
-    } finally {
-      setDeleting(false);
-      setConfirmOpen(false);
-    }
-  };
-
-  if (!post) return null;
+  // --- FIX: Calculate totalVotes HERE (Top Level) ---
+  // This ensures 'totalVotes' is available when the poll options map runs below.
+  const totalVotes = post?.poll?.options?.reduce((acc, o) => acc + (o.votes?.length || 0), 0) || 0;
 
   return (
-    <>
-      <motion.article layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="card p-4 mb-4">
-        <div className="flex items-start gap-4">
-          <img src={post.user?.avatar || "/default-avatar.png"} className="w-12 h-12 rounded-full object-cover" alt={post.user?.name} />
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{post.user?.name}</div>
-                <div className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleString()}</div>
-              </div>
-              <div className="text-sm text-gray-500">{(post.likes && post.likes.length) || 0} ❤️</div>
-            </div>
-
-            <p className="mt-3 text-sm leading-6">{post.content}</p>
-
-            {post.images?.length > 0 && (
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                {post.images.map((img, i) => (
-                  <LazyImage key={`${post._id}-img-${i}`} src={img} alt={`post-${i}`} className="h-52 rounded-lg" />
-                ))}
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center gap-4 text-sm text-gray-600">
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={toggleLike}
-                disabled={liking}
-                className={`flex items-center gap-2 ${likedByMe ? "text-pink-500" : ""}`}
-                aria-pressed={likedByMe}
-              >
-                <motion.span layout key={likedByMe ? "liked" : "unliked"} initial={{ scale: 0.8 }} animate={{ scale: likedByMe ? 1.15 : 1 }}>
-                  {likedByMe ? "💗" : "🤍"}
-                </motion.span>
-                <span>{(post.likes && post.likes.length) || 0} Like</span>
-              </motion.button>
-
-              <button onClick={openComments} className="flex items-center gap-2">
-                💬 <span>{(post.comments && post.comments.length) || 0} Comment</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  if (!post._id) return;
-                  const u = `${window.location.origin}/post/${post._id}`;
-                  if (navigator.share) navigator.share({ title: post.content?.slice(0, 50) || "Post", url: u }).catch(() => {});
-                  else navigator.clipboard?.writeText(u).then(() => toast.add("Link copied"));
-                }}
-                className="flex items-center gap-2"
-              >
-                🔗 Share
-              </button>
-
-              <button onClick={openView} className="ml-auto px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">View</button>
-
-              {canDelete && (
-                <button onClick={() => setConfirmOpen(true)} className="ml-2 px-3 py-1 rounded bg-red-600 text-white">
-                  Delete
-                </button>
-              )}
-            </div>
+    <motion.article 
+        layout 
+        initial={{ opacity: 0, y: 10 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6 overflow-hidden"
+    >
+      {/* Header */}
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link to={`/profile/${post.user?._id}`}>
+            <UserAvatar src={post.user?.avatar} name={post.user?.name} className="w-10 h-10" />
+          </Link>
+          <div>
+            <Link to={`/profile/${post.user?._id}`} className="font-bold text-sm hover:text-indigo-500 transition">
+                {post.user?.name}
+            </Link>
+            <div className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</div>
           </div>
         </div>
-      </motion.article>
+        <button className="text-gray-400 hover:text-gray-600"><FaEllipsisH /></button>
+      </div>
 
-      <ConfirmModal
-        isOpen={confirmOpen}
-        title="Delete post?"
-        description="This action will permanently delete the post. Are you sure you want to continue?"
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        loading={deleting}
-        onConfirm={doDelete}
-        onCancel={() => setConfirmOpen(false)}
-      />
-    </>
+      {/* Content */}
+      <div className="px-4 pb-2 text-sm leading-relaxed whitespace-pre-wrap dark:text-gray-200">
+        {post.content}
+      </div>
+
+      {/* Media */}
+      {images.length > 0 && (
+        <div className="mt-2">
+            <img 
+                src={images[0]} 
+                alt="Post content" 
+                className="w-full max-h-[500px] object-cover"
+                onDoubleClick={toggleLike}
+            />
+        </div>
+      )}
+      {videos.length > 0 && (
+        <div className="mt-2">
+            <video src={videos[0]} controls className="w-full max-h-[500px] object-cover bg-black" />
+        </div>
+      )}
+
+      {/* Polls Section */}
+      {post.poll && post.poll.options && (
+        <div className="p-4">
+            <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700">
+                <h4 className="font-bold mb-3 text-sm">{post.poll.question}</h4>
+                <div className="space-y-2">
+                    {post.poll.options.map((opt, idx) => {
+                        // Calculate percentage safely using the totalVotes calculated above
+                        const percent = totalVotes === 0 ? 0 : Math.round(((opt.votes?.length || 0) / totalVotes) * 100);
+                        const hasVoted = opt.votes?.includes(myId);
+
+                        return (
+                            <button 
+                                key={idx} 
+                                onClick={() => handleVote(idx)}
+                                className={`relative w-full text-left p-3 rounded-lg text-sm font-medium transition overflow-hidden border ${hasVoted ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            >
+                                {/* Progress Bar Background */}
+                                <div 
+                                    className="absolute top-0 left-0 bottom-0 bg-indigo-200 dark:bg-indigo-600/40 transition-all duration-500" 
+                                    style={{ width: `${percent}%` }} 
+                                />
+                                
+                                {/* Text Label (z-10 ensures it sits above the bar) */}
+                                <div className="relative flex justify-between z-10">
+                                    <span>{opt.text}</span>
+                                    <span>{percent}%</span>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="mt-2 text-xs text-gray-500 text-right">
+                    {new Date(post.poll.expiresAt) < new Date() ? "Poll Ended" : "Voting Open"}
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+            <button onClick={toggleLike} className="flex items-center gap-2 group">
+                <motion.div whileTap={{ scale: 0.8 }}>
+                    {likedByMe ? <FaHeart className="text-red-500 text-xl" /> : <FaRegHeart className="text-xl group-hover:text-gray-600" />}
+                </motion.div>
+                <span className="font-semibold text-sm">{post.likes?.length || 0}</span>
+            </button>
+
+            <button 
+                onClick={() => window.dispatchEvent(new CustomEvent("openComments", { detail: post._id }))} 
+                className="flex items-center gap-2 group"
+            >
+                <FaComment className="text-xl text-gray-500 group-hover:text-indigo-500 transition" />
+                <span className="font-semibold text-sm">{post.comments?.length || 0}</span>
+            </button>
+
+            <button className="text-gray-500 hover:text-green-500 transition"><FaShare className="text-xl" /></button>
+        </div>
+        
+        <button onClick={() => setSaved(!saved)}>
+            {saved ? <FaBookmark className="text-indigo-600 text-xl" /> : <FaRegBookmark className="text-gray-500 text-xl" />}
+        </button>
+      </div>
+    </motion.article>
   );
-};
-
-export default PostCard;
+}

@@ -1,0 +1,11 @@
+const mongoose = require('mongoose');
+
+const TransactionSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  type: { type: String, enum: ['credit', 'debit'], required: true },
+  amount: { type: Number, required: true },
+  description: String,
+  status: { type: String, enum: ['pending', 'success', 'failed'], default: 'success' },
+}, { timestamps: true });
+
+module.exports = mongoose.model('Transaction', TransactionSchema);

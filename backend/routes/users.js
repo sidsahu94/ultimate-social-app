@@ -1,42 +1,26 @@
 // backend/routes/users.js
+
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-const upload = require('../utils/multer');
+const users = require('../controllers/usersController');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
+const upload = require('../utils/multer'); // Ensure this import exists
 
-// import controller functions and validate they exist
-const usersController = require('../controllers/usersController');
+// 1. SPECIFIC ROUTES FIRST (Crucial!)
+router.get('/me', protect, users.getMe);
+router.get('/search', async (req, res) => { /* ... keep your search logic ... */ });
 
-// destructure handlers (makes it easier to see missing ones)
-const { getMe, getUserById, updateProfile, followToggle } = usersController || {};
+// This was causing the 500 error because it was below /:id
+router.get('/follow-requests', protect, users.getFollowRequests); 
+router.post('/requests/:id/approve', protect, users.acceptFollowRequest);
+router.post('/requests/:id/reject', protect, users.declineFollowRequest);
 
-// helper to assert handlers are functions
-const assertHandler = (fn, name) => {
-  if (typeof fn !== 'function') {
-    throw new Error(`usersController.${name} is not a function or not exported properly`);
-  }
-};
-
-try {
-  assertHandler(getMe, 'getMe');
-  assertHandler(getUserById, 'getUserById');
-  assertHandler(updateProfile, 'updateProfile');
-  assertHandler(followToggle, 'followToggle');
-} catch (err) {
-  // throw early so server startup surfaces a clear error message
-  console.error('Routes/users.js initialization error:', err.message);
-  throw err;
-}
-
-// routes
-router.get('/me', protect, getMe);
-router.get('/:id', protect, getUserById);
-router.put(
-  '/:id',
-  protect,
-  upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]),
-  updateProfile
-);
-router.post('/:id/follow', protect, followToggle);
+// 2. DYNAMIC ROUTES LAST
+router.get('/:id', optionalAuth, users.getUserById);
+router.put('/:id', protect, upload.fields([{name:'avatar'},{name:'coverPhoto'}]), users.updateProfile);
+router.post('/:id/follow', protect, users.followToggle);
+router.get('/:id/followers', optionalAuth, users.listFollowers);
+router.get('/:id/following', optionalAuth, users.listFollowing);
+router.put('/password', protect, users.updatePassword);
 
 module.exports = router;

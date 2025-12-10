@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  @apply bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Glass Cards */
+.card {
+  @apply backdrop-blur-md bg-white/70 dark:bg-gray-800/60 border border-white/30 dark:border-gray-700/40 shadow-xl rounded-2xl transition-all duration-300;
+}
+.card:hover {
+  transform: translateY(-4px);
+  @apply shadow-2xl;
+}
+
+/* Buttons */
+.btn-primary {
+  @apply bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold px-4 py-2 rounded-xl shadow-md transition-transform duration-200;
+}
+.btn-primary:hover { transform: scale(1.05); }
+.btn-error {
+  @apply bg-gradient-to-r from-red-500 to-pink-600 text-white px-4 py-2 rounded-xl shadow-md;
+}
+
+/* Inputs */
+input, textarea, select {
+  @apply bg-white/60 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition;
+}
+
+/* Navigation Glassbar */
+.navbar {
+  @apply fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/40 dark:bg-gray-900/40 border-b border-white/20 dark:border-gray-700/30 shadow-md flex items-center justify-between px-6 py-3;
+}
+
+/* Story rings */
+.story-ring {
+  @apply rounded-full p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500;
+}
+.story-ring img {
+  @apply rounded-full border-2 border-white dark:border-gray-900;
+}
+
+/* Floating action button */
+.fab {
+  @apply fixed bottom-6 right-6 rounded-full bg-gradient-to-r from-indigo-500 to-pink-500 shadow-xl p-4 text-white text-2xl;
+  animation: pulse 3s infinite;
+}
+@keyframes pulse {
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.1);}
+}
+
+/* Animations */
+.fade-in { animation: fadeIn 0.5s ease forwards; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }

@@ -1,44 +1,74 @@
-// frontend/src/components/profile/FollowButton.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
+import { useToast } from '../ui/ToastProvider';
 
-const FollowButton = ({ userId, onChange }) => {
+const FollowButton = ({ userId, initialStatus, onChange }) => {
   const [loading, setLoading] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const { add: addToast } = useToast();
 
+  // Initialize state
   useEffect(() => {
-    // best-effort: check if current user follows this user by fetching /users/:id (backend returns followers)
-    const check = async () => {
-      try {
-        const res = await API.get(`/users/${userId}`);
-        const followers = res.data.followers || [];
-        const meId = (localStorage.getItem('meId') || null); // optionally set meId on login
-        // fallback: if meId not available, server-side 'isFollowing' would be best.
-        setIsFollowing(!!(followers.find(f => f === meId)));
-      } catch (err) {
-        // ignore
-      }
-    };
-    check();
-  }, [userId]);
+    // If parent passed status, use it. Otherwise fetch.
+    if (initialStatus !== undefined) {
+      setIsFollowing(initialStatus);
+    } else {
+      checkStatus();
+    }
+  }, [userId, initialStatus]);
 
-  const toggle = async () => {
+  const checkStatus = async () => {
     try {
-      setLoading(true);
-      await API.post(`/users/${userId}/follow`);
-      setIsFollowing(s => !s);
-      onChange && onChange();
+      const res = await API.get(`/users/${userId}`);
+      setIsFollowing(res.data.isFollowing);
+    } catch (e) {
+      // quiet fail
+    }
+  };
+
+  const toggle = async (e) => {
+    e.preventDefault(); // Stop link clicks if inside a card
+    e.stopPropagation();
+    
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const r = await API.post(`/users/${userId}/follow`);
+      
+      // Update state based on backend response
+      const nowFollowing = r.data.following; // Backend returns { following: true/false }
+      setIsFollowing(nowFollowing);
+      
+      if (nowFollowing) {
+        addToast("Followed user", { type: 'success' });
+      } else {
+        addToast("Unfollowed user", { type: 'info' });
+      }
+
+      if (onChange) onChange();
     } catch (err) {
-      console.error('follow err', err);
-      alert(err.response?.data?.message || 'Failed to toggle follow');
+      console.error(err);
+      addToast(err.userMessage || 'Action failed', { type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <button onClick={toggle} disabled={loading} className={`px-4 py-2 rounded ${isFollowing ? 'bg-white border' : 'bg-indigo-600 text-white'}`}>
-      {isFollowing ? 'Following' : 'Follow'}
+    <button 
+      onClick={toggle} 
+      disabled={loading}
+      className={`
+        px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 shadow-sm
+        ${isFollowing 
+          ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 border border-transparent' 
+          : 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-md'
+        }
+        ${loading ? 'opacity-70 cursor-wait' : ''}
+      `}
+    >
+      {loading ? '...' : (isFollowing ? 'Following' : 'Follow')}
     </button>
   );
 };
