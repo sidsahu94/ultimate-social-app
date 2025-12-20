@@ -2,14 +2,13 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
 import RightSidebar from './RightSidebar';
-import AudioSpace from '../chat/AudioSpace'; 
-import CommandPalette from '../common/CommandPalette'; 
-import IncomingCall from '../chat/IncomingCall'; 
+import AudioSpace from '../chat/AudioSpace';
+import CommandPalette from '../common/CommandPalette';
+import IncomingCall from '../chat/IncomingCall';
 import { motion } from 'framer-motion';
 
 export default function MainLayout() {
   return (
-    // FIX: Removed solid bg colors. Added text colors and selection style.
     <div className="min-h-screen text-slate-900 dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
       
       {/* Global Overlays */}
@@ -25,7 +24,8 @@ export default function MainLayout() {
         </div>
 
         {/* MIDDLE: Feed/Content */}
-        <main className="min-h-screen w-full max-w-[700px] mx-auto pt-6 px-0 md:px-4 pb-24 md:pb-6 overflow-x-hidden">
+        {/* Added pb-24 for mobile to account for bottom dock */}
+        <main className="min-h-screen w-full max-w-[700px] mx-auto pt-4 md:pt-6 px-0 md:px-4 pb-24 md:pb-6 overflow-x-hidden">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -42,7 +42,7 @@ export default function MainLayout() {
 
       </div>
 
-      {/* Mobile Nav (Bottom Dock) */}
+      {/* Mobile Nav (Bottom Dock) - Rendered by Navbar component conditionally */}
       <div className="md:hidden">
         <Navbar />
       </div>

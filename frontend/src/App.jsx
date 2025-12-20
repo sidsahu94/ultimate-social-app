@@ -87,6 +87,10 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<Feed />} />
             <Route path="/explore" element={<Explore />} />
+            
+            {/* ✅ MOVED REELS HERE SO SIDEBAR SHOWS */}
+            <Route path="/reels" element={<ReelsPage />} />
+            
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/profile/:id" element={<ProfilePage />} />
@@ -113,7 +117,6 @@ export default function App() {
           </Route>
 
           {/* --- Full Screen Pages (No Sidebar) --- */}
-          <Route path="/reels" element={<ReelsPage />} />
           <Route path="/discover" element={<SwipeExplore />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

@@ -43,5 +43,5 @@ router.delete('/:id', protect, postsController.deletePost);
 // It's better to ensure frontend uses /api/comments/:postId, but adding an alias here for a quick fix if needed:
 // router.post('/:postId/comment', protect, commentsController.create);
 // router.get('/:postId/comments', protect, commentsController.list);
-
+router.post('/unfurl', postsController.unfurlLink);
 module.exports = router;

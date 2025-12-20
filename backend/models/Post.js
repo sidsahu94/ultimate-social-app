@@ -1,3 +1,4 @@
+// backend/models/Post.js
 const mongoose = require('mongoose');
 
 const PollOptionSchema = new mongoose.Schema({
@@ -10,15 +11,18 @@ const PostSchema = new mongoose.Schema({
   content: { type:String, default:'' },
   images: [String],
   videos: [String],
+  
+  // Arrays like this caused the index error previously
   hashtags: [String],
+  mentions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  
   likes: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
 
- 
   isArchived: { type:Boolean, default:false },
   isFlagged: { type:Boolean, default:false },
 
-  // Stage-5: Polls
+  // Polls
   poll: {
     question: String,
     options: [PollOptionSchema],
@@ -26,6 +30,9 @@ const PostSchema = new mongoose.Schema({
   }
 }, { timestamps:true });
 
-PostSchema.index({ content:'text', hashtags:1 });
+// ✅ FIX: Changed hashtags from 1 to 'text'.
+// This creates a compound text index. MongoDB allows multiple text fields, 
+// even if they are arrays.
+PostSchema.index({ content: 'text', hashtags: 'text' });
 
 module.exports = mongoose.model('Post', PostSchema);

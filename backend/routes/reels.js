@@ -4,15 +4,13 @@ const { protect } = require('../middleware/authMiddleware');
 const upload = require('../utils/multer');
 const reels = require('../controllers/reelsController');
 
-// Ensure controller functions exist before routing
-if (!reels.uploadReel || !reels.feed) {
-    console.error("Reels controller functions missing!");
-}
-
-// Upload a reel (Video file)
+// Upload reel
 router.post('/upload', protect, upload.any(), reels.uploadReel);
 
-// Get Reels feed
-router.get('/feed', reels.feed);
+// Reels feed
+router.get('/feed', protect, reels.feed);
+
+// ✅ LIKE / UNLIKE REEL (FIX)
+router.put('/like/:id', protect, reels.likeReel);
 
 module.exports = router;

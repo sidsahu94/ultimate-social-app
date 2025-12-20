@@ -1,9 +1,10 @@
+// frontend/src/components/posts/CreatePostModal.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';
 import { FaImage, FaVideo, FaPoll, FaSmile, FaGlobeAmericas, FaTimes, FaMagic } from 'react-icons/fa';
 import { useToast } from '../ui/ToastProvider';
-import { generateCaption } from '../../utils/aiGenerator'; // Ensure utils/aiGenerator.js exists
+import { generateCaption } from '../../utils/aiGenerator';
 
 const FILTERS = [
   { name: 'Normal', val: '' },
@@ -28,21 +29,51 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
   // Filter State
   const [filter, setFilter] = useState('');
 
+  // Hashtag Autocomplete State
+  const [tagSuggestions, setTagSuggestions] = useState([]);
+
   const { add } = useToast();
 
   // Reset state on close/open
   useEffect(() => {
     if (!isOpen) {
-      setText(''); setFiles([]); setPollQ(''); setPollOpts(['','']); setFilter('');
+      setText(''); setFiles([]); setPollQ(''); setPollOpts(['','']); setFilter(''); setTagSuggestions([]);
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Handle Hashtag Detection
+  const handleTextChange = async (e) => {
+    const val = e.target.value;
+    setText(val);
+
+    const words = val.split(/[\s\n]+/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('#') && lastWord.length > 1) {
+        const query = lastWord.slice(1);
+        try {
+            // Ensure you have created backend/routes/tags.js for this to work
+            const res = await API.get(`/tags/search?q=${query}`);
+            setTagSuggestions(res.data || []);
+        } catch(e) {
+            // Silent fail for tags
+        }
+    } else {
+        setTagSuggestions([]);
+    }
+  };
+
+  const insertTag = (tag) => {
+    const words = text.split(/[\s\n]+/);
+    words.pop(); // Remove the partial tag
+    const newText = words.join(' ') + ' #' + tag + ' ';
+    setText(newText);
+    setTagSuggestions([]);
+  };
 
   const handleMagicWrite = async () => {
     setAiLoading(true);
     try {
-      // Simulate or call AI
       const caption = await generateCaption(); 
       setText(prev => (prev ? prev + "\n" + caption : caption));
     } catch(e) {
@@ -71,12 +102,10 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
          // Standard Post
          fd.append('content', text);
          files.forEach(f => fd.append('media', f));
-         // Note: Applying CSS filters to the actual image file requires Canvas processing.
-         // For now, we'll just send the raw file, but in a real app, you'd process it here.
          await API.post('/posts', fd);
       }
 
-      onPosted && onPosted();
+      if (onPosted) onPosted();
       onClose();
       add('Posted successfully!', { type: 'success' });
     } catch(err) {
@@ -86,6 +115,8 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -151,10 +182,22 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
               <div className="relative">
                 <textarea 
                   value={text}
-                  onChange={e => setText(e.target.value)}
-                  placeholder={activeTab === 'reel' ? "Describe your reel..." : "What's on your mind?"}
+                  onChange={handleTextChange}
+                  placeholder={activeTab === 'reel' ? "Describe your reel..." : "What's on your mind? (Try typing #)"}
                   className="w-full h-24 bg-transparent text-lg resize-none outline-none placeholder-gray-400 dark:text-white"
                 />
+                
+                {/* Autocomplete Dropdown */}
+                {tagSuggestions.length > 0 && (
+                    <div className="absolute z-10 bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-xl rounded-xl p-2 mt-1 left-0 w-64 max-h-40 overflow-y-auto">
+                        {tagSuggestions.map(tag => (
+                            <button key={tag} onClick={() => insertTag(tag)} className="block w-full text-left px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded text-sm text-indigo-600 font-medium transition">
+                                #{tag}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 <button 
                   onClick={handleMagicWrite}
                   disabled={aiLoading}

@@ -1,3 +1,4 @@
+// frontend/src/pages/wallet/WalletPage.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaGift, FaCopy } from 'react-icons/fa';
@@ -9,7 +10,7 @@ export default function WalletPage() {
     balance: 0, 
     transactions: [],
     lastAirdrop: null, 
-    referralCode: '...' 
+    referralCode: 'LOADING...' 
   });
   const [loading, setLoading] = useState(true);
   const [recipientId, setRecipientId] = useState('');
@@ -26,7 +27,6 @@ export default function WalletPage() {
         transactions: appsRes.data?.transactions || []
       });
     } catch (e) {
-      // Silent fail or minimal log
       console.warn("Wallet data partial load");
     } finally {
       setLoading(false);
@@ -54,6 +54,13 @@ export default function WalletPage() {
       load();
     } catch (e) {
       addToast(e.userMessage || "Cooldown active", { type: 'error' });
+    }
+  };
+
+  const copyReferral = () => {
+    if (data.referralCode) {
+        navigator.clipboard.writeText(data.referralCode);
+        addToast('Referral code copied!', { type: 'success' });
     }
   };
 
@@ -85,6 +92,24 @@ export default function WalletPage() {
             </div>
         </div>
         <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+      </div>
+
+      {/* Referral Card (NEW) */}
+      <div className="card p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
+        <div className="flex justify-between items-center">
+            <div>
+                <h3 className="font-bold text-lg text-green-800 dark:text-green-300">Invite Friends & Earn</h3>
+                <p className="text-sm text-green-700 dark:text-green-400">Get 50 coins for every friend who signs up!</p>
+            </div>
+            <div className="flex gap-2">
+                <code className="bg-white dark:bg-black/30 px-3 py-2 rounded-lg font-mono font-bold border border-green-300 dark:border-green-700 select-all">
+                    {data.referralCode || '...'}
+                </code>
+                <button onClick={copyReferral} className="p-2 bg-green-600 text-white rounded-lg shadow-lg hover:bg-green-700 transition">
+                    <FaCopy />
+                </button>
+            </div>
+        </div>
       </div>
 
       {/* Transactions History */}

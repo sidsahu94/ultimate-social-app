@@ -1,3 +1,4 @@
+// frontend/src/pages/explore/Explore.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import API from "../../services/api";
 import { motion } from "framer-motion";
@@ -8,7 +9,6 @@ import { useToast } from "../../components/ui/ToastProvider";
 
 export default function Explore() {
 	const [searchParams] = useSearchParams();
-	// Use local state initialization based on URL, but ensure effect runs for first load
 	const [query, setQuery] = useState(searchParams.get('q') || '');
 	const [results, setResults] = useState({ posts: [], users: [], hashtags: [] });
 	const [trending, setTrending] = useState([]);
@@ -16,7 +16,6 @@ export default function Explore() {
 	const [activeTab, setActiveTab] = useState(searchParams.get('t') || 'posts');
 	const { add: addToast } = useToast();
 
-	// --- 1. Load Trending & Setup Search Executor
 	const executeSearch = useCallback(async (q) => {
 		const finalQuery = q.trim();
 		if (!finalQuery) {
@@ -26,33 +25,31 @@ export default function Explore() {
 
 		setLoading(true);
 		try {
-			const r = await API.get(`/api/search/global?q=${encodeURIComponent(finalQuery)}`);
+            // ✅ FIX: Removed the extra '/api' prefix
+			const r = await API.get(`/search/global?q=${encodeURIComponent(finalQuery)}`);
 			setResults({ 
 				users: r.data.users || [], 
 				posts: r.data.posts || [],
 				hashtags: r.data.hashtags || []
 			});
-			// Auto switch tab if there are results
+			
 			if (r.data.users?.length > 0 && activeTab !== 'users') setActiveTab('users');
 			else if (r.data.posts?.length > 0 && activeTab !== 'posts') setActiveTab('posts');
 			
 		} catch (e2) {
-			addToast('Search failed: Network error or bad format', { type: 'error' });
+			// addToast('Search failed', { type: 'error' }); // Optional: silence if typing fast
 			setResults({ users: [], posts: [], hashtags: [] });
 		} finally {
 			setLoading(false);
 		}
 	}, [activeTab, addToast]);
 	
-	// Execute search on form submit
 	const doSearch = (e) => {
 		e?.preventDefault?.();
 		executeSearch(query);
 	};
 	
-	// Initial Load & URL Parameter Sync
 	useEffect(() => {
-		// Load Trending
 		(async () => {
 			try {
 				const r = await API.get("/posts/trending");
@@ -62,7 +59,6 @@ export default function Explore() {
 			}
 		})();
 		
-		// Execute search if query exists in URL on initial load
 		const urlQuery = searchParams.get('q');
 		const urlTab = searchParams.get('t');
 		
@@ -73,12 +69,11 @@ export default function Explore() {
 		if (urlTab) {
 			setActiveTab(urlTab);
 		}
-	}, [searchParams, executeSearch]); // Added dependency array for safety
+	}, [searchParams, executeSearch]);
 
-	// --- 4. Renderers (remain mostly the same, ensuring Links are correct)
 	const renderPosts = () => {
 		if (loading) return <div className="text-center py-6"><Spinner /></div>;
-		if (results.posts.length === 0) return <div className="text-gray-400 text-center py-6">No posts match your search — try another keyword.</div>;
+		if (results.posts.length === 0) return <div className="text-gray-400 text-center py-6">No posts match your search.</div>;
 		return (
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 				{results.posts.map((p) => (
@@ -142,14 +137,10 @@ export default function Explore() {
 		);
 	};
 
-
-	// --- 5. Main Render
 	return (
 		<div className="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
 			
 			<div className="lg:col-span-3 space-y-6">
-				
-				{/* Search Bar */}
 				<motion.div layout className="card p-4">
 					<form onSubmit={doSearch} className="flex gap-3">
 						<input 
@@ -162,7 +153,6 @@ export default function Explore() {
 					</form>
 				</motion.div>
 				
-				{/* Tabs */}
 				<div className="flex gap-4 border-b pb-1 overflow-x-auto">
 					<button onClick={() => setActiveTab('users')} className={`px-4 py-2 text-sm font-medium transition ${activeTab === 'users' ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-indigo-500'}`}>
 						People ({results.users.length})
@@ -175,7 +165,6 @@ export default function Explore() {
 					</button>
 				</div>
 				
-				{/* Tab Content */}
 				<motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={activeTab}>
 					{activeTab === 'users' && renderUsers()}
 					{activeTab === 'posts' && renderPosts()}
@@ -184,7 +173,6 @@ export default function Explore() {
 
 			</div>
 			
-			{/* Sidebar / Trending (Simplified render for brevity) */}
 			<aside className="lg:col-span-1 space-y-6">
 				<div className="card p-4">
 					<h4 className="font-semibold text-lg mb-3 border-b pb-2">🔥 Trending Posts</h4>

@@ -1,32 +1,56 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/components/chat/IncomingCall.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPhone, FaVideo, FaTimes } from 'react-icons/fa';
+import { FaVideo, FaTimes } from 'react-icons/fa';
 import socket from '../../services/socket';
 import { useNavigate } from 'react-router-dom';
 
 export default function IncomingCall() {
-  const [call, setCall] = useState(null); // { roomId, fromUser }
+  const [call, setCall] = useState(null); 
   const nav = useNavigate();
+  const audioRef = useRef(new Audio('/ringtone.mp3')); // Load sound
 
   useEffect(() => {
+    // Configure audio loop
+    audioRef.current.loop = true;
+
     const onIncoming = (data) => {
-      // data: { roomId, from: { name, avatar... } }
       setCall(data);
+      // Play sound reliably (requires user interaction first usually, but works in active apps)
+      audioRef.current.play().catch(e => console.warn("Audio play blocked", e));
     };
-    // Backend needs to emit 'call:incoming'
+
+    const onEnd = () => {
+        setCall(null);
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+    };
+
     socket.on('call:incoming', onIncoming);
-    return () => socket.off('call:incoming', onIncoming);
+    
+    // Listen for call cancelled/ended remotely
+    socket.on('call:ended', onEnd);
+
+    return () => {
+        socket.off('call:incoming', onIncoming);
+        socket.off('call:ended', onEnd);
+        audioRef.current.pause(); // Cleanup audio
+    };
   }, []);
 
   const accept = () => {
     if(!call) return;
+    audioRef.current.pause();
     nav(`/chat/call/${call.roomId}`);
     setCall(null);
   };
 
   const reject = () => {
     setCall(null);
-    // optionally emit 'call:rejected'
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    // Emit rejection so caller stops waiting
+    socket.emit('call:rejected', { roomId: call.roomId });
   };
 
   return (
@@ -47,10 +71,10 @@ export default function IncomingCall() {
           </div>
           
           <div className="flex gap-3">
-            <button onClick={reject} className="p-3 bg-red-500 rounded-full hover:bg-red-600 transition">
+            <button onClick={reject} className="p-3 bg-red-500 rounded-full hover:bg-red-600 transition shadow-lg shadow-red-500/30">
               <FaTimes />
             </button>
-            <button onClick={accept} className="p-3 bg-green-500 rounded-full hover:bg-green-600 transition animate-bounce">
+            <button onClick={accept} className="p-3 bg-green-500 rounded-full hover:bg-green-600 transition animate-bounce shadow-lg shadow-green-500/30">
               <FaVideo />
             </button>
           </div>

@@ -5,40 +5,58 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          500: '#0ea5e9', // Sky blue
-          600: '#0284c7',
-          900: '#0c4a6e',
+        // 🎨 THE TRICK: Remapping 'indigo' to a vibrant "Electric Violet" palette
+        // This instantly changes every primary button/link in your app.
+        indigo: {
+          50: '#f0fdfa',  // Cyan-ish white
+          100: '#ccfbf1',
+          200: '#99f6e4',
+          300: '#5eead4',
+          400: '#2dd4bf', // Bright Teal
+          500: '#0d9488', // Deep Teal (Text)
+          600: '#7c3aed', // 🟣 PRIMARY: Electric Violet (Buttons)
+          700: '#6d28d9',
+          800: '#5b21b6',
+          900: '#4c1d95',
+          950: '#2e1065',
         },
+        // 🌑 New Dark Mode Backgrounds (Deep Space)
         dark: {
-          bg: '#000000',
-          card: '#121212',
-          border: '#27272a'
-        }
+          bg: '#050505',
+          card: '#0f0f11', // Almost black, slightly tinted
+          border: '#27272a',
+        },
+      },
+      backgroundImage: {
+        // 🌈 The "Extraordinary" Gradient
+        'brand-gradient': 'linear-gradient(135deg, #06b6d4 0%, #7c3aed 50%, #db2777 100%)', // Cyan -> Violet -> Pink
+        'nav-gradient': 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0) 100%)',
+        'glass-shine': 'linear-gradient(45deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%)',
+      },
+      boxShadow: {
+        'glow': '0 0 20px rgba(124, 58, 237, 0.5)', // Purple glow
+        'neon': '0 0 10px rgba(6, 182, 212, 0.5), 0 0 20px rgba(124, 58, 237, 0.3)',
       },
       animation: {
-        'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        'pulse-slow': 'pulse 3s infinite',
-        'gradient-x': 'gradient-x 15s ease infinite',
+        'gradient-x': 'gradient-x 3s ease infinite',
+        'float': 'float 6s ease-in-out infinite',
       },
       keyframes: {
-        pop: {
-          '0%': { transform: 'scale(0.5)', opacity: 0 },
-          '100%': { transform: 'scale(1)', opacity: 1 },
-        },
         'gradient-x': {
           '0%, 100%': {
             'background-size': '200% 200%',
-            'background-position': 'left center',
+            'background-position': 'left center'
           },
           '50%': {
             'background-size': '200% 200%',
-            'background-position': 'right center',
+            'background-position': 'right center'
           },
         },
-      },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        }
+      }
     },
   },
   plugins: [],

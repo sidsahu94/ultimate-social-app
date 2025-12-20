@@ -1,17 +1,16 @@
-import React, { useEffect, useState, useCallback } from "react";
+// frontend/src/pages/home/Feed.jsx
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
 import PostCard from "../../components/posts/PostCard";
+import SkeletonPost from "../../components/ui/SkeletonPost";
+import { AnimatePresence, motion } from "framer-motion";
+import Stories from "../../components/stories/Stories";
+import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import FAB from "../../components/common/FAB";
 import CreatePostModal from "../../components/posts/CreatePostModal";
-import useInfiniteScroll from "../../hooks/useInfiniteScroll";
-import SkeletonPost from "../../components/ui/SkeletonPost";
 import { useToast } from "../../components/ui/ToastProvider";
-import { motion, AnimatePresence } from "framer-motion";
-import Stories from "../../components/stories/Stories";
-import FollowSuggestions from "../discovery/FollowSuggestions";
-import Trending from "../explore/Trending";
 
-// Utility to ensure posts are unique before adding to feed (by _id or id)
+// Utility to ensure posts are unique
 const uniqueById = (arr) => {
   const seen = new Set();
   const out = [];
@@ -26,7 +25,7 @@ const uniqueById = (arr) => {
   return out;
 };
 
-const Feed = () => {
+export default function Feed() {
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -34,70 +33,113 @@ const Feed = () => {
   const [hasMore, setHasMore] = useState(true);
   const { add: addToast } = useToast();
 
-  // --- 1. Load Feed Data (safer pagination + duplicate protection)
+  const pageRef = useRef(page);
+  const loadingRef = useRef(loading);
+  const hasMoreRef = useRef(hasMore);
+
+  useEffect(() => { pageRef.current = page; }, [page]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+
   const load = useCallback(async (reset = false) => {
-    // Allow manual refresh while loading (reset can force a reload)
-    if (loading && !reset) return;
+    // If already loading or no more posts, stop.
+    if (loadingRef.current || (!reset && !hasMoreRef.current)) return;
 
-    // If resetting, start from page 0. Otherwise use current page.
-    const pageToLoad = reset ? 0 : page;
-
+    const pageToLoad = reset ? 0 : pageRef.current;
     try {
       setLoading(true);
       const res = await API.get(`/posts/feed?page=${pageToLoad}&limit=6`);
-      const newPosts = res.data || [];
+      const newPosts = Array.isArray(res?.data) ? res.data : [];
 
-      setPosts((prev) => {
-        if (reset) {
-          // Fresh replace on reset
-          return uniqueById(newPosts);
-        }
-
-        // Filter out any incoming posts that already exist in state
-        const existingIds = new Set(prev.map(p => String(p._id || p.id)));
-        const uniqueNewPosts = newPosts.filter(p => {
-          const id = String(p._id || p.id || '');
-          return id && !existingIds.has(id);
+      setPosts(prev => {
+        if (reset) return uniqueById(newPosts);
+        const existing = new Set(prev.map(p => String(p._id || p.id)));
+        const filtered = newPosts.filter(p => {
+          const id = String(p._id || p.id || "");
+          return id && !existing.has(id);
         });
-
-        return uniqueById([...prev, ...uniqueNewPosts]);
+        return uniqueById([...prev, ...filtered]);
       });
 
-      setHasMore(newPosts.length > 0);
-      setPage((p) => (reset ? 1 : p + 1));
+      // ✅ FIX: Strict check to stop flickering
+      // If we got fewer posts than asked for, we are at the end.
+      if (newPosts.length < 6) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+        setPage(prev => (reset ? 1 : prev + 1));
+      }
+
     } catch (err) {
-      console.error('load feed', err);
-      addToast(err.userMessage || 'Failed to load feed', { type: 'error' });
-      if (reset) setPosts([]); // Clear feed on hard fail when reset
-      setHasMore(false);
+      console.error("Feed load error", err);
+      setHasMore(false); // Stop trying on error
     } finally {
       setLoading(false);
     }
-  }, [page, loading, addToast]); // removed hasMore to avoid stale closures
+  }, []);
 
-  // --- 2. Initial Load
-  useEffect(() => { load(true); }, []); // initial mount
+  // Initial Load
+  useEffect(() => { load(true); }, [load]);
+// Add this logic inside your Feed component (before return)
 
-  // --- 3. Infinite Scroll Hook
-  const loaderRef = useInfiniteScroll(load, [load]);
+// --- PULL TO REFRESH LOGIC ---
+const [startY, setStartY] = useState(0);
+const [refreshing, setRefreshing] = useState(false);
 
-  // --- 4. Event Listeners for Post CRUD
+const handleTouchStart = (e) => {
+  if (window.scrollY === 0) setStartY(e.touches[0].clientY);
+};
+
+const handleTouchMove = (e) => {
+  const y = e.touches[0].clientY;
+  if (window.scrollY === 0 && y - startY > 50 && !refreshing) {
+    setRefreshing(true);
+    load(true).then(() => {
+        setTimeout(() => setRefreshing(false), 1000);
+    });
+  }
+};
+
+useEffect(() => {
+  window.addEventListener('touchstart', handleTouchStart);
+  window.addEventListener('touchmove', handleTouchMove);
+  return () => {
+    window.removeEventListener('touchstart', handleTouchStart);
+    window.removeEventListener('touchmove', handleTouchMove);
+  };
+}, [startY, refreshing, load]);
+
+// Add this visually at the top of your JSX inside the main div
+{refreshing && (
+  <div className="w-full flex justify-center py-4">
+    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+  </div>
+)}
+  // Infinite Scroll Hook
+  const loaderRef = useInfiniteScroll(() => {
+    if (hasMoreRef.current && !loadingRef.current) {
+        load();
+    }
+  });
+
+  // --- REAL-TIME UPDATES ---
   useEffect(() => {
     const onPostCreated = (ev) => {
-      const p = ev.detail;
-      if (p) setPosts(prev => uniqueById([p, ...prev]));
-      else load(true); // Hard refresh if payload is missing
+      if (ev.detail && ev.detail._id) {
+        setPosts(prev => uniqueById([ev.detail, ...prev]));
+      } else {
+        load(true);
+      }
     };
 
     const onPostDeleted = (ev) => {
       const id = ev?.detail;
       if (!id) return;
-      setPosts(prev => prev.filter(p => String(p._id || p.id) !== String(id)));
+      setPosts(prev => prev.filter(p => String(p._id) !== String(id)));
     };
 
     window.addEventListener('postCreated', onPostCreated);
     window.addEventListener('postDeleted', onPostDeleted);
-
     return () => {
       window.removeEventListener('postCreated', onPostCreated);
       window.removeEventListener('postDeleted', onPostDeleted);
@@ -105,55 +147,70 @@ const Feed = () => {
   }, [load]);
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="min-h-screen">
+      <div className="max-w-3xl mx-auto"> 
         
-        {/* Main Content: Stories and Feed */}
-        <div className="lg:col-span-2">
-          {/* Stories Section (only on small/medium screens for demo) */}
-          <div className="lg:hidden mb-4">
-            <Stories />
-          </div>
-          
+        {/* Stories */}
+        <div className="mb-6">
+          <Stories />
+        </div>
+
+        {/* Feed */}
+        <div className="space-y-6">
+          {posts.length === 0 && !loading && !hasMore && (
+            <div className="card p-6 text-gray-500 text-center">
+                Follow people to see their posts here!
+            </div>
+          )}
+
           <AnimatePresence>
             {posts.map((p) => (
-              // Use motion.article to wrap the PostCard to enable exit animation
-              <motion.div key={p._id || p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0, margin: 0 }} className="mb-4">
+              <motion.div
+                key={p._id || p.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+              >
                 <PostCard post={p} />
               </motion.div>
             ))}
           </AnimatePresence>
-
-          {/* Loading Skeletons */}
-          {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonPost key={i} />)}
-          
-          {/* Infinite Scroll Trigger / No More Posts Message */}
-          <div ref={loaderRef} className="py-6 text-center">
-            {!loading && !hasMore && posts.length > 0 && <div className="text-gray-500">You've reached the end of the feed.</div>}
-            {!loading && posts.length === 0 && !hasMore && <div className="card p-6 text-gray-500">Follow more people to see posts here.</div>}
-          </div>
         </div>
 
-        {/* Sidebar (Desktop Only) */}
-        <aside className="hidden lg:block space-y-6 lg:col-span-1">
-          <Stories />
-          
-          <div className="card p-4">
-            <h4 className="font-semibold text-lg mb-3 border-b pb-2">Who to follow</h4>
-            <FollowSuggestions isSidebar={true} />
+        {/* Loader */}
+        {loading && (
+          <div className="mt-6 space-y-6">
+            <SkeletonPost />
+            <SkeletonPost />
           </div>
-          
-          <div className="card p-4">
-            <h4 className="font-semibold text-lg mb-3 border-b pb-2">Trends</h4>
-            <Trending isSidebar={true} />
-          </div>
-        </aside>
+        )}
+
+        {/* Trigger for Infinite Scroll */}
+        {/* Only render if we have more, to prevent "bouncing" against the bottom */}
+        {hasMore && !loading && (
+            <div ref={loaderRef} className="h-20 flex items-center justify-center text-gray-400 text-sm">
+                Loading more...
+            </div>
+        )}
+
+        {!hasMore && posts.length > 0 && (
+            <div className="py-8 text-center text-gray-400 text-sm">
+                You're all caught up! 🎉
+            </div>
+        )}
 
         <FAB onClick={() => setOpenCreate(true)} />
-        <CreatePostModal isOpen={openCreate} onClose={() => setOpenCreate(false)} onPosted={() => load(true)} />
+        <CreatePostModal 
+            isOpen={openCreate} 
+            onClose={() => setOpenCreate(false)} 
+            onPosted={(newPost) => {
+                if (newPost) {
+                    window.dispatchEvent(new CustomEvent('postCreated', { detail: newPost }));
+                }
+            }} 
+        />
       </div>
     </div>
   );
-};
-
-export default Feed;
+}

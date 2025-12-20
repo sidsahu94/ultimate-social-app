@@ -6,6 +6,8 @@ const cloudinaryUtil = require('../utils/cloudinary');
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 /* ------------------ Helpers ------------------ */
 const safeUploadToCloudinary = async (filePath) => {
@@ -73,7 +75,34 @@ exports.createPost = async (req, res) => {
     return res.status(500).json({ message: err.message || 'Error creating post' });
   }
 };
+exports.unfurlLink = async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ message: 'URL required' });
 
+    // Fetch the HTML
+    const { data } = await axios.get(url, {
+        headers: { 'User-Agent': 'SocialAppBot/1.0' }, // Be polite
+        timeout: 5000 
+    });
+    
+    const $ = cheerio.load(data);
+    
+    // Scrape Open Graph (OG) tags standard
+    const meta = {
+        title: $('meta[property="og:title"]').attr('content') || $('title').text() || '',
+        description: $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || '',
+        image: $('meta[property="og:image"]').attr('content') || '',
+        url: url
+    };
+
+    res.json(meta);
+  } catch (err) {
+    // If it fails, just return empty meta, don't crash
+    console.error("Unfurl error:", err.message);
+    res.json({ title: '', description: '', image: '' }); 
+  }
+};
 exports.getFeed = async (req, res) => {
   try {
     const page = Math.max(0, parseInt(req.query.page || '0', 10));

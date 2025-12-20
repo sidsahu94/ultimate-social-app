@@ -5,7 +5,8 @@ const Post = require('../models/Post');
 /**
  * Basic suggestion engine:
  * - Suggest users with high follower count who are not followed by me
- * - Suggest trending hashtags from recent posts
+ * - Suggest trending hashtags from recent po
+ * sts
  */
 exports.suggestions = async (req, res) => {
   try {

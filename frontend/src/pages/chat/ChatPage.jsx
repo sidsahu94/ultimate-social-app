@@ -1,12 +1,13 @@
+// frontend/src/pages/chat/ChatPage.jsx
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import API from "../../services/api";
 import socket from "../../services/socket";
 import { useSelector } from "react-redux";
-import { FaPlus, FaSearch, FaPaperPlane, FaArrowLeft, FaTimes, FaImage, FaUsers, FaUserPlus } from 'react-icons/fa';
+import { FaPaperPlane, FaArrowLeft, FaTimes, FaImage, FaUsers, FaUserPlus } from 'react-icons/fa';
 import UserAvatar from "../../components/ui/UserAvatar";
 import MessageBubble from "../../components/chat/MessageBubble";
 import CreateGroupModal from "../../components/chat/CreateGroupModal";
-import NewChatModal from "../../components/chat/NewChatModal"; // New Import
+import NewChatModal from "../../components/chat/NewChatModal";
 import { useToast } from "../../components/ui/ToastProvider";
 
 export default function ChatPage() {
@@ -26,22 +27,34 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false); 
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const fileInputRef = useRef(null); // For image uploads
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Small timeout ensures DOM is rendered before scrolling
+    setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   }, []);
-
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
   // --- Socket Listeners ---
   useEffect(() => {
     const onReceive = (payload) => {
       if (!payload) return;
-      if (active && payload.chatId === active._id) {
-        setMessages(prev => [...prev, payload.message]);
+      
+      // Check if message belongs to current chat
+      // Note: payload structure depends on backend. Usually { chatId, message }
+      const incomingChatId = payload.chatId || payload.room;
+      
+      if (active && incomingChatId === active._id) {
+        setMessages(prev => {
+            // Prevent duplicates
+            if (prev.some(m => m._id === payload.message._id)) return prev;
+            return [...prev, payload.message];
+        });
         scrollToBottom();
       }
+      
+      // Always refresh conversation list order (to show unread dot or move to top)
       loadConversations();
     };
 
@@ -73,9 +86,12 @@ export default function ChatPage() {
 
   const openConversation = async (conv) => {
     if (active) socket.emit('leaveRoom', { room: active._id });
+    
     setActive(conv);
     setIsTyping(false);
     setReplyTo(null);
+    
+    // Join the specific chat room
     if (conv && conv._id) socket.emit('joinRoom', { room: conv._id });
 
     try {
@@ -100,34 +116,45 @@ export default function ChatPage() {
   };
 
   const send = async () => {
-    if ((!text.trim() && !replyTo) || !active) return; // Allow sending just reply context or ensure text
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if ((!text.trim() && !replyTo) || !active) return;
     
     const content = text;
     const currentReply = replyTo;
     setText("");
     setReplyTo(null);
 
-    const temp = { 
-        _id: String(Date.now()), 
+    // 1. Optimistic Update (Immediate Show)
+    const tempId = "temp-" + Date.now();
+    const optimisticMsg = { 
+        _id: tempId, 
         content, 
-        sender: { _id: myId }, // mocked structure for UI
+        sender: { _id: myId }, // Simplified sender for immediate render
         replyTo: currentReply, 
-        createdAt: new Date().toISOString() 
+        createdAt: new Date().toISOString(),
+        isOptimistic: true // Optional flag for styling (opacity)
     };
-    setMessages(m => [...m, temp]);
+    
+    setMessages(prev => [...prev, optimisticMsg]);
     scrollToBottom();
 
     try {
+      // 2. Server Request
       const res = await API.post(`/chat/${active._id}/message`, { content, replyToId: currentReply?._id });
-      const sentMsg = res.data; // Server response with populated sender
+      const sentMsg = res.data.messages ? res.data.messages[res.data.messages.length - 1] : res.data; 
       
+      // 3. Replace Optimistic Message with Real One
+      setMessages(prev => prev.map(m => (m._id === tempId ? sentMsg : m)));
+      
+      // 4. Emit Socket (Redundancy, backend usually broadcasts too)
       const otherIds = (active.participants || []).map(p => p._id).filter(id => id !== myId);
       socket.emit('sendMessage', { toUserIds: otherIds, chatId: active._id, message: sentMsg });
       
-      // Update optimistic message with real one
-      setMessages(prev => prev.map(m => (m._id === temp._id ? sentMsg : m)));
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error(err);
+        addToast("Failed to send message", { type: 'error' });
+        // Remove optimistic message on fail
+        setMessages(prev => prev.filter(m => m._id !== tempId));
+    }
   };
 
   const startNewChat = async (targetUserId) => {
@@ -139,39 +166,9 @@ export default function ChatPage() {
     } catch (e) { addToast("Failed to start chat", { type: 'error' }); }
   };
 
-  // --- NEW: Handle Image Upload ---
-  const handleImageUpload = async (e) => {
-      const file = e.target.files[0];
-      if (!file || !active) return;
-      
-      // Optimistic message for image
-      const tempId = String(Date.now());
-      setMessages(prev => [...prev, { _id: tempId, content: '📷 Sending Image...', sender: { _id: myId }, createdAt: new Date().toISOString() }]);
-      scrollToBottom();
-
-      try {
-          // Ideally use a dedicated endpoint or generic upload. Using posts upload as fallback or similar.
-          // Assuming backend/routes/extra.js has generic upload or we use a FormData approach on message endpoint if supported.
-          // Let's assume we use the existing /extra/voice logic but adapted, or create a quick post media logic.
-          // Better: Use `CreatePost` logic to get URL, then send message. 
-          // For now, simpler simulation:
-          const fd = new FormData();
-          fd.append('media', file); // Reuse story/post upload logic if endpoint supports it
-          // NOTE: Backend needs to support media in message endpoint or separate upload
-          // Since we don't have a dedicated chat upload route in previous backend code, 
-          // we will use the existing /api/posts route to "hijack" the upload utility if needed, 
-          // OR better, create a simple upload endpoint in future.
-          // Using a placeholder alert for now to prevent crash if backend isn't ready.
-          alert("Image upload requires backend update for 'chat/upload'. Text works perfectly.");
-          setMessages(prev => prev.filter(m => m._id !== tempId));
-      } catch (err) {
-          setMessages(prev => prev.filter(m => m._id !== tempId));
-      }
-  };
-
   const getOther = (c) => {
       if (c.isGroup) return { name: c.name || 'Group Chat', avatar: null, isGroup: true };
-      return c.participants?.find(p => p._id !== myId) || {};
+      return c.participants?.find(p => p._id !== myId) || { name: "User" };
   };
 
   return (
@@ -198,10 +195,10 @@ export default function ChatPage() {
                             <div className="flex-1 min-w-0">
                                 <div className="font-semibold truncate flex items-center gap-2">
                                     {other.name}
-                                    {/* Online Indicator (Simulated) */}
-                                    {!other.isGroup && <span className="w-2 h-2 rounded-full bg-green-500"></span>}
                                 </div>
-                                <div className={`text-xs truncate ${active?._id === c._id ? 'text-indigo-100' : 'text-gray-500'}`}>{c.lastMessage?.content || 'Start chatting'}</div>
+                                <div className={`text-xs truncate ${active?._id === c._id ? 'text-indigo-100' : 'text-gray-500'}`}>
+                                    {c.messages?.[c.messages.length - 1]?.content || 'Start chatting'}
+                                </div>
                             </div>
                         </div>
                     );
@@ -234,7 +231,7 @@ export default function ChatPage() {
                             <MessageBubble 
                                 key={m._id || i}
                                 message={m}
-                                isMe={m.sender === myId || m.sender?._id === myId}
+                                isMe={String(m.sender?._id || m.sender) === String(myId)}
                                 onReply={(msg) => setReplyTo(msg)}
                                 onDelete={() => {}} 
                             />
@@ -250,11 +247,6 @@ export default function ChatPage() {
                     )}
 
                     <div className="p-3 border-t dark:border-gray-700 flex gap-2 items-center">
-                        <button className="text-gray-400 hover:text-indigo-500 p-2" onClick={() => fileInputRef.current.click()}>
-                            <FaImage size={20} />
-                        </button>
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-                        
                         <input 
                             className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full px-4 py-2 focus:outline-none"
                             placeholder="Type a message..."
@@ -268,7 +260,6 @@ export default function ChatPage() {
             )}
         </div>
 
-        {/* Modals */}
         <CreateGroupModal isOpen={showGroupModal} onClose={() => setShowGroupModal(false)} onCreated={loadConversations} />
         <NewChatModal isOpen={showNewChat} onClose={() => setShowNewChat(false)} onUserSelect={startNewChat} />
     </div>

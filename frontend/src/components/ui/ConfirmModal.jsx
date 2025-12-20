@@ -1,32 +1,20 @@
-// frontend/src/components/ui/ConfirmModal.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const ConfirmModal = ({ isOpen, title = 'Are you sure?', description = '', confirmLabel = 'Yes, delete', cancelLabel = 'Cancel', loading = false, onConfirm, onCancel }) => {
+export default function ConfirmModal({ isOpen, onCancel, onConfirm, title, description }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={() => { if (!loading) onCancel && onCancel(); }} />
-      <motion.div initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl p-5 z-10 modal-accent">
-        <div className="flex items-start gap-3">
-          <div>
-            <h3 className="text-lg font-semibold">{title}</h3>
-            {description ? <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{description}</p> : null}
-          </div>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-3">
-          <button onClick={() => onCancel && onCancel()} disabled={loading} className="px-4 py-2 rounded border">
-            {cancelLabel}
-          </button>
-          <button onClick={() => onConfirm && onConfirm()} disabled={loading} className="px-4 py-2 rounded bg-gradient-to-r from-indigo-600 to-pink-500 text-white">
-            {loading ? 'Deleting...' : confirmLabel}
-          </button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xs shadow-2xl text-center">
+        <h3 className="text-xl font-bold mb-2">{title || "Are you sure?"}</h3>
+        <p className="text-sm text-gray-500 mb-6">{description || "This action cannot be undone."}</p>
+        
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-gray-700 font-medium">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-red-600 text-white font-bold">Delete</button>
         </div>
       </motion.div>
     </div>
   );
-};
-
-export default ConfirmModal;
+}

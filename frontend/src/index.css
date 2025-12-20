@@ -5,104 +5,115 @@
 @layer base {
   body {
     @apply transition-colors duration-500 antialiased;
-    /* Light Mode: Soft Paper White */
-    background-color: #f8fafc; 
-    color: #0f172a;
+    /* Light Mode: Subtle mesh feel */
+    background-color: #f3f4f6;
+    color: #111827;
+    
+    /* Fix mobile height */
+    min-height: 100vh;
+    min-height: 100dvh; 
+    overscroll-behavior-y: none;
   }
   
-  /* Dark Mode: Deep Midnight Blue (Not Black) */
+  /* Dark Mode: Deep Midnight with Starfield feel */
   .dark body {
-    background-color: #020617; 
-    color: #f1f5f9;
+    background-color: #050505; 
+    color: #e2e8f0;
+    background-image: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #050505 60%);
+  }
+
+  /* Selection: Neon Pink */
+  ::selection {
+    @apply bg-pink-500 text-white;
   }
 }
 
-/* THE EXTRAORDINARY AURORA BACKGROUND */
+/* --- THE NEW EXTRAORDINARY COMPONENTS --- */
+@layer components {
+  /* 🪟 Ultimate Glass Card */
+  .card {
+    @apply bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border border-white/50 dark:border-white/10 rounded-3xl transition-all duration-300;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  }
+  
+  .card:hover {
+    @apply transform -translate-y-1 border-purple-500/30 dark:border-cyan-500/30;
+    box-shadow: 0 15px 40px -10px rgba(124, 58, 237, 0.2); /* Purple Glow */
+  }
+
+  /* 🚀 "Candy" Button (High Gloss) */
+  .btn-primary {
+    @apply relative overflow-hidden bg-brand-gradient text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-purple-500/40 transition-all active:scale-95;
+    background-size: 200% auto;
+    animation: gradient-x 4s ease infinite; /* Moves the gradient automatically */
+  }
+  
+  .btn-primary:hover {
+    @apply shadow-cyan-500/50 scale-105;
+  }
+}
+
+/* --- THE NEON AURORA BACKGROUND --- */
 .aurora-bg {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  opacity: 0.8; 
 }
 
+.dark .aurora-bg {
+  opacity: 0.5; /* More subtle in dark mode so text pops */
+}
+
+/* Updated Colors for the Blobs (Cyan, Violet, Pink) */
 .aurora-blob {
   position: absolute;
-  filter: blur(80px);
-  opacity: 0.4;
-  animation: float 20s infinite ease-in-out;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.6;
+  animation: float 10s infinite ease-in-out;
 }
 
 .blob-1 {
-  top: -10%;
-  left: -10%;
-  width: 50vw;
-  height: 50vw;
-  background: #6366f1; /* Indigo */
+  top: -10%; left: -10%; width: 60vw; height: 60vw;
+  background: #22d3ee; /* Cyan */
   animation-delay: 0s;
 }
 
 .blob-2 {
-  bottom: -10%;
-  right: -10%;
-  width: 50vw;
-  height: 50vw;
-  background: #ec4899; /* Pink */
-  animation-delay: -5s;
+  bottom: -10%; right: -10%; width: 60vw; height: 60vw;
+  background: #d946ef; /* Fuchsia */
+  animation-delay: -3s;
 }
 
 .blob-3 {
-  top: 40%;
-  left: 40%;
-  width: 40vw;
-  height: 40vw;
+  top: 40%; left: 30%; width: 40vw; height: 40vw;
   background: #8b5cf6; /* Violet */
-  animation-delay: -10s;
+  animation-delay: -6s;
+  opacity: 0.4;
 }
 
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.9); }
+/* Mobile Utilities */
+.reels-container {
+  height: 100dvh;
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
 }
 
-/* Glassmorphism Utilities */
-@layer components {
-  .card {
-    @apply bg-white/70 dark:bg-[#0f172a]/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xl rounded-3xl transition-all hover:shadow-2xl hover:border-indigo-500/20;
-  }
-  
-  .btn-primary {
-    @apply bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-indigo-500/30 hover:scale-105 transition-transform active:scale-95;
-  }
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom);
 }
-/* Hide Scrollbar but keep functionality */
+
+.z-modal { z-index: 9999; }
+
+/* Custom Scrollbar - Sleek */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #22d3ee, #d946ef);
+  border-radius: 10px;
+}
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* TikTok/Reels Scroll Snap Logic */
-.snap-y-mandatory { scroll-snap-type: y mandatory; }
-.snap-always { scroll-snap-stop: always; }
-.snap-center { scroll-snap-align: center; }
-
-/* Glassmorphism Utilities */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-.dark .glass-panel {
-  background: rgba(15, 23, 42, 0.6); /* Slate-900 with opacity */
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Aurora Gradient Animation */
-@keyframes gradient-xy {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-xy 6s ease infinite;
-}
