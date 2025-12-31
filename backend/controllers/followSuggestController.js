@@ -1,26 +1,44 @@
 const User = require('../models/User');
 
 exports.suggest = async (req,res)=>{
-  const meId = req.user._id;
-  // gather people you follow's follows (2-hop) and popular users
-  const me = await User.findById(meId).select('following').lean();
-  const following = (me.following || []).map(String);
-  const pool = new Set();
+  try {
+      const meId = req.user._id;
+      
+      // 1. Get my data: who I follow AND who I block
+      const me = await User.findById(meId).select('following blockedUsers').lean();
+      
+      const following = new Set((me.following || []).map(String));
+      const blocked = new Set((me.blockedUsers || []).map(String));
+      
+      const pool = new Set();
 
-  // 1) 2-hop: users followed by those you follow
-  const twoHop = await User.find({ _id: { $in: following } }).select('following').lean();
-  twoHop.forEach(u => (u.following||[]).forEach(f => pool.add(String(f))));
+      // 2. Popular users (Simple Heuristic)
+      // In production, you might use a graph database or more complex aggregation
+      const popular = await User.find()
+        .sort({ 'followers.length': -1 })
+        .limit(100) // Look at top 100
+        .select('_id followers');
 
-  // 2) popular users
-  const popular = await User.find().sort({ 'followers.length': -1 }).limit(50).select('_id');
-  popular.forEach(u => pool.add(String(u._id)));
+      popular.forEach(u => {
+          const uid = String(u._id);
+          // Filter: Not me, Not already following, Not blocked
+          if (uid !== String(meId) && !following.has(uid) && !blocked.has(uid)) {
+              pool.add(uid);
+          }
+      });
 
-  // remove yourself and already followed
-  pool.delete(String(meId));
-  following.forEach(f => pool.delete(String(f)));
+      // 3. Fetch details for the candidates
+      const candidates = await User.find({ _id: { $in: Array.from(pool) } })
+        .select('name avatar followers')
+        .limit(20)
+        .lean();
 
-  // fetch details & sort by follower count (simple ranking)
-  const candidates = await User.find({ _id: { $in: Array.from(pool) } }).select('name avatar followers').lean();
-  candidates.sort((a,b)=> (b.followers?.length||0) - (a.followers?.length||0));
-  res.json(candidates.slice(0,20));
+      // Sort by popularity (follower count)
+      candidates.sort((a,b)=> (b.followers?.length||0) - (a.followers?.length||0));
+      
+      res.json(candidates);
+  } catch (err) {
+      console.error('Suggest error:', err);
+      res.status(500).json({ message: 'Server error' });
+  }
 };

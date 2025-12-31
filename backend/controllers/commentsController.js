@@ -2,10 +2,11 @@
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const User = require("../models/User");
+const createNotification = require('../utils/notify'); // 🔥 WIRED: Notification Helper
 
 /**
  * POST /api/comments/:postId
- * Creates a comment and emits 'comment:created' to the post room.
+ * Creates a comment, emits 'comment:created' to the post room, and notifies owner.
  */
 exports.create = async (req, res) => {
   try {
@@ -26,24 +27,24 @@ exports.create = async (req, res) => {
 
     await comment.populate("user", "name avatar");
 
-    // Emit real-time event to post room and notify post owner
+    // 1. Emit real-time event to post room (for CommentsModal)
     try {
       const io = req.app.get("io") || global.io;
       if (io) {
         io.to(`post:${post._id}`).emit("comment:created", comment);
-        // also send a notification event to post owner socket (if needed)
-        if (String(post.user) !== String(req.user._id)) {
-          io.emit("notify:user", {
-            userId: post.user,
-            payload: {
-              type: "comment",
-              data: { commentId: comment._id, postId: post._id, from: { _id: req.user._id, name: req.user.name } },
-            },
-          });
-        }
       }
     } catch (e) {
-      console.warn("Could not emit socket comment:created", e && e.message ? e.message : e);
+      console.warn("Could not emit socket comment:created", e?.message);
+    }
+
+    // 2. 🔥 WIRE UP: Send Notification to Post Owner
+    if (String(post.user) !== String(req.user._id)) {
+      await createNotification(req, {
+        toUser: post.user,
+        type: 'comment',
+        data: { postId: post._id, commentId: comment._id },
+        message: `${req.user.name} commented: "${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`
+      });
     }
 
     res.status(201).json(comment);
@@ -126,5 +127,21 @@ exports.toggleLike = async (req, res) => {
   } catch (e) {
     console.error("toggleLike err", e);
     res.status(500).json({ message: "Error toggling like" });
+  }
+};
+exports.list = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page || 0);
+    const limit = 20;
+    
+    const comments = await Comment.find({ post: req.params.postId })
+      .sort({ createdAt: -1 })
+      .skip(page * limit)
+      .limit(limit)
+      .populate("user", "name avatar");
+      
+    res.json(comments);
+  } catch (e) {
+    res.status(500).json({ message: "Error fetching comments" });
   }
 };

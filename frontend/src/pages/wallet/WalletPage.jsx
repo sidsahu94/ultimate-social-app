@@ -1,9 +1,10 @@
-// frontend/src/pages/wallet/WalletPage.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
-import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaGift, FaCopy } from 'react-icons/fa';
+import socket from '../../services/socket';
+import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaCopy, FaPaperPlane, FaSearch, FaLock } from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { useToast } from '../../components/ui/ToastProvider';
+import UserAvatar from '../../components/ui/UserAvatar';
 
 export default function WalletPage() {
   const [data, setData] = useState({ 
@@ -13,8 +14,20 @@ export default function WalletPage() {
     referralCode: 'LOADING...' 
   });
   const [loading, setLoading] = useState(true);
+  
+  // Transfer State
   const [recipientId, setRecipientId] = useState('');
   const [amount, setAmount] = useState(10);
+  
+  // Search State
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // 🔥 Security State
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [password, setPassword] = useState('');
+  
   const { add: addToast } = useToast();
 
   const load = async () => {
@@ -33,17 +46,66 @@ export default function WalletPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
 
-  const handleTransfer = async () => {
+    const onWalletUpdate = (update) => {
+        if (update && typeof update.balance === 'number') {
+            setData(prev => ({ ...prev, balance: update.balance }));
+            API.get('/apps/wallet').then(res => {
+                setData(prev => ({ ...prev, transactions: res.data.transactions || [] }));
+            });
+        }
+    };
+
+    socket.on('wallet:update', onWalletUpdate);
+    return () => socket.off('wallet:update', onWalletUpdate);
+  }, []);
+
+  // Search Logic
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (query.length > 2) {
+        try {
+          const r = await API.get(`/users/search?q=${query}`);
+          setResults(r.data.users || []);
+          setShowDropdown(true);
+        } catch (e) {}
+      } else {
+        setResults([]);
+        setShowDropdown(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const selectUser = (user) => {
+    setRecipientId(user._id);
+    setQuery(user.name); // Show name in input
+    setShowDropdown(false);
+  };
+
+  // 🔥 1. Open Confirm Modal
+  const initTransfer = () => {
     if (!recipientId || amount <= 0) return addToast("Invalid details", { type: 'error' });
+    setShowConfirm(true);
+  };
+
+  // 🔥 2. Perform Secure Transfer
+  const confirmTransfer = async () => {
+    if (!password) return addToast("Password required", { type: 'error' });
     try {
-      await API.post('/wallet/tip', { to: recipientId, amount });
+      await API.post('/wallet/tip', { to: recipientId, amount, password });
       addToast(`Sent ${amount} coins!`, { type: 'success' });
-      load();
+      
+      // Reset inputs
       setRecipientId('');
+      setQuery(''); 
+      setAmount(10);
+      setPassword('');
+      setShowConfirm(false);
     } catch (e) {
-      addToast(e.userMessage || "Transfer failed", { type: 'error' });
+      addToast(e.userMessage || "Transfer failed (Check password)", { type: 'error' });
     }
   };
 
@@ -51,9 +113,26 @@ export default function WalletPage() {
     try {
       const res = await API.post('/wallet/airdrop');
       addToast(res.data.message, { type: 'success' });
-      load();
     } catch (e) {
       addToast(e.userMessage || "Cooldown active", { type: 'error' });
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (data.balance < 100) return addToast("Minimum withdrawal is 100 coins", { type: 'error' });
+    
+    const paypalEmail = prompt("Enter PayPal email for withdrawal request:");
+    if (paypalEmail) {
+        try {
+            await API.post('/payouts/create', { 
+                amount: data.balance, 
+                method: 'paypal',
+                details: paypalEmail 
+            });
+            addToast("Withdrawal request submitted!", { type: 'success' });
+        } catch (e) {
+            addToast("Withdrawal request queued.", { type: 'info' });
+        }
     }
   };
 
@@ -70,6 +149,7 @@ export default function WalletPage() {
 
   return (
     <div className="max-w-xl mx-auto p-4 space-y-6">
+      
       {/* Balance Card */}
       <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10">
@@ -86,7 +166,10 @@ export default function WalletPage() {
             >
                 <FaArrowDown /> {isCooldown ? 'Claimed' : 'Daily Bonus'}
             </button>
-            <button className="flex-1 bg-white text-indigo-700 py-3 rounded-xl font-bold hover:bg-gray-100 transition flex items-center justify-center gap-2">
+            <button 
+                onClick={handleWithdraw}
+                className="flex-1 bg-white text-indigo-700 py-3 rounded-xl font-bold hover:bg-gray-100 transition flex items-center justify-center gap-2"
+            >
                 <FaArrowUp /> Withdraw
             </button>
             </div>
@@ -94,7 +177,57 @@ export default function WalletPage() {
         <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
       </div>
 
-      {/* Referral Card (NEW) */}
+      {/* Transfer Section */}
+      <div className="card p-5">
+        <h3 className="font-bold mb-3 flex items-center gap-2"><FaPaperPlane className="text-indigo-500"/> Send Coins</h3>
+        <div className="flex flex-col gap-3">
+            
+            {/* Recipient Search */}
+            <div className="relative">
+                <div className="flex items-center border rounded-xl bg-gray-50 dark:bg-gray-800 dark:border-gray-700 px-3 transition focus-within:ring-2 ring-indigo-500/20">
+                    <FaSearch className="text-gray-400 mr-2" />
+                    <input 
+                        value={query}
+                        onChange={e => { setQuery(e.target.value); setRecipientId(''); }} 
+                        placeholder="Search user to tip..."
+                        className="w-full py-3 bg-transparent outline-none"
+                    />
+                </div>
+
+                {/* Dropdown Results */}
+                {showDropdown && results.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
+                        {results.map(u => (
+                            <div 
+                                key={u._id} 
+                                onClick={() => selectUser(u)}
+                                className="flex items-center gap-3 p-3 hover:bg-indigo-50 dark:hover:bg-gray-700 cursor-pointer transition"
+                            >
+                                <UserAvatar src={u.avatar} name={u.name} className="w-8 h-8" />
+                                <div className="text-sm font-semibold">{u.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="flex gap-2">
+                <div className="flex-1">
+                    <input 
+                        className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:border-gray-700" 
+                        type="number" 
+                        placeholder="Amount"
+                        value={amount}
+                        onChange={e => setAmount(Number(e.target.value))}
+                    />
+                </div>
+                {/* 🔥 Button opens Modal */}
+                <button onClick={initTransfer} className="btn-primary rounded-xl px-6 font-bold">Send</button>
+            </div>
+        </div>
+      </div>
+
+      {/* Referral Card */}
       <div className="card p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
         <div className="flex justify-between items-center">
             <div>
@@ -132,6 +265,38 @@ export default function WalletPage() {
           ))}
         </div>
       </div>
+
+      {/* 🔥 Security Modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-sm shadow-2xl border dark:border-gray-700">
+                <div className="flex justify-center mb-4 text-indigo-500">
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
+                        <FaLock size={24} />
+                    </div>
+                </div>
+                <h3 className="font-bold text-xl mb-2 text-center">Confirm Transfer</h3>
+                <p className="text-sm text-gray-500 mb-6 text-center">
+                    You are about to send <b>{amount} coins</b> to <b>{query}</b>. 
+                    Please confirm your password to proceed.
+                </p>
+                
+                <input 
+                    type="password" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-indigo-500 outline-none"
+                    autoFocus
+                />
+                
+                <div className="flex gap-3">
+                    <button onClick={() => setShowConfirm(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition">Cancel</button>
+                    <button onClick={confirmTransfer} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/30">Confirm</button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

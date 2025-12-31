@@ -1,7 +1,7 @@
 import React from 'react';
-import { FaTag, FaGavel } from 'react-icons/fa';
+import { FaTag, FaGavel, FaTrash } from 'react-icons/fa';
 
-export default function ProductCard({ item, onBuy }) {
+export default function ProductCard({ item, onBuy, onDelete }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all group">
       <div className="relative h-48 overflow-hidden bg-gray-200">
@@ -17,7 +17,7 @@ export default function ProductCard({ item, onBuy }) {
       
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
-          <h3 className="font-bold text-lg leading-tight">{item.title}</h3>
+          <h3 className="font-bold text-lg leading-tight line-clamp-1">{item.title}</h3>
           <span className="text-green-600 font-black text-lg">₹{item.price}</span>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">{item.description}</p>
@@ -29,9 +29,21 @@ export default function ProductCard({ item, onBuy }) {
           >
             <FaTag /> Buy Now
           </button>
-          <button className="px-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-indigo-500 hover:bg-indigo-50 transition">
-            <FaGavel />
-          </button>
+          
+          {/* Conditional Rendering: Delete if Owner, Gavel/Bid if Visitor */}
+          {onDelete ? (
+            <button 
+                onClick={onDelete} 
+                className="px-3 bg-red-100 text-red-500 rounded-lg hover:bg-red-200 transition flex items-center justify-center"
+                title="Delete Listing"
+            >
+                <FaTrash />
+            </button>
+          ) : (
+            <button className="px-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-indigo-500 hover:bg-indigo-50 transition flex items-center justify-center">
+                <FaGavel />
+            </button>
+          )}
         </div>
       </div>
     </div>

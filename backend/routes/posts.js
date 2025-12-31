@@ -38,7 +38,7 @@ router.get('/bookmarks/me', protect, postsController.getBookmarks);
 router.get('/user/:id', optionalAuth, postsController.getPostsByUser); // Allow optionalAuth for public profiles
 router.put('/:id', protect, upload.any(), postsController.updatePost);
 router.delete('/:id', protect, postsController.deletePost);
-
+router.get('/:id/likes', protect, postsController.getPostLikes);
 // Comments (Aliasing the commentsController to /posts route is not standard, but fixing the missing /comments calls)
 // It's better to ensure frontend uses /api/comments/:postId, but adding an alias here for a quick fix if needed:
 // router.post('/:postId/comment', protect, commentsController.create);

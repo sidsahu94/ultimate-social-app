@@ -55,3 +55,11 @@ exports.markSingleRead = async (req, res) => {
     res.status(500).json({ message: 'Error marking notification', error: error.message });
   }
 };
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({ user: req.user.id, isRead: false });
+    res.json({ count });
+  } catch (error) {
+    res.status(500).json({ count: 0 });
+  }
+};

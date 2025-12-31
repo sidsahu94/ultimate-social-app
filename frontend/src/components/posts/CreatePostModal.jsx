@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { FaImage, FaVideo, FaPoll, FaSmile, FaGlobeAmericas, FaTimes, FaMagic } from 'react-icons/fa';
 import { useToast } from '../ui/ToastProvider';
 import { generateCaption } from '../../utils/aiGenerator';
+import { compressImage } from '../../utils/compressor'; 
 
 const FILTERS = [
   { name: 'Normal', val: '' },
@@ -16,7 +17,7 @@ const FILTERS = [
 ];
 
 export default function CreatePostModal({ isOpen, onClose, onPosted }) {
-  const [activeTab, setActiveTab] = useState('post'); // post | reel | poll
+  const [activeTab, setActiveTab] = useState('post'); 
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +42,17 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
     }
   }, [isOpen]);
 
+  // 🔥 Listen for external triggers (like Repost) to pre-fill content
+  useEffect(() => {
+    const handler = (e) => {
+        if (e.detail?.content) {
+            setText(e.detail.content);
+        }
+    };
+    window.addEventListener('openCreatePost', handler);
+    return () => window.removeEventListener('openCreatePost', handler);
+  }, []);
+
   // Handle Hashtag Detection
   const handleTextChange = async (e) => {
     const val = e.target.value;
@@ -52,7 +64,6 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
     if (lastWord.startsWith('#') && lastWord.length > 1) {
         const query = lastWord.slice(1);
         try {
-            // Ensure you have created backend/routes/tags.js for this to work
             const res = await API.get(`/tags/search?q=${query}`);
             setTagSuggestions(res.data || []);
         } catch(e) {
@@ -101,7 +112,12 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
       else {
          // Standard Post
          fd.append('content', text);
-         files.forEach(f => fd.append('media', f));
+         
+         for (const f of files) {
+             const processed = await compressImage(f);
+             fd.append('media', processed);
+         }
+
          await API.post('/posts', fd);
       }
 

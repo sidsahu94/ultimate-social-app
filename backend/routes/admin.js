@@ -9,6 +9,9 @@ router.use(protect, restrictTo('admin'));
 router.get('/stats', adminController.getStats);
 router.get('/users', adminController.listUsers);
 router.delete('/users/:id', adminController.deleteUser);
+// ... inside the router
+router.get('/posts', adminController.listPosts);
+// ...
 
 // future: add post moderation endpoints here
 

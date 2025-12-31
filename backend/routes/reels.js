@@ -12,5 +12,8 @@ router.get('/feed', protect, reels.feed);
 
 // ✅ LIKE / UNLIKE REEL (FIX)
 router.put('/like/:id', protect, reels.likeReel);
+// ... existing routes
+router.post('/:id/view', protect, reels.viewReel); // 🔥 NEW ROUTE
+
 
 module.exports = router;

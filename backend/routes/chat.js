@@ -10,7 +10,11 @@ router.post('/', protect, chatController.createChat);
 router.get('/', protect, chatController.getChats);
 router.post('/:chatId/message', protect, chatController.sendMessage);
 router.get('/:chatId', protect, chatController.getChatById);
-
+router.delete('/:chatId', protect, chatController.deleteChat);
+router.post('/:id/leave', protect, chatController.leaveChat);
+router.get('/:chatId/messages', protect, chatController.getMessages); 
+router.get('/meta/unread', protect, chatController.getUnreadCount);
+router.delete('/:chatId/messages/:messageId', protect, chatController.unsendMessage);
 // reactions, read receipts
 router.post('/:chatId/messages/:messageId/react', protect, chatController.reactMessage);
 

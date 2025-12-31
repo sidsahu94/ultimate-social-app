@@ -5,10 +5,10 @@ import { motion } from 'framer-motion';
 import { useToast } from '../ui/ToastProvider';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../redux/slices/authSlice';
-// ✅ FIX: Added FaTimes to the import
-import { FaTwitter, FaInstagram, FaLinkedin, FaTimes } from 'react-icons/fa';
+import { FaTwitter, FaInstagram, FaLinkedin, FaTimes, FaCamera } from 'react-icons/fa';
+import { compressImage } from '../../utils/compressor'; // 🔥 Fix: Import Compression
 
-const ProfileEditModal = ({ isOpen, onClose, user }) => {
+const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     const dispatch = useDispatch();
     const { add: addToast } = useToast();
     
@@ -16,10 +16,19 @@ const ProfileEditModal = ({ isOpen, onClose, user }) => {
         name: '', bio: '', website: '', 
         socialLinks: { twitter: '', instagram: '', linkedin: '' } 
     });
+    
+    // File States
     const [avatarFile, setAvatarFile] = useState(null);
     const [coverFile, setCoverFile] = useState(null);
+    
+    // Preview States
+    const [previewAvatar, setPreviewAvatar] = useState(null);
+    const [previewCover, setPreviewCover] = useState(null);
+    
+    const [deleteAvatar, setDeleteAvatar] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Initialize Data
     useEffect(() => {
         if(user) {
             setForm({ 
@@ -35,9 +44,42 @@ const ProfileEditModal = ({ isOpen, onClose, user }) => {
         }
         setAvatarFile(null);
         setCoverFile(null);
+        setPreviewAvatar(null);
+        setPreviewCover(null);
+        setDeleteAvatar(false);
     }, [user, isOpen]);
 
     if (!isOpen) return null;
+
+    const handleFileChange = (e, type) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (type === 'avatar') {
+            setAvatarFile(file);
+            setPreviewAvatar(URL.createObjectURL(file));
+            setDeleteAvatar(false);
+        } else {
+            setCoverFile(file);
+            setPreviewCover(URL.createObjectURL(file));
+        }
+    };
+
+    const handleDeleteAvatar = (e) => {
+        e.preventDefault(); 
+        e.stopPropagation(); 
+        setAvatarFile(null);
+        setPreviewAvatar(null); 
+        setDeleteAvatar(true); 
+    };
+
+    // 🔥 Fix: Link Sanitizer
+    const sanitizeLink = (url) => {
+        if (!url) return '';
+        const trimmed = url.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+        return `https://${trimmed}`;
+    };
 
     const submit = async (e) => {
         e.preventDefault();
@@ -48,21 +90,38 @@ const ProfileEditModal = ({ isOpen, onClose, user }) => {
             const fd = new FormData();
             fd.append('name', form.name);
             fd.append('bio', form.bio);
-            fd.append('website', form.website);
             
-            // Append social links
-            fd.append('socialLinks[twitter]', form.socialLinks.twitter);
-            fd.append('socialLinks[instagram]', form.socialLinks.instagram);
-            fd.append('socialLinks[linkedin]', form.socialLinks.linkedin);
+            // 🔥 Fix: Apply sanitization
+            fd.append('website', sanitizeLink(form.website));
+            fd.append('socialLinks[twitter]', sanitizeLink(form.socialLinks.twitter));
+            fd.append('socialLinks[instagram]', sanitizeLink(form.socialLinks.instagram));
+            fd.append('socialLinks[linkedin]', sanitizeLink(form.socialLinks.linkedin));
 
-            if (avatarFile) fd.append('avatar', avatarFile);
-            if (coverFile) fd.append('coverPhoto', coverFile);
+            if (deleteAvatar) fd.append('deleteAvatar', 'true');
+
+            // 🔥 Fix: Compress images
+            if (avatarFile) {
+                const compressed = await compressImage(avatarFile);
+                fd.append('avatar', compressed);
+            }
+            if (coverFile) {
+                const compressed = await compressImage(coverFile);
+                fd.append('coverPhoto', compressed);
+            }
             
             const res = await API.put(`/users/${user._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
             
             addToast('Profile saved successfully!', { type: 'success' });
-            dispatch(setUser(res.data));
-            onClose();
+            
+            // Update Redux
+            dispatch(setUser(res.data)); 
+            
+            // 🔥 Fix: Update Parent State
+            if (onUpdate) {
+                onUpdate(res.data);
+            } else {
+                onClose();
+            }
         } catch (err) {
             console.error('save profile err', err);
             addToast(err.userMessage || 'Failed to save profile', { type: 'error' });
@@ -123,15 +182,46 @@ const ProfileEditModal = ({ isOpen, onClose, user }) => {
                     
                     {/* Media Uploads */}
                     <div className="flex gap-4 pt-2">
-                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center text-sm">
-                            <div className="font-semibold">Change Avatar</div>
-                            <input type="file" accept="image/*" className="hidden" onChange={e=>setAvatarFile(e.target.files?.[0])} />
-                            {avatarFile && <span className="text-green-500 text-xs">{avatarFile.name}</span>}
+                        {/* Avatar */}
+                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center relative overflow-hidden group h-24 flex flex-col items-center justify-center">
+                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2"><FaCamera /> Avatar</div>
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'avatar')} />
+                            
+                            {(previewAvatar || (user.avatar && !deleteAvatar)) && (
+                                <>
+                                    <img src={previewAvatar || user.avatar} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" alt="preview" />
+                                    <div className="absolute bottom-1 text-[10px] text-green-600 font-bold bg-white/80 px-2 rounded z-20">
+                                        {previewAvatar ? 'Selected' : 'Current'}
+                                    </div>
+                                    
+                                    <button 
+                                        type="button"
+                                        onClick={handleDeleteAvatar}
+                                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full z-30 hover:bg-red-600 shadow-md transition-transform active:scale-95"
+                                        title="Remove Photo"
+                                    >
+                                        <FaTimes size={10} />
+                                    </button>
+                                </>
+                            )}
+                            
+                            {deleteAvatar && (
+                                <div className="absolute inset-0 bg-red-100/50 flex items-center justify-center text-red-500 text-xs font-bold">
+                                    Removed
+                                </div>
+                            )}
                         </label>
-                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center text-sm">
-                            <div className="font-semibold">Change Cover</div>
-                            <input type="file" accept="image/*" className="hidden" onChange={e=>setCoverFile(e.target.files?.[0])} />
-                            {coverFile && <span className="text-green-500 text-xs">{coverFile.name}</span>}
+
+                        {/* Cover */}
+                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center relative overflow-hidden group h-24 flex flex-col items-center justify-center">
+                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2"><FaCamera /> Cover</div>
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'cover')} />
+                            {previewCover && (
+                                <>
+                                    <img src={previewCover} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" alt="preview" />
+                                    <div className="absolute bottom-1 text-[10px] text-green-600 font-bold bg-white/80 px-2 rounded z-20">Selected</div>
+                                </>
+                            )}
                         </label>
                     </div>
                     

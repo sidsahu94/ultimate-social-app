@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaCalendarPlus, FaMapMarkerAlt, FaUsers, FaClock, FaCalendarAlt } from 'react-icons/fa';
+import { FaCalendarPlus, FaMapMarkerAlt, FaUsers, FaClock, FaCalendarAlt, FaTrash } from 'react-icons/fa'; // 🔥 Added FaTrash
 import API from '../../services/api';
 import Spinner from '../../components/common/Spinner';
 import { useToast } from '../../components/ui/ToastProvider';
+import CreateEventModal from '../../components/events/CreateEventModal';
+import { useSelector } from 'react-redux'; // 🔥 Added useSelector
 
 export default function EventsPage() {
+  const myId = useSelector(s => s.auth.user?._id); // 🔥 Get Current User ID
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('upcoming');
+  const [showModal, setShowModal] = useState(false);
   const { add: addToast } = useToast();
 
   useEffect(() => {
@@ -18,7 +22,6 @@ export default function EventsPage() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      // Calls the new Apps Controller endpoint
       const res = await API.get('/apps/events');
       setEvents(res.data || []);
     } catch (e) {
@@ -33,30 +36,22 @@ export default function EventsPage() {
     try {
       await API.post(`/apps/events/${id}/join`);
       addToast("You joined the event!", { type: 'success' });
-      loadEvents(); // Refresh list to show updated attendee count
+      loadEvents(); 
     } catch (e) {
       addToast("Failed to join", { type: 'error' });
     }
   };
 
-  const handleCreate = async () => {
-    // For a real app, you'd open a modal here.
-    // For this demo, we'll create a quick test event to verify the DB works.
-    const title = prompt("Event Title:");
-    if (!title) return;
-    
-    try {
-      await API.post('/apps/events', {
-        title,
-        date: new Date(Date.now() + 86400000), // Tomorrow
-        location: 'Virtual',
-        description: 'Community meetup'
-      });
-      addToast("Event created!", { type: 'success' });
-      loadEvents();
-    } catch (e) {
-      addToast("Failed to create", { type: 'error' });
-    }
+  // 🔥 NEW: Delete Event Handler
+  const handleDelete = async (id) => {
+      if(!confirm("Are you sure you want to cancel this event?")) return;
+      try {
+          await API.delete(`/apps/events/${id}`);
+          addToast("Event cancelled successfully", { type: 'info' });
+          setEvents(prev => prev.filter(e => e._id !== id));
+      } catch(e) { 
+          addToast("Failed to delete event", { type: 'error' }); 
+      }
   };
 
   return (
@@ -69,8 +64,9 @@ export default function EventsPage() {
         <div className="relative z-20 text-white max-w-lg">
           <h1 className="text-4xl font-bold mb-2">Discover Events</h1>
           <p className="text-indigo-200 mb-6">Find concerts, workshops, and meetups happening near you.</p>
+          
           <button 
-            onClick={handleCreate}
+            onClick={() => setShowModal(true)}
             className="bg-white text-indigo-900 px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition shadow-lg"
           >
             <FaCalendarPlus /> Create Event
@@ -82,7 +78,7 @@ export default function EventsPage() {
       <div className="flex gap-4 mb-6 border-b dark:border-gray-800 pb-1">
         {['upcoming', 'my events'].map(t => (
           <button 
-            key={t}
+            key={t} 
             onClick={() => setFilter(t)}
             className={`px-4 py-2 capitalize font-medium transition ${filter === t ? 'text-indigo-500 border-b-2 border-indigo-500' : 'text-gray-500 hover:text-gray-400'}`}
           >
@@ -101,51 +97,74 @@ export default function EventsPage() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((evt, i) => (
-            <motion.div 
-              key={evt._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="group bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all border border-gray-100 dark:border-gray-700 flex flex-col"
-            >
-              <div className="h-48 overflow-hidden relative bg-gray-200">
-                <img 
-                  src={evt.image || `https://source.unsplash.com/random/500x300?event&sig=${i}`} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                  alt={evt.title}
-                />
-                <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-black px-3 py-1 rounded-lg text-xs font-bold shadow-sm flex flex-col items-center">
-                  <span className="text-xs uppercase text-red-500">{new Date(evt.date).toLocaleString('default', { month: 'short' })}</span>
-                  <span className="text-lg leading-none">{new Date(evt.date).getDate()}</span>
-                </div>
-              </div>
-              
-              <div className="p-5 flex-1 flex flex-col">
-                <h3 className="font-bold text-lg mb-2 line-clamp-1">{evt.title}</h3>
-                <div className="flex flex-col gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4 flex-1">
-                  <div className="flex items-center gap-2">
-                    <FaMapMarkerAlt className="text-indigo-500" /> {evt.location || 'Online'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaClock className="text-orange-500" /> {new Date(evt.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaUsers className="text-green-500" /> {evt.attendees?.length || 0} Going
-                  </div>
+          {events.map((evt, i) => {
+            // 🔥 Check Ownership
+            const isHost = String(evt.host?._id || evt.host) === String(myId);
+
+            return (
+                <motion.div 
+                key={evt._id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="group bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all border border-gray-100 dark:border-gray-700 flex flex-col"
+                >
+                <div className="h-48 overflow-hidden relative bg-gray-200">
+                    <img 
+                    src={evt.image || `https://source.unsplash.com/random/500x300?event&sig=${i}`} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                    alt={evt.title}
+                    />
+                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-black px-3 py-1 rounded-lg text-xs font-bold shadow-sm flex flex-col items-center">
+                    <span className="text-xs uppercase text-red-500">{new Date(evt.date).toLocaleString('default', { month: 'short' })}</span>
+                    <span className="text-lg leading-none">{new Date(evt.date).getDate()}</span>
+                    </div>
                 </div>
                 
-                <button 
-                  onClick={() => handleJoin(evt._id)}
-                  className="w-full py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition"
-                >
-                  Join Event
-                </button>
-              </div>
-            </motion.div>
-          ))}
+                <div className="p-5 flex-1 flex flex-col relative"> {/* Added relative for positioning */}
+                    
+                    {/* 🔥 Delete Button (Top Right of Content Area) */}
+                    {isHost && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete(evt._id); }}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition z-10"
+                            title="Cancel Event"
+                        >
+                            <FaTrash />
+                        </button>
+                    )}
+
+                    <h3 className="font-bold text-lg mb-2 line-clamp-1 pr-8">{evt.title}</h3>
+                    <div className="flex flex-col gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4 flex-1">
+                    <div className="flex items-center gap-2">
+                        <FaMapMarkerAlt className="text-indigo-500" /> {evt.location || 'Online'}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <FaClock className="text-orange-500" /> {new Date(evt.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <FaUsers className="text-green-500" /> {evt.attendees?.length || 0} Going
+                    </div>
+                    </div>
+                    
+                    <button 
+                    onClick={() => handleJoin(evt._id)}
+                    className="w-full py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition"
+                    >
+                    Join Event
+                    </button>
+                </div>
+                </motion.div>
+            );
+          })}
         </div>
       )}
+
+      <CreateEventModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        onCreated={loadEvents} 
+      />
     </div>
   );
 }

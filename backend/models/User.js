@@ -13,8 +13,15 @@ const UserSchema = new mongoose.Schema({
   isVerified: { type:Boolean, default:false },
 
   googleId: String,
+  
+  // Social Graph
   followers: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
   following: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
+  
+  // 🔥 BLOCKED USERS (New)
+  blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  
+  closeFriends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   saved: [{ type:mongoose.Schema.Types.ObjectId, ref:'Post' }],
 
   // Gamification & Wallet
@@ -24,7 +31,6 @@ const UserSchema = new mongoose.Schema({
     totalReceived: { type:Number, default: 0 },
     totalSent: { type:Number, default: 0 }
   },
-  // --- NEW FIELDS ---
   lastAirdrop: { type: Date, default: null }, // For 24h cooldown
   referralCode: { type: String, unique: true, sparse: true }, 
   referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -53,6 +59,7 @@ const UserSchema = new mongoose.Schema({
   resetOtpExpires: { type:Number, select:false },
 }, { timestamps:true });
 
+// Indexes for Search
 UserSchema.index({ name:'text', email:'text' });
 UserSchema.index({ geo: '2dsphere' });
 

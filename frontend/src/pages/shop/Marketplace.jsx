@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import ProductCard from '../../components/shop/ProductCard';
-import { FaSearch, FaFilter, FaPlus, FaStore } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaStore } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../components/ui/ToastProvider';
+import { useSelector, useDispatch } from 'react-redux';
+import { updateAuthUser } from '../../redux/slices/authSlice'; // 🔥 Import Redux action
 
-const CATEGORIES = ['All', 'Digital', 'Services', 'Merch', 'NFTs'];
+const CATEGORIES = ['All', 'Digital', 'Services', 'Merch', 'NFTs', 'Mine'];
 
 export default function Marketplace() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('All');
   const [showCreate, setShowCreate] = useState(false);
   const [newItem, setNewItem] = useState({ title: '', price: '', desc: '' });
+  
   const { add } = useToast();
+  const dispatch = useDispatch();
+  
+  // Get current user from Redux
+  const { user } = useSelector(s => s.auth);
+  const myId = user?._id;
 
   useEffect(() => { loadItems(); }, []);
 
@@ -29,10 +37,58 @@ export default function Marketplace() {
       add('Listing created!', { type: 'success' });
       setShowCreate(false);
       loadItems();
+      setNewItem({ title: '', price: '', desc: '' });
     } catch (e) { add('Failed to create', { type: 'error' }); }
   };
 
-  const filteredItems = filter === 'All' ? items : items.filter(i => i.category === filter);
+  const handleDeleteItem = async (itemId) => {
+    if(!confirm("Remove listing?")) return;
+    try {
+        await API.delete(`/shop/${itemId}`);
+        setItems(prev => prev.filter(i => i._id !== itemId));
+        add("Listing removed", { type: 'info' });
+    } catch(e) { 
+        add("Failed to delete", { type: 'error' }); 
+    }
+  };
+
+  // 🔥 NEW: Real Purchase Logic
+  const handleBuy = async (item) => {
+    if (!user) return add("Please login to buy items", { type: 'error' });
+    if (!confirm(`Buy "${item.title}" for ${item.price} coins?`)) return;
+
+    try {
+      // 1. Call API to execute transaction
+      await API.post(`/shop/${item._id}/buy`);
+      
+      add(`Successfully purchased ${item.title}!`, { type: 'success' });
+      
+      // 2. Update Local Item State (Decrease stock visually)
+      setItems(prev => prev.map(i => {
+          if (i._id === item._id) {
+              return { ...i, stock: (i.stock || 1) - 1 };
+          }
+          return i;
+      }));
+
+      // 3. Update Redux Wallet immediately so UI reflects new balance
+      const currentBalance = user.wallet?.balance || 0;
+      dispatch(updateAuthUser({ 
+          wallet: { 
+              ...user.wallet, 
+              balance: currentBalance - item.price 
+          } 
+      }));
+
+    } catch (e) {
+      add(e.userMessage || 'Purchase failed (Insufficient funds?)', { type: 'error' });
+    }
+  };
+
+  // Filter Logic
+  const filteredItems = filter === 'Mine' 
+    ? items.filter(i => i.owner?._id === myId || i.createdBy === myId)
+    : (filter === 'All' ? items : items.filter(i => i.category === filter));
 
   return (
     <div className="max-w-6xl mx-auto p-4 min-h-screen">
@@ -74,13 +130,21 @@ export default function Marketplace() {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredItems.map((item, i) => (
-          <motion.div key={item._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <ProductCard item={item} onBuy={() => add(`Bought ${item.title}`, { type: 'success' })} />
-          </motion.div>
-        ))}
-      </div>
+      {filteredItems.length === 0 ? (
+          <div className="text-center py-10 text-gray-500">No items found in this category.</div>
+      ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredItems.map((item, i) => (
+              <motion.div key={item._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                <ProductCard 
+                    item={item} 
+                    onBuy={() => handleBuy(item)} // 🔥 Use real handler
+                    onDelete={filter === 'Mine' || item.createdBy === myId ? () => handleDeleteItem(item._id) : null}
+                />
+              </motion.div>
+            ))}
+          </div>
+      )}
 
       {/* Create Modal */}
       <AnimatePresence>

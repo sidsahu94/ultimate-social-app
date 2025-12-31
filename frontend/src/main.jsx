@@ -5,57 +5,25 @@ import { Provider } from 'react-redux';
 import { store } from './redux/store';
 import { ThemeProvider } from './contexts/ThemeProvider';
 import { ToastProvider } from './components/ui/ToastProvider';
-import { VideoProvider } from './contexts/VideoContext'; // "Super App" Video Context
+import { VideoProvider } from './contexts/VideoContext';
+import { SocketProvider } from './contexts/SocketContext'; // Ensure this file exists
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import "./index.css";
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
-import socket, { updateSocketAuth } from './services/socket';
-import { fetchMe, setUser } from './redux/slices/authSlice';
+import { fetchMe } from './redux/slices/authSlice';
 
-// --- Socket Connector Component ---
-// Handles connecting/disconnecting socket based on Auth state
-function SocketConnector() {
+// --- Auth Initializer ---
+// Ensures user session is validated on app load before rendering children
+function AuthInitializer({ children }) {
   React.useEffect(() => {
     const token = localStorage.getItem('token');
-    const meId = localStorage.getItem('meId');
-    
-    if (!token || !meId) {
-      store.dispatch(setUser(null)); 
-      return;
+    if (token) {
+        store.dispatch(fetchMe());
     }
-
-    // 1. Fetch user data to verify token
-    store.dispatch(fetchMe())
-      .unwrap()
-      .then(user => {
-        // 2. Update Redux & Socket Auth
-        store.dispatch(setUser(user));
-        updateSocketAuth(token, user._id);
-        socket.connect();
-        
-        // 3. Join Personal Room
-        socket.on('connect', () => {
-          socket.emit('joinRoom', { room: user._id }); 
-          console.log('🔌 Socket connected via Main.jsx');
-        });
-      })
-      .catch(err => {
-        console.warn('Session expired:', err);
-        localStorage.removeItem('token');
-        localStorage.removeItem('meId');
-        store.dispatch(setUser(null)); 
-      });
-
-    return () => {
-      // Cleanup on unmount (though Main usually doesn't unmount)
-      if (socket && socket.connected) socket.disconnect();
-    };
   }, []);
-  
-  return null;
+  return children;
 }
 
-// --- Root Component ---
 const Root = () => {
   useKeyboardShortcuts();
   
@@ -63,20 +31,24 @@ const Root = () => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   if (!clientId) {
-    console.error("🚨 CRITICAL: VITE_GOOGLE_CLIENT_ID is missing in .env file. Google Login will fail.");
+    console.warn("⚠️ VITE_GOOGLE_CLIENT_ID is missing. Google Login may fail.");
   }
 
   return (
     <GoogleOAuthProvider clientId={clientId}>
       <Provider store={store}>
-        <ThemeProvider>
-          <ToastProvider>
-            <VideoProvider>
-              <SocketConnector />
-              <App />
-            </VideoProvider>
-          </ToastProvider>
-        </ThemeProvider>
+        <AuthInitializer>
+          <ThemeProvider>
+            <ToastProvider>
+              {/* SocketProvider handles the connection logic now */}
+              <SocketProvider>
+                <VideoProvider>
+                  <App />
+                </VideoProvider>
+              </SocketProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </AuthInitializer>
       </Provider>
     </GoogleOAuthProvider>
   );

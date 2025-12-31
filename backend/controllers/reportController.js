@@ -1,5 +1,8 @@
 // backend/controllers/reportController.js
 const Report = require('../models/Report');
+const User = require('../models/User');
+const Post = require('../models/Post');
+const Notification = require('../models/Notification');
 
 exports.createReport = async (req, res) => {
   try {
@@ -29,16 +32,48 @@ exports.getReports = async (req, res) => {
     console.error('getReports err', err);
     return res.status(500).json({ message: 'Server error' });
   }
-};
+};// Import Notification model
 
 exports.updateReport = async (req, res) => {
   try {
-    const id = req.params.id;
-    const update = req.body;
-    const r = await Report.findByIdAndUpdate(id, update, { new: true });
-    return res.json(r);
+    const { status, action } = req.body; // status: 'resolved', action: 'ban', 'warn', 'hide_post'
+    
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    // 1. Update Report State
+    if (status) report.status = status;
+    if (action) report.action = action;
+    report.handledBy = req.user._id;
+
+    // 2. 🔥 AUTO-EXECUTE ACTION LOGIC
+    if (status === 'resolved' || status === 'actioned') {
+        
+        // A) Ban User
+        if (action === 'ban' && report.targetUser) {
+            await User.findByIdAndUpdate(report.targetUser, { role: 'banned' });
+            // Optional: Create system notification for the user (if they can still read them)
+        }
+        
+        // B) Hide/Flag Post
+        if ((action === 'hide_post' || action === 'remove') && report.targetPost) {
+            await Post.findByIdAndUpdate(report.targetPost, { isFlagged: true });
+        }
+
+        // C) Send Warning
+        if (action === 'warn' && report.targetUser) {
+             await Notification.create({
+                 user: report.targetUser,
+                 type: 'system',
+                 message: `⚠️ Community Warning: Your content was reported for "${report.reason}". Please review our guidelines.`
+             });
+        }
+    }
+
+    await report.save();
+    res.json(report);
   } catch (err) {
-    console.error('updateReport err', err);
-    return res.status(500).json({ message: 'Server error' });
+    console.error('Update report error:', err);
+    res.status(500).json({ message: 'Error processing report action' });
   }
 };

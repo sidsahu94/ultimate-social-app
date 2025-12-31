@@ -1,9 +1,14 @@
+// backend/models/Chat.js
 const mongoose = require('mongoose');
 
 const MessageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref:'User', required:true },
   content: { type:String, default:'' },
-  media: { type:String, default:null }, // single file URL
+  media: { type:String, default:null }, // For images/videos
+  
+  // ✅ ADDED: Audio field for voice notes
+  audio: { type:String, default:null }, 
+  
   reactions: [{
     by: { type: mongoose.Schema.Types.ObjectId, ref:'User' },
     emoji: { type:String }

@@ -1,17 +1,31 @@
-// src/pages/auth/Login.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser } from '../../redux/slices/authSlice';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Spinner from '../../components/common/Spinner';
-import GoogleLoginButton from '../../components/auth/GoogleLoginButton'; // Ensure this component exists
+import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const Login = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading, error } = useSelector(s => s.auth);
+  
   const [form, setForm] = useState({ email: '', password: '' });
+  const [showPass, setShowPass] = useState(false);
 
-  if (user) return <Navigate to="/" />;
+  // 🔥 FIX: Deep Linking Logic
+  // If the user was redirected here from a protected route, 'from' will hold that path.
+  // Otherwise, default to '/' (Home).
+  const from = location.state?.from?.pathname || "/";
+
+  // Watch for successful login (user state update) and redirect
+  useEffect(() => {
+    if (user) {
+      navigate(from, { replace: true });
+    }
+  }, [user, navigate, from]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -19,7 +33,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-black transition-all duration-1000">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-black transition-all duration-1000 p-4">
       
       {/* Glass Card */}
       <div className="w-full max-w-md bg-white/10 dark:bg-black/40 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/10">
@@ -61,23 +75,43 @@ const Login = () => {
                 placeholder="Email address"
                 type="email"
                 name="email"
-                autoComplete="email" /* Fixes Autocomplete Warning */
+                autoComplete="email"
                 value={form.email}
                 onChange={e => setForm({...form, email: e.target.value})}
                 required
               />
             </div>
-            <div>
+            
+            {/* Password Input with Toggle */}
+            <div className="relative">
               <input
-                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-white placeholder-gray-500 transition hover:bg-white/10"
+                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-white placeholder-gray-500 transition hover:bg-white/10 pr-12"
                 placeholder="Password"
-                type="password"
+                type={showPass ? "text" : "password"}
                 name="password"
-                autoComplete="current-password" /* Fixes Autocomplete Warning */
+                autoComplete="current-password"
                 value={form.password}
                 onChange={e => setForm({...form, password: e.target.value})}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                title={showPass ? "Hide password" : "Show password"}
+              >
+                {showPass ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
+              </button>
+            </div>
+
+            {/* Forgot Password Link */}
+            <div className="flex justify-end">
+                <Link 
+                    to="/forgot-password" 
+                    className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition"
+                >
+                    Forgot Password?
+                </Link>
             </div>
 
             <button 

@@ -17,5 +17,5 @@ router.post('/games/score', protect, appsController.submitScore);
 
 // Analytics
 router.get('/analytics', protect, appsController.getAnalytics);
-
+router.delete('/events/:id', protect, appsController.deleteEvent);
 module.exports = router;

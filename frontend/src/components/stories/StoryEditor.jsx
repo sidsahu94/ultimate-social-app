@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FaTimes, FaPaperPlane, FaFont, FaPalette } from 'react-icons/fa';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';
+import { compressImage } from '../../utils/compressor'; // 🔥 Import compressor
 
 const COLORS = ['#ffffff', '#000000', '#ff0055', '#00ccff', '#ffcc00'];
 
@@ -18,7 +19,18 @@ export default function StoryEditor({ file, onClose, onPosted }) {
     setLoading(true);
     try {
       const fd = new FormData();
-      fd.append('media', file);
+      
+      // 🔥 FIX: Compress file if it is an image
+      let fileToSend = file;
+      if (!isVideo) {
+          try {
+            fileToSend = await compressImage(file);
+          } catch (err) {
+            console.warn("Compression skipped", err);
+          }
+      }
+
+      fd.append('media', fileToSend);
       fd.append('caption', caption);
       // For a real text overlay, you'd canvas-draw this on backend or frontend.
       // Here we store it as metadata.

@@ -7,6 +7,8 @@ const upload = require('../utils/multer');
 
 // Specific routes first
 router.get('/me', protect, users.getMe);
+router.delete('/me', protect, users.deleteMe);
+router.post('/:id/block', protect, users.blockUser);
 
 // Close Friends (must come before dynamic /:id)
 router.put('/close-friends', protect, users.updateCloseFriends);

@@ -1,4 +1,3 @@
-// controllers/appsController.js
 const Event = require('../models/Event');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
@@ -76,13 +75,77 @@ exports.getLeaderboard = async (req, res) => {
   } catch (e) { res.status(500).json({ message: 'Error' }); }
 };
 
+// ... existing imports
+
 exports.submitScore = async (req, res) => {
   try {
-    await GameScore.create({ 
-      user: req.user._id, 
-      gameId: req.body.gameId, 
-      score: req.body.score 
-    });
-    res.json({ message: 'Score saved' });
-  } catch (e) { res.status(500).json({ message: 'Error' }); }
+    const { gameId, score } = req.body;
+    const userId = req.user._id;
+
+    // 1. Save Score (Always allow playing)
+    await GameScore.create({ user: userId, gameId, score });
+
+    // 2. Reward Logic (With Daily Cap)
+    const reward = Math.floor(score / 100);
+
+    if (reward > 0) {
+      const user = await User.findById(userId);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      // Find total earned today from games
+      // (This requires looking up recent transactions or storing a "dailyEarned" field on User. 
+      //  For this fix, we'll aggregate Transactions.)
+      const todaysTransactions = await Transaction.find({
+          user: userId,
+          type: 'credit',
+          description: { $regex: /Reward for/ }, // Matches our game description
+          createdAt: { $gte: today }
+      });
+
+      const earnedToday = todaysTransactions.reduce((acc, t) => acc + t.amount, 0);
+      const DAILY_CAP = 500;
+
+      if (earnedToday >= DAILY_CAP) {
+          return res.json({ message: 'Score saved (Daily limit reached)', earned: 0 });
+      }
+
+      // Cap the reward if it exceeds remaining limit
+      const actualReward = Math.min(reward, DAILY_CAP - earnedToday);
+
+      if (actualReward > 0) {
+          user.wallet.balance += actualReward;
+          user.wallet.totalReceived += actualReward;
+          await user.save();
+
+          await Transaction.create({
+            user: userId,
+            type: 'credit',
+            amount: actualReward,
+            description: `Reward for ${gameId} score: ${score}`
+          });
+
+          return res.json({ message: 'Score saved', earned: actualReward, newBalance: user.wallet.balance });
+      }
+    }
+
+    res.json({ message: 'Score saved', earned: 0 });
+  } catch (e) { 
+    console.error(e);
+    res.status(500).json({ message: 'Error saving score' }); 
+  }
+};
+exports.deleteEvent = async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Not found' });
+    
+    // Check ownership
+    if (String(event.host) !== String(req.user._id)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    await Event.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Event deleted' });
+  } catch (e) { res.status(500).json({ message: 'Server error' }); }
 };

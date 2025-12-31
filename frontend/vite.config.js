@@ -4,20 +4,21 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // 🔥 FIX: Define 'global' for libraries like simple-peer
+  define: {
+    global: 'window',
+  },
   server: {
     port: 5173,
-    // This proxy is the permanent fix.
     proxy: {
-      // 1. Proxy all API requests
       '/api': {
-        target: 'http://localhost:5000', // Your backend server
-        changeOrigin: true, // Needed for virtual hosted sites
-        secure: false,      // Do not validate SSL certs
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
       },
-      // 2. Proxy the WebSocket connection
       '/socket.io': {
-        target: 'http://localhost:5000', // Your backend server
-        ws: true,           // Enable WebSocket proxying
+        target: 'http://localhost:5000',
+        ws: true,
         changeOrigin: true,
         secure: false,
       },

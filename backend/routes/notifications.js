@@ -26,5 +26,6 @@ router.post('/:id/read', protect, async (req, res) => {
     }
   }
 });
+router.get('/unread-count', protect, notificationsController.getUnreadCount);
 
 module.exports = router;

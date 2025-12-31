@@ -18,13 +18,13 @@ export default function MainLayout() {
 
       <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-[80px_1fr] xl:grid-cols-[280px_1fr_350px]">
         
-        {/* LEFT: Navigation */}
-        <div className="hidden md:block sticky top-0 h-screen z-30">
+        {/* LEFT: Navigation - Sticky Fixed */}
+        <div className="hidden md:block sticky top-0 h-screen z-30 overflow-y-auto no-scrollbar">
           <Navbar />
         </div>
 
         {/* MIDDLE: Feed/Content */}
-        {/* Added pb-24 for mobile to account for bottom dock */}
+        {/* 🔥 FIX: Added 'pb-24' for mobile to clear the bottom navbar, 'md:pb-6' for desktop */}
         <main className="min-h-screen w-full max-w-[700px] mx-auto pt-4 md:pt-6 px-0 md:px-4 pb-24 md:pb-6 overflow-x-hidden">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -35,7 +35,7 @@ export default function MainLayout() {
           </motion.div>
         </main>
 
-        {/* RIGHT: Trends & Suggestions */}
+        {/* RIGHT: Trends & Suggestions - Sticky Fixed */}
         <div className="hidden xl:block sticky top-0 h-screen pl-6 py-6 overflow-y-auto no-scrollbar z-20">
           <RightSidebar />
         </div>

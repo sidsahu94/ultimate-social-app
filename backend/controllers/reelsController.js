@@ -96,3 +96,17 @@ exports.likeReel = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+// ... existing imports
+
+// ---------------- INCREMENT VIEW ----------------
+exports.viewReel = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // $inc is atomic and efficient
+    await Reel.findByIdAndUpdate(id, { $inc: { views: 1 } });
+    res.json({ success: true });
+  } catch (err) {
+    // Fail silently for analytics
+    res.status(200).json({ success: false }); 
+  }
+};

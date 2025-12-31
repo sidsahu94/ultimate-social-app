@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Peer from 'simple-peer';
 import socket from '../../services/socket';
+import { useToast } from '../../components/ui/ToastProvider';
 import {
   FaMicrophone,
   FaMicrophoneSlash,
@@ -19,6 +20,7 @@ const ICE_SERVERS = [
 export default function CallRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const { add } = useToast();
 
   const myVideo = useRef(null);
   const peerVideo = useRef(null);
@@ -42,7 +44,9 @@ export default function CallRoom() {
         });
 
         setStream(localStream);
-        myVideo.current.srcObject = localStream;
+        if (myVideo.current) {
+            myVideo.current.srcObject = localStream;
+        }
 
         if (!socket.connected) socket.connect();
         socket.emit('joinRoom', { room: roomId });
@@ -60,8 +64,21 @@ export default function CallRoom() {
             peerRef.current.signal(signal);
           }
         });
+
+        // 🔥 WIRE UP: Handle Rejection/End
+        socket.on('call:rejected', () => {
+            add('Call rejected or busy', { type: 'error' });
+            cleanupAndLeave();
+        });
+
+        socket.on('call:ended', () => {
+            add('Call ended', { type: 'info' });
+            cleanupAndLeave();
+        });
+
       } catch (err) {
-        alert('Camera/Microphone permission denied');
+        console.error("Media Error:", err);
+        add('Camera/Microphone permission denied', { type: 'error' });
         navigate('/chat');
       }
     };
@@ -71,10 +88,12 @@ export default function CallRoom() {
     return () => {
       socket.off('user-joined');
       socket.off('call:signal');
-      if (peerRef.current) peerRef.current.destroy();
+      socket.off('call:rejected');
+      socket.off('call:ended');
+      // Cleanup tracks on unmount
       if (stream) stream.getTracks().forEach((t) => t.stop());
     };
-  }, [roomId, navigate]);
+  }, [roomId, navigate, add]);
 
   // HOST
   const createPeer = (toSocketId, stream) => {
@@ -94,7 +113,9 @@ export default function CallRoom() {
     });
 
     peer.on('stream', (remoteStream) => {
-      peerVideo.current.srcObject = remoteStream;
+      if (peerVideo.current) {
+          peerVideo.current.srcObject = remoteStream;
+      }
       setCallAccepted(true);
     });
 
@@ -118,7 +139,9 @@ export default function CallRoom() {
     });
 
     peer.on('stream', (remoteStream) => {
-      peerVideo.current.srcObject = remoteStream;
+      if (peerVideo.current) {
+          peerVideo.current.srcObject = remoteStream;
+      }
       setCallAccepted(true);
     });
 
@@ -127,59 +150,80 @@ export default function CallRoom() {
   };
 
   const toggleMute = () => {
-    stream.getAudioTracks()[0].enabled =
-      !stream.getAudioTracks()[0].enabled;
-    setIsMuted(!stream.getAudioTracks()[0].enabled);
+    if (stream) {
+        stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
+        setIsMuted(!stream.getAudioTracks()[0].enabled);
+    }
   };
 
   const toggleVideo = () => {
-    stream.getVideoTracks()[0].enabled =
-      !stream.getVideoTracks()[0].enabled;
-    setIsVideoOff(!stream.getVideoTracks()[0].enabled);
+    if (stream) {
+        stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
+        setIsVideoOff(!stream.getVideoTracks()[0].enabled);
+    }
+  };
+
+  const cleanupAndLeave = () => {
+    if (peerRef.current) peerRef.current.destroy();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    navigate('/chat');
+    // window.location.reload(); // Optional: force refresh to clear WebRTC states if buggy
   };
 
   const leaveCall = () => {
-    if (peerRef.current) peerRef.current.destroy();
-    navigate('/chat');
-    window.location.reload();
+    // Notify other peer
+    socket.emit('call:rejected', { roomId }); // Reuse rejection event to signal end
+    cleanupAndLeave();
   };
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 relative">
-      <div className="flex-1 flex items-center justify-center gap-4 p-4">
-        {callAccepted && (
+      <div className="flex-1 flex items-center justify-center gap-4 p-4 relative overflow-hidden">
+        
+        {/* Remote Video */}
+        {callAccepted ? (
           <video
             ref={peerVideo}
             autoPlay
             playsInline
-            className="w-2/3 h-full object-cover rounded-xl"
+            className="w-full h-full object-cover rounded-xl"
           />
+        ) : (
+            <div className="text-white animate-pulse">Waiting for answer...</div>
         )}
 
+        {/* Local Video (PiP) */}
         <video
           ref={myVideo}
           autoPlay
           muted
           playsInline
-          className={`object-cover rounded-xl ${
-            callAccepted
-              ? 'w-1/4 h-1/4 absolute bottom-24 right-4'
-              : 'w-2/3 h-full'
-          }`}
+          className={`object-cover rounded-xl border-2 border-gray-700 shadow-lg bg-black transition-all duration-300
+            ${callAccepted 
+              ? 'w-32 h-48 absolute bottom-24 right-6 z-20' 
+              : 'w-2/3 h-2/3 rounded-3xl opacity-50 blur-sm absolute' 
+            }`}
         />
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-4 bg-gray-800 p-4 rounded-full">
-        <button onClick={toggleMute}>
-          {isMuted ? <FaMicrophoneSlash /> : <FaMicrophone />}
+      {/* Controls */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-6 bg-gray-800/80 backdrop-blur-md p-4 rounded-full shadow-2xl z-30 border border-gray-700">
+        <button 
+            onClick={toggleMute} 
+            className={`p-4 rounded-full transition ${isMuted ? 'bg-white text-gray-900' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+        >
+          {isMuted ? <FaMicrophoneSlash size={20} /> : <FaMicrophone size={20} />}
         </button>
 
-        <button onClick={toggleVideo}>
-          {isVideoOff ? <FaVideoSlash /> : <FaVideo />}
+        <button 
+            onClick={toggleVideo}
+            className={`p-4 rounded-full transition ${isVideoOff ? 'bg-white text-gray-900' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+        >
+          {isVideoOff ? <FaVideoSlash size={20} /> : <FaVideo size={20} />}
         </button>
 
-        <button onClick={leaveCall} className="text-red-500">
-          <FaPhoneSlash />
+        <button onClick={leaveCall} className="p-4 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-lg shadow-red-600/30">
+          <FaPhoneSlash size={20} />
         </button>
       </div>
     </div>

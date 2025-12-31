@@ -3,134 +3,246 @@ import API from "../../services/api";
 import { motion } from "framer-motion";
 import { useToast } from "../ui/ToastProvider";
 import socket from '../../services/socket';
-import UserAvatar from "../ui/UserAvatar"; // Updated to use the new Avatar component
+import UserAvatar from "../ui/UserAvatar";
+import { FaTrash, FaHeart, FaRegHeart } from "react-icons/fa"; // 🔥 Added Heart Icons
+import { useSelector } from "react-redux"; 
 
-const fetchPost = async (id) => {
-	const tryPaths = [`/posts/${id}`, `/post/${id}`, `/posts/post/${id}`];
-	for (const p of tryPaths) {
-		try {
-			const r = await API.get(p);
-			if (r?.data) return r.data;
-		} catch (e) {}
-	}
-	throw new Error("Post not found");
-};
+const CommentsModal = ({ postId, isOpen, onClose }) => {
+    const [post, setPost] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [content, setContent] = useState("");
+    const [sending, setSending] = useState(false);
+    
+    // Pagination State
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
 
-const postComment = async (postId, content) => {
-    // Ensuring we hit the specific route defined in server.js
-	const r = await API.post(`/comments/${postId}`, { text: content });
-    return r.data;
-};
+    const { add } = useToast();
+    const myId = useSelector(s => s.auth.user?._id);
 
-const CommentsModal = ({ postId, isOpen, onClose, onCommentAdded }) => {
-	const [post, setPost] = useState(null);
-	const [loading, setLoading] = useState(false);
-	const [content, setContent] = useState("");
-	const [sending, setSending] = useState(false);
-	const { add } = useToast();
+    // --- Socket Logic (Real-time updates) ---
+    useEffect(() => {
+        if (!postId) return;
+        socket.emit('joinRoom', { room: `post:${postId}` });
+        
+        const onNewComment = (newComment) => {
+            // 🔥 FIX: Ignore event if I created the comment (API response already added it)
+            if (newComment.user?._id === myId || newComment.user === myId) {
+                return;
+            }
 
-	useEffect(() => {
-		if (!postId) return;
-
-		socket.emit('joinRoom', { room: `post:${postId}` });
-
-        // --- FIX: Changed event name from 'post:comment' to 'comment:created' ---
-		const onNewComment = (newComment) => {
-            // Check if this comment belongs to current post (backend sends the whole comment obj)
-			if (newComment.post === postId || newComment.postId === postId || (post && post._id === postId)) {
-				setPost(prev => ({
+            if (newComment.post === postId || (post && post._id === postId)) {
+                setPost(prev => ({
                     ...prev,
                     comments: [newComment, ...(prev?.comments || [])],
-                    commentsCount: (prev?.commentsCount || 0) + 1
                 }));
-			}
-		};
+            }
+        };
+        
+        const onDeleteComment = ({ commentId }) => {
+            setPost(prev => ({
+                ...prev,
+                comments: prev.comments.filter(c => c._id !== commentId)
+            }));
+        };
 
-		socket.on('comment:created', onNewComment);
+        // Listen for socket like events on comments (optional, but good for consistency)
+        const onLikeComment = ({ commentId, likesCount }) => {
+             // For simplicity, we might just re-fetch or assume simple count update
+             // But usually, liking is a local interaction first.
+        };
 
-		return () => {
-			socket.off('comment:created', onNewComment);
-		};
-	}, [postId]);
+        socket.on('comment:created', onNewComment);
+        socket.on('comment:deleted', onDeleteComment); 
 
-	useEffect(() => {
-		if (!isOpen) return;
-		if (!postId) {
-			onClose && onClose();
-			return;
-		}
-		setLoading(true);
-		fetchPost(postId)
-			.then((p) => setPost(p))
-			.catch((err) => {
-				add("Failed to load comments", { type: "error" });
-				onClose && onClose();
-			})
-			.finally(() => setLoading(false));
-	}, [isOpen, postId, add, onClose]);
+        return () => {
+            socket.off('comment:created', onNewComment);
+            socket.off('comment:deleted', onDeleteComment);
+        };
+    }, [postId, post, myId]); // Added myId to dependencies
 
-	if (!isOpen) return null;
+    // --- Load Comments with Pagination ---
+    const loadComments = async (isReset = false) => {
+        const p = isReset ? 0 : page;
+        if (isReset) setLoading(true);
 
-	const submit = async (e) => {
-		e.preventDefault();
-		if (!content.trim()) return;
-		setSending(true);
-		try {
-			// API call (Backend emits socket event automatically)
-            await postComment(postId, content); 
-			add("Comment added", { type: "info" });
-			setContent("");
-			onCommentAdded && onCommentAdded();
-		} catch (err) {
-			console.error("add comment err", err);
-			add(err.message || "Failed to add comment", { type: "error" });
-		} finally {
-			setSending(false);
-		}
-	};
+        try {
+            const res = await API.get(`/comments/${postId}?page=${p}`);
+            const newComments = res.data;
+            
+            if (newComments.length < 20) setHasMore(false);
+            
+            if (isReset) {
+                setPost(prev => ({ ...prev, comments: newComments }));
+            } else {
+                setPost(prev => ({
+                    ...prev,
+                    comments: [...(prev.comments || []), ...newComments]
+                }));
+            }
+            setPage(p + 1);
+        } catch(e) {
+            if (isReset) {
+                // Fallback to fetch single post
+                try {
+                    const r = await API.get(`/posts/${postId}`);
+                    setPost(r.data);
+                    setHasMore(false); 
+                } catch (err) { onClose(); }
+            }
+        } finally {
+            if (isReset) setLoading(false);
+        }
+    };
 
-	if (loading) return null;
+    useEffect(() => {
+        if (isOpen && postId) {
+            setPage(0);
+            setHasMore(true);
+            loadComments(true);
+        }
+    }, [isOpen, postId]);
 
-	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-			<div className="absolute inset-0 bg-black/50" onClick={() => { if (!sending) onClose(); }} />
-			<motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl p-4 z-10 card flex flex-col max-h-[80vh]">
-				<div className="flex items-center gap-3 mb-3 border-b pb-3">
-                    <UserAvatar src={post?.user?.avatar} name={post?.user?.name} />
-					<div>
-						<div className="font-semibold">{post?.user?.name}</div>
-						<div className="text-xs text-gray-500">{new Date(post?.createdAt).toLocaleString()}</div>
-					</div>
-					<button className="ml-auto text-gray-500 hover:text-red-500 transition" onClick={() => { if (!sending) onClose(); }}>✕</button>
-				</div>
-				
-				<div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-2">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded mb-4 text-sm">{post?.content}</div>
-                    <h4 className="font-bold text-sm">Comments</h4>
-					{(!post?.comments || post?.comments.length === 0) && <div className="text-gray-400 text-center py-4">No comments yet.</div>}
-					{(post?.comments || []).map((c) => (
-						<div key={c._id || Math.random()} className="flex items-start gap-3">
-                            <UserAvatar src={c.user?.avatar} name={c.user?.name} className="w-8 h-8" />
-							<div>
-								<div className="text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded-lg rounded-tl-none">
-                                    <span className="font-semibold mr-2">{c.user?.name}</span>
-                                    {c.content || c.text}
+    const submit = async (e) => {
+        e.preventDefault();
+        if (!content.trim()) return;
+        setSending(true);
+        try {
+            const res = await API.post(`/comments/${postId}`, { text: content });
+            // Add immediately (Optimistic UI handled by API response return)
+            setPost(prev => ({
+                ...prev,
+                comments: [res.data, ...(prev.comments || [])]
+            }));
+            setContent("");
+        } catch (err) {
+            add("Failed to comment", { type: "error" });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const deleteComment = async (commentId) => {
+        if(!confirm("Delete comment?")) return;
+        try {
+            await API.delete(`/comments/${commentId}`);
+            setPost(prev => ({
+                ...prev,
+                comments: prev.comments.filter(c => c._id !== commentId)
+            }));
+            add("Comment deleted", { type: "info" });
+        } catch(e) {
+            add("Failed to delete", { type: "error" });
+        }
+    };
+
+    // 🔥 NEW: Toggle Like Function
+    const toggleCommentLike = async (commentId, likesArray) => {
+        // Optimistic UI update
+        setPost(prev => ({
+            ...prev,
+            comments: prev.comments.map(c => {
+                if (c._id === commentId) {
+                    const isLiked = c.likes?.includes(myId);
+                    return {
+                        ...c,
+                        likes: isLiked 
+                            ? c.likes.filter(id => id !== myId)
+                            : [...(c.likes || []), myId]
+                    };
+                }
+                return c;
+            })
+        }));
+
+        try {
+            await API.post(`/comments/like/${commentId}`);
+        } catch (e) {
+            // Revert on failure (could be implemented here if strict consistency needed)
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl flex flex-col max-h-[80vh] shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                    <h3 className="font-bold">Comments</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-red-500 text-2xl leading-none">&times;</button>
+                </div>
+                
+                {/* List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {loading && <div className="text-center py-4 text-gray-500">Loading comments...</div>}
+                    
+                    {!loading && (!post?.comments || post.comments.length === 0) && (
+                        <div className="text-gray-500 text-center py-4">No comments yet.</div>
+                    )}
+                    
+                    {(post?.comments || []).map((c) => {
+                        const isLiked = c.likes?.includes(myId);
+                        
+                        return (
+                            <div key={c._id} className="flex gap-3 group">
+                                <UserAvatar src={c.user?.avatar} name={c.user?.name} className="w-8 h-8 flex-shrink-0" />
+                                <div className="flex-1">
+                                    <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none relative pr-8">
+                                        <div className="font-bold text-xs mb-1">{c.user?.name}</div>
+                                        <div className="text-sm text-gray-800 dark:text-gray-200">{c.text || c.content}</div>
+                                        
+                                        {/* 🔥 NEW: Like Button */}
+                                        <button 
+                                            onClick={() => toggleCommentLike(c._id, c.likes)}
+                                            className="absolute bottom-2 right-3 text-xs flex items-center gap-1 transition"
+                                        >
+                                            {isLiked ? <FaHeart className="text-red-500" /> : <FaRegHeart className="text-gray-400 hover:text-red-500" />}
+                                            <span className="text-gray-400">{c.likes?.length || 0}</span>
+                                        </button>
+
+                                        {/* Delete Button */}
+                                        {(String(c.user?._id) === String(myId) || String(post?.user?._id) === String(myId)) && (
+                                            <button 
+                                                onClick={() => deleteComment(c._id)}
+                                                className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                                            >
+                                                <FaTrash size={10} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 mt-1 ml-1">
+                                        {new Date(c.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </div>
                                 </div>
-								<div className="text-xs text-gray-400 mt-1">{new Date(c.createdAt).toLocaleString()}</div>
-							</div>
-						</div>
-					))}
-				</div>
+                            </div>
+                        );
+                    })}
 
-				<form onSubmit={submit} className="flex gap-2 pt-2 border-t">
-					<input value={content} onChange={(e) => setContent(e.target.value)} placeholder="Add a comment..." className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600" />
-					<button disabled={sending} className="btn-primary">
-						{sending ? "..." : "Post"}
-					</button>
-				</form>
-			</motion.div>
-		</div>
-	);
+                    {/* Load More Button */}
+                    {!loading && hasMore && (post?.comments?.length > 0) && (
+                        <button 
+                            onClick={() => loadComments(false)}
+                            className="w-full py-2 text-sm text-indigo-500 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition rounded-lg"
+                        >
+                            Load more comments
+                        </button>
+                    )}
+                </div>
+
+                {/* Input */}
+                <form onSubmit={submit} className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 flex gap-2">
+                    <input 
+                        value={content} 
+                        onChange={(e) => setContent(e.target.value)} 
+                        placeholder="Write a comment..." 
+                        className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" 
+                    />
+                    <button disabled={sending} className="text-indigo-600 font-bold px-3 disabled:opacity-50">Post</button>
+                </form>
+            </motion.div>
+        </div>
+    );
 };
 
 export default CommentsModal;

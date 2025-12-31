@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import API from '../../services/api';
 import {
   FaHeart, FaRegHeart, FaComment, FaShare,
   FaVolumeMute, FaVolumeUp,
-  FaEllipsisV, FaTrash, FaExclamationTriangle, FaVideo, FaMusic, FaArrowLeft
+  FaEllipsisV, FaTrash, FaExclamationTriangle, FaVideo, FaMusic
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '../../components/ui/UserAvatar';
@@ -12,6 +12,7 @@ import ReportModal from '../../components/ui/ReportModal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReelUploadModal from '../../components/reels/ReelUploadModal';
 
 // Reliable Demo Data
 const DEMO_REELS = [
@@ -47,18 +48,33 @@ const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
   const myId = useSelector(s => s.auth.user?._id);
   const { add: addToast } = useToast();
 
-  // Handle Auto-Play / Pause
+  // Handle Auto-Play / Pause & View Counting
   useEffect(() => {
+    let viewTimer;
+
     if (isActive) {
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
-        const p = videoRef.current.play();
-        if (p && p.catch) p.catch(() => {});
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(() => {});
+        }
       }
+
+      // 🔥 FIX: Count view after 3 seconds of active watching
+      // Only if it's a real reel (not demo)
+      if (!String(reel._id).startsWith('demo')) {
+          viewTimer = setTimeout(() => {
+            API.post(`/reels/${reel._id}/view`).catch(() => {});
+          }, 3000);
+      }
+
     } else {
       if (videoRef.current) videoRef.current.pause();
     }
-  }, [isActive]);
+
+    return () => clearTimeout(viewTimer);
+  }, [isActive, reel._id]);
 
   // Sync Like State
   useEffect(() => {
@@ -238,14 +254,18 @@ const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
 export default function ReelsPage() {
   const [reels, setReels] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  
+  // Upload State
+  const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); 
+  
   const containerRef = useRef(null);
-  const nav = useNavigate();
   const { add: addToast } = useToast();
 
   useEffect(() => { loadReels(); }, []);
 
-  // Keyboard Navigation Support
+  // Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
         if (e.key === 'ArrowDown') {
@@ -285,25 +305,47 @@ export default function ReelsPage() {
     }
   };
 
-  const handleUpload = async (e) => {
+  // 1. Select File
+  const onFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const caption = prompt('Enter a caption for your reel:');
-    if (caption === null) return;
+
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_SIZE) {
+        addToast("File too large! Max 50MB.", { type: 'error' });
+        return;
+    }
+    
+    setSelectedFile(file); // Open Modal
+  };
+
+  // 2. Perform Upload
+  const performUpload = async (caption) => {
+    if (!selectedFile) return;
     
     setUploading(true);
+    setUploadProgress(0);
+
     const fd = new FormData();
-    fd.append('video', file);
+    fd.append('video', selectedFile);
     fd.append('caption', caption);
     
     try {
-      await API.post('/reels/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await API.post('/reels/upload', fd, { 
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percentCompleted);
+        }
+      });
       addToast('Reel uploaded! Processing...', { type: 'success' });
+      setSelectedFile(null); // Close modal
       await loadReels();
     } catch (err) {
       addToast('Upload failed.', { type: 'error' });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -327,7 +369,6 @@ export default function ReelsPage() {
   }, [activeIndex]);
 
   return (
-    // Fits inside MainLayout grid, snaps perfectly
     <div className="relative h-[calc(100vh-20px)] w-full flex flex-col items-center bg-black md:rounded-2xl overflow-hidden shadow-2xl">
       
       {/* Header / Upload */}
@@ -337,8 +378,8 @@ export default function ReelsPage() {
         </h2>
         
         <label className="pointer-events-auto cursor-pointer bg-white/20 hover:bg-white/30 backdrop-blur-md px-4 py-2 rounded-full text-white text-sm font-bold flex items-center gap-2 transition border border-white/10 shadow-lg">
-          {uploading ? <span className="animate-pulse">Uploading...</span> : <><FaVideo /> Create</>}
-          <input type="file" accept="video/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+           <FaVideo /> Create
+           <input type="file" accept="video/*" className="hidden" onChange={onFileSelect} disabled={uploading} />
         </label>
       </div>
 
@@ -370,6 +411,15 @@ export default function ReelsPage() {
           />
         ))}
       </div>
+
+      {/* Render Upload Modal */}
+      <ReelUploadModal 
+        file={selectedFile} 
+        onClose={() => setSelectedFile(null)} 
+        onConfirm={performUpload}
+        uploading={uploading}
+        progress={uploadProgress}
+      />
     </div>
   );
 }
