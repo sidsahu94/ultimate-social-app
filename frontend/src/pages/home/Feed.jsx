@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
-import socket from "../../services/socket"; // 🔥 Standard Import for Socket
+import socket from "../../services/socket";
 import PostCard from "../../components/posts/PostCard";
 import SkeletonPost from "../../components/ui/SkeletonPost";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,16 +12,15 @@ import CreatePostModal from "../../components/posts/CreatePostModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { FaArrowUp } from "react-icons/fa";
 
-// Utility to ensure posts are unique based on ID
+// Utility to remove duplicates based on _id
 const uniqueById = (arr) => {
   const seen = new Set();
   const out = [];
   for (const a of arr) {
-    const id = a && (a._id || a.id);
-    if (!id) { out.push(a); continue; }
-    if (!seen.has(String(id))) {
-      seen.add(String(id));
-      out.push(a);
+    if (!a?._id) continue;
+    if (!seen.has(a._id)) { 
+        seen.add(a._id); 
+        out.push(a); 
     }
   }
   return out;
@@ -33,87 +32,103 @@ export default function Feed() {
   const [loading, setLoading] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const { add: addToast } = useToast();
-
-  // Scroll to Top State
+  
+  // Scroll to Top Button State
   const [showTopBtn, setShowTopBtn] = useState(false);
+  
+  // Pull to Refresh State
+  const [refreshing, setRefreshing] = useState(false);
+  const [startY, setStartY] = useState(0);
 
-  // Refs for consistent state inside callbacks/event listeners
-  const pageRef = useRef(page);
-  const loadingRef = useRef(loading);
-  const hasMoreRef = useRef(hasMore);
-
-  useEffect(() => { pageRef.current = page; }, [page]);
-  useEffect(() => { loadingRef.current = loading; }, [loading]);
-  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
-
-  // Scroll Restoration
-  useEffect(() => {
-    const savedPos = sessionStorage.getItem('feed_scroll_y');
-    if (savedPos) {
-        setTimeout(() => window.scrollTo(0, parseInt(savedPos)), 50);
-    }
-    return () => {
-        sessionStorage.setItem('feed_scroll_y', window.scrollY);
-    };
-  }, []);
-
-  // Scroll Listener for Top Button
-  useEffect(() => {
-    const checkScroll = () => {
-        if (window.scrollY > 400) setShowTopBtn(true);
-        else setShowTopBtn(false);
-    };
-    window.addEventListener('scroll', checkScroll);
-    return () => window.removeEventListener('scroll', checkScroll);
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const { add: addToast } = useToast();
 
   // --- DATA LOADING ---
   const load = useCallback(async (reset = false) => {
-    if (loadingRef.current || (!reset && !hasMoreRef.current)) return;
-
-    const pageToLoad = reset ? 0 : pageRef.current;
+    if (loading) return;
+    const pageToLoad = reset ? 0 : page;
+    setLoading(true);
     
     try {
-      setLoading(true);
       const res = await API.get(`/posts/feed?page=${pageToLoad}&limit=6`);
       const newPosts = Array.isArray(res?.data) ? res.data : [];
 
       setPosts(prev => {
         if (reset) return uniqueById(newPosts);
-        const existing = new Set(prev.map(p => String(p._id || p.id)));
-        const filtered = newPosts.filter(p => {
-          const id = String(p._id || p.id || "");
-          return id && !existing.has(id);
-        });
-        return uniqueById([...prev, ...filtered]);
+        // Merge and dedupe
+        return uniqueById([...prev, ...newPosts]);
       });
 
       if (newPosts.length < 6) {
         setHasMore(false);
       } else {
         setHasMore(true);
-        setPage(prev => (reset ? 1 : prev + 1));
+        setPage(p => reset ? 1 : p + 1);
       }
 
     } catch (err) {
       console.error("Feed load error", err);
-      setHasMore(false);
+      // Don't disable hasMore on error, allows retry
     } finally {
       setLoading(false);
     }
+  }, [page, loading]);
+
+  // Initial Load
+  useEffect(() => { load(true); }, []);
+
+  // --- REAL-TIME UPDATES ---
+  useEffect(() => {
+    const onPostCreated = (ev) => {
+      // Handles both Socket.io event and CustomEvent from CreatePostModal
+      const newPost = ev.detail || ev; 
+      
+      if (newPost && newPost._id) {
+        setPosts(prev => uniqueById([newPost, ...prev])); // Add to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        addToast('New post loaded!', { type: 'info' });
+      } else {
+        // Fallback: Reload feed if data is partial
+        load(true);
+      }
+    };
+
+    const onPostDeleted = (ev) => {
+      const id = ev?.detail;
+      if (!id) return;
+      setPosts(prev => prev.filter(p => p._id !== id));
+    };
+
+    // Scheduled Post Published Event
+    const onScheduled = (newPost) => {
+        if(newPost) {
+            setPosts(prev => uniqueById([newPost, ...prev]));
+            addToast(`Scheduled post by ${newPost.user?.name || 'User'} is now live!`, { type: 'info' });
+        }
+    };
+
+    window.addEventListener('postCreated', onPostCreated);
+    window.addEventListener('postDeleted', onPostDeleted);
+    socket.on('post:created', onPostCreated);
+    socket.on('post:published', onScheduled);
+
+    return () => {
+      window.removeEventListener('postCreated', onPostCreated);
+      window.removeEventListener('postDeleted', onPostDeleted);
+      socket.off('post:created', onPostCreated);
+      socket.off('post:published', onScheduled);
+    };
+  }, [load, addToast]);
+
+  // --- SCROLL TO TOP ---
+  useEffect(() => {
+    const checkScroll = () => setShowTopBtn(window.scrollY > 400);
+    window.addEventListener('scroll', checkScroll);
+    return () => window.removeEventListener('scroll', checkScroll);
   }, []);
 
-  useEffect(() => { load(true); }, [load]);
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // --- PULL TO REFRESH LOGIC ---
-  const [startY, setStartY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-
+  // --- PULL TO REFRESH ---
   const handleTouchStart = (e) => {
     if (window.scrollY === 0) setStartY(e.touches[0].clientY);
   };
@@ -139,79 +154,32 @@ export default function Feed() {
     };
   }, [startY, refreshing, load]);
 
-  // --- INFINITE SCROLL ---
+  // Infinite Scroll Hook
   const loaderRef = useInfiniteScroll(() => {
-    if (hasMoreRef.current && !loadingRef.current) {
-        load();
-    }
+      if(hasMore) load();
   });
 
-  // --- REAL-TIME UPDATES ---
-  useEffect(() => {
-    const onPostCreated = (ev) => {
-      if (ev.detail && ev.detail._id) {
-        setPosts(prev => uniqueById([ev.detail, ...prev]));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        load(true);
-      }
-    };
-
-    const onPostDeleted = (ev) => {
-      const id = ev?.detail;
-      if (!id) return;
-      setPosts(prev => prev.filter(p => String(p._id) !== String(id)));
-    };
-
-    // 🔥 NEW: Listen for Scheduled Posts going live
-    const onScheduledPublish = (newPost) => {
-        if(newPost) {
-            setPosts(prev => uniqueById([newPost, ...prev]));
-            addToast(`New post from ${newPost.user?.name || 'someone'}`, { type: 'info' });
-        }
-    };
-
-    window.addEventListener('postCreated', onPostCreated);
-    window.addEventListener('postDeleted', onPostDeleted);
-    socket.on('post:published', onScheduledPublish);
-
-    return () => {
-      window.removeEventListener('postCreated', onPostCreated);
-      window.removeEventListener('postDeleted', onPostDeleted);
-      socket.off('post:published', onScheduledPublish);
-    };
-  }, [load, addToast]);
-
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-20">
       <div className="max-w-3xl mx-auto"> 
         
-        {/* Pull-to-Refresh Spinner */}
+        {/* Pull Refresh Indicator */}
         <div className={`w-full flex justify-center overflow-hidden transition-all duration-300 ${refreshing ? 'h-16 py-4' : 'h-0'}`}>
            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
 
-        {/* Stories Section */}
+        {/* Stories */}
         <div className="mb-6">
           <Stories />
         </div>
 
         {/* Feed Posts */}
         <div className="space-y-6">
-          
-          {/* Empty State Banner */}
           {posts.length === 0 && !loading && !hasMore && (
-            <div className="flex flex-col items-center justify-center py-12 text-center animate-fade-in">
-              <div className="w-32 h-32 bg-indigo-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                  <span className="text-6xl animate-bounce">👋</span>
-              </div>
-              <h2 className="text-2xl font-bold mb-3 text-gray-800 dark:text-white">Welcome to SocialApp!</h2>
-              <p className="text-gray-500 max-w-xs mb-8 leading-relaxed">
-                Your feed is looking a bit quiet. Follow some creators or post your first thought to get started!
-              </p>
-              <Link to="/explore" className="btn-primary px-8 py-3 rounded-full text-lg shadow-lg hover:shadow-xl transition-transform hover:-translate-y-1">
-                Find People
-              </Link>
+            <div className="text-center py-10">
+                <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300">Welcome to SocialApp!</h3>
+                <p className="text-gray-500 mt-2">Follow users or create a post to get started.</p>
+                <Link to="/explore" className="mt-4 inline-block btn-primary px-6 py-2 rounded-full">Find People</Link>
             </div>
           )}
 
@@ -222,7 +190,7 @@ export default function Feed() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.4 }}
+                layout
               >
                 <PostCard post={p} />
               </motion.div>
@@ -230,7 +198,7 @@ export default function Feed() {
           </AnimatePresence>
         </div>
 
-        {/* Loading Skeletons */}
+        {/* Loaders */}
         {loading && (
           <div className="mt-6 space-y-6">
             <SkeletonPost />
@@ -245,7 +213,7 @@ export default function Feed() {
             </div>
         )}
 
-        {/* End of Feed */}
+        {/* End of Feed Message */}
         {!hasMore && posts.length > 0 && (
             <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
                 <div className="w-2 h-2 bg-gray-300 rounded-full mb-2"></div>
@@ -253,7 +221,7 @@ export default function Feed() {
             </div>
         )}
 
-        {/* Global Components */}
+        {/* Create Button */}
         <FAB onClick={() => setOpenCreate(true)} />
         
         <CreatePostModal 
@@ -261,12 +229,12 @@ export default function Feed() {
             onClose={() => setOpenCreate(false)} 
             onPosted={(newPost) => {
                 if (newPost) {
-                    window.dispatchEvent(new CustomEvent('postCreated', { detail: newPost }));
+                    // Handled by event listener above
                 }
             }} 
         />
 
-        {/* Scroll to Top Button */}
+        {/* Scroll To Top */}
         <AnimatePresence>
             {showTopBtn && (
                 <motion.button

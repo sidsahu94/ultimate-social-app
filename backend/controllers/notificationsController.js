@@ -3,11 +3,18 @@ const Notification = require('../models/Notification');
 
 /**
  * GET /api/notifications
- * Returns notifications for current user (most recent first)
+ * 🔥 FIXED: Added Pagination
  */
 exports.getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user.id }).sort({ createdAt: -1 });
+    const page = parseInt(req.query.page || 0);
+    const limit = parseInt(req.query.limit || 20);
+
+    const notifications = await Notification.find({ user: req.user.id })
+        .sort({ createdAt: -1 })
+        .skip(page * limit)
+        .limit(limit);
+        
     res.status(200).json(notifications);
   } catch (error) {
     console.error('getNotifications err', error);
@@ -17,7 +24,6 @@ exports.getNotifications = async (req, res) => {
 
 /**
  * PUT /api/notifications/mark-read
- * Marks all unread notifications for current user as read
  */
 exports.markAsRead = async (req, res) => {
   try {
@@ -31,7 +37,6 @@ exports.markAsRead = async (req, res) => {
 
 /**
  * POST /api/notifications/:id/read
- * Mark a single notification as read
  */
 exports.markSingleRead = async (req, res) => {
   try {
@@ -39,7 +44,6 @@ exports.markSingleRead = async (req, res) => {
     const notif = await Notification.findById(id);
     if (!notif) return res.status(404).json({ message: 'Notification not found' });
 
-    // ensure owner
     if (notif.user.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: 'Not allowed' });
     }
@@ -55,6 +59,7 @@ exports.markSingleRead = async (req, res) => {
     res.status(500).json({ message: 'Error marking notification', error: error.message });
   }
 };
+
 exports.getUnreadCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({ user: req.user.id, isRead: false });

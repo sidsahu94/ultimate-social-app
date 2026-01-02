@@ -12,15 +12,20 @@ const PostSchema = new mongoose.Schema({
   images: [String],
   videos: [String],
   
-  // Arrays like this caused the index error previously
   hashtags: [String],
   mentions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
   likes: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
+  
+  // 🔥 NEW: View Count (Analytics)
+  views: { type: Number, default: 0 },
 
   isArchived: { type:Boolean, default:false },
   isFlagged: { type:Boolean, default:false },
+  
+  // 🔥 NEW: Draft Support
+  isDraft: { type: Boolean, default: false },
 
   // Polls
   poll: {
@@ -30,9 +35,7 @@ const PostSchema = new mongoose.Schema({
   }
 }, { timestamps:true });
 
-// ✅ FIX: Changed hashtags from 1 to 'text'.
-// This creates a compound text index. MongoDB allows multiple text fields, 
-// even if they are arrays.
+// Compound text index for search
 PostSchema.index({ content: 'text', hashtags: 'text' });
 
 module.exports = mongoose.model('Post', PostSchema);

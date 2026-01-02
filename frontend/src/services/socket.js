@@ -1,26 +1,26 @@
 // frontend/services/socket.js
 import { io } from "socket.io-client";
 
-// FIX: The backend URL should be the relative origin.
-// Vite's proxy will handle forwarding this to http://localhost:5000
+// Vite proxy handles forwarding to backend
 const BACKEND_WS = window.location.origin;
 
-const auth = {};
-try {
-  const token = localStorage.getItem('token');
-  const meId = localStorage.getItem('meId');
-  if (token) auth.token = token;
-  if (meId) auth.userId = meId;
-} catch {}
-
+// 🔥 FIX: Auth as a function ensures token is fresh on every reconnection attempt
 const socket = io(BACKEND_WS, {
-  autoConnect: false, // We connect manually in main.jsx after auth
+  autoConnect: false,
   transports: ["websocket", "polling"],
-  path: '/socket.io', // This path must match the backend
-  auth
+  path: '/socket.io',
+  auth: (cb) => {
+    const token = localStorage.getItem('token');
+    const meId = localStorage.getItem('meId');
+    // Callback with the latest credentials
+    cb({ token, userId: meId });
+  },
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
 });
 
-// Update auth details dynamically
+// Helper if you need to manually update (though the function above handles most cases)
 export const updateSocketAuth = (token, userId) => {
 	socket.auth = { token, userId };
 };

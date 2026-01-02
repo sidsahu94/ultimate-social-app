@@ -14,15 +14,22 @@ async function protect(req, res, next) {
     if (!token) return res.status(401).json({ message: 'Not authenticated' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
-    if (!user) return res.status(401).json({ message: 'User not found' });
+    
+    // 🔥 FIX: Removed .select('-password +isDeleted') which caused the projection error
+    // 'password' is excluded by default in schema
+    // 'isDeleted' is included by default in schema
+    const user = await User.findById(decoded.id); 
+    
+    if (!user || user.isDeleted) {
+        return res.status(401).json({ message: 'Account deactivated or user not found' });
+    }
 
     req.user = user;
     req.userId = String(user._id);
     req.user.id = String(user._id);
     next();
   } catch (err) {
-    console.error('protect middleware error:', err && err.message ? err.message : err);
+    // console.error('protect middleware error:', err.message); // Optional: Uncomment to debug
     return res.status(401).json({ message: 'Token invalid or expired' });
   }
 }
@@ -40,59 +47,43 @@ async function optionalAuth(req, res, next) {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('-password');
-      if (user) {
+      // 🔥 FIX: Simplified query here too
+      const user = await User.findById(decoded.id);
+      
+      if (user && !user.isDeleted) {
         req.user = user;
         req.userId = String(user._id);
         req.user.id = String(user._id);
       }
-    } catch (e) {
-      // ignore invalid token
-    }
+    } catch (e) {}
     return next();
   } catch (err) {
-    console.error('optionalAuth middleware error:', err && err.message ? err.message : err);
     return next();
   }
 }
 
 function restrictTo(...allowedRoles) {
   return (req, res, next) => {
-    try {
-      if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-      if (!allowedRoles.includes(req.user.role)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-      return next();
-    } catch (err) {
-      console.error('restrictTo error:', err && err.message ? err.message : err);
-      return res.status(500).json({ message: 'Server error' });
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
+    next();
   };
 }
 
 function requireRole(role) {
   return (req, res, next) => {
-    try {
-      if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-      if (req.user.role !== role) return res.status(403).json({ message: 'Forbidden: requires ' + role });
-      next();
-    } catch (err) {
-      console.error('requireRole error:', err && err.message ? err.message : err);
-      res.status(500).json({ message: 'Server error' });
-    }
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    if (req.user.role !== role) return res.status(403).json({ message: 'Forbidden: requires ' + role });
+    next();
   };
 }
 
 function adminOnly(req, res, next) {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    if (req.user.isAdmin || req.user.role === 'admin') return next();
-    return res.status(403).json({ message: 'Admins only' });
-  } catch (err) {
-    console.error('adminOnly error:', err && err.message ? err.message : err);
-    return res.status(500).json({ message: 'Server error' });
-  }
+  if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+  if (req.user.role === 'admin') return next();
+  return res.status(403).json({ message: 'Admins only' });
 }
 
 module.exports = { protect, optionalAuth, restrictTo, requireRole, adminOnly };

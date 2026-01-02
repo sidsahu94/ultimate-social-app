@@ -5,11 +5,19 @@ const axios = require('axios');
 const crypto = require('crypto'); 
 const { sendOtpEmail } = require('../utils/email'); 
 
-// Token Generator
-const createToken = (payload, expiresIn = '7d') =>
-  jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn });
+// Helper: Generate Token Pair
+const createTokens = async (user) => {
+    const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET || 'refreshsecret', { expiresIn: '7d' });
+    
+    // Store hashed refresh token
+    user.refreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await user.save({ validateBeforeSave: false });
 
-// --- REGISTER (AUTO-VERIFIED) ---
+    return { accessToken, refreshToken };
+};
+
+// --- REGISTER ---
 exports.register = async (req, res) => {
   try {
     const { name, email, password, referralCode } = req.body;
@@ -18,7 +26,6 @@ exports.register = async (req, res) => {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'Email already registered' });
 
-    // Handle Referral
     let referrer = null;
     if (referralCode) {
         referrer = await User.findOne({ referralCode });
@@ -30,22 +37,20 @@ exports.register = async (req, res) => {
       name,
       email,
       password: hashed,
-      // ✨ AUTO-VERIFY: No email OTP needed anymore for standard flow
       isVerified: true, 
       referredBy: referrer ? referrer._id : null,
-      wallet: { balance: referrer ? 50 : 0 } // Bonus for being referred
+      wallet: { balance: referrer ? 50 : 0 }
     });
     
     await user.save();
 
-    // Reward Referrer
     if (referrer) {
         referrer.wallet.balance += 50;
         await referrer.save();
     }
 
-    const token = createToken({ id: user._id });
-    res.status(201).json({ token, user });
+    const { accessToken, refreshToken } = await createTokens(user);
+    res.status(201).json({ token: accessToken, refreshToken, user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -64,8 +69,9 @@ exports.login = async (req, res) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const token = createToken({ id: user._id });
-    res.json({ token, user });
+    const { accessToken, refreshToken } = await createTokens(user);
+    
+    res.json({ token: accessToken, refreshToken, user });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -74,11 +80,11 @@ exports.login = async (req, res) => {
 // --- GOOGLE LOGIN ---
 exports.googleLogin = async (req, res) => {
   try {
-    const { token: accessToken } = req.body; 
-    if (!accessToken) return res.status(400).json({ message: "No access token" });
+    const { token: accessTokenInput } = req.body; 
+    if (!accessTokenInput) return res.status(400).json({ message: "No access token" });
 
     const googleRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessTokenInput}` }
     });
 
     const { email, name, picture, sub: googleId } = googleRes.data;
@@ -91,19 +97,16 @@ exports.googleLogin = async (req, res) => {
         googleId, 
         avatar: picture, 
         isVerified: true,
-        // 🔥 FIX: Password left undefined. 
-        // This allows 'updatePassword' to detect it's a first-time setup.
       });
       await user.save();
     } else if (!user.googleId) {
-      // Link Google ID to existing account if matching email
       user.googleId = googleId;
       if (!user.avatar) user.avatar = picture;
       await user.save();
     }
 
-    const jwtToken = createToken({ id: user._id });
-    res.json({ token: jwtToken, user });
+    const { accessToken, refreshToken } = await createTokens(user);
+    res.json({ token: accessToken, refreshToken, user });
 
   } catch (err) {
     console.error("Google login error:", err.message);
@@ -111,32 +114,77 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
+// --- REFRESH TOKEN (Rotation) ---
+exports.refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(401).json({ message: 'No token provided' });
+
+    // 1. Verify the token signature
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'refreshsecret');
+
+    // 2. Check if user exists (Select +refreshToken AND +isDeleted)
+    const user = await User.findById(decoded.id).select('+refreshToken +isDeleted');
+    
+    if (!user) return res.status(401).json({ message: 'User not found' });
+
+    if (user.isDeleted) {
+        return res.status(403).json({ message: 'Account deactivated' });
+    }
+
+    // 3. Verify the token matches the hash in DB
+    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    
+    if (user.refreshToken !== hashedToken) {
+        user.refreshToken = null;
+        await user.save({ validateBeforeSave: false });
+        return res.status(403).json({ message: 'Invalid refresh token' });
+    }
+
+    // 4. Rotate: Issue NEW pair and save new hash
+    const tokens = await createTokens(user);
+    
+    res.json({ 
+        token: tokens.accessToken, 
+        refreshToken: tokens.refreshToken 
+    });
+
+  } catch (err) {
+    return res.status(403).json({ message: 'Token expired or invalid' });
+  }
+};
+
+// --- LOGOUT ---
+exports.logout = async (req, res) => {
+  try {
+    if (req.user) {
+        await User.findByIdAndUpdate(req.user._id, { refreshToken: null });
+    }
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Logout failed' });
+  }
+};
+
 // Legacy Stub
 exports.verifyOtp = async (req, res) => res.json({ message: 'Already verified' });
 
 // --- PASSWORD RESET LOGIC ---
-
-// 1. Request Reset
 exports.requestPasswordReset = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Hash it for security before saving
     user.resetOtp = await bcrypt.hash(otp, 10);
-    user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+    user.resetOtpExpires = Date.now() + 10 * 60 * 1000; 
     await user.save();
 
-    // Send Email
     try {
         const sent = await sendOtpEmail(email, otp, 'Password Reset Code');
-        if (!sent) {
-            console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
-        }
+        if (!sent) console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
     } catch (emailErr) {
         console.log(`[DEV MODE - Email Failed] OTP for ${email}: ${otp}`);
     }
@@ -148,7 +196,6 @@ exports.requestPasswordReset = async (req, res) => {
   }
 };
 
-// 2. Complete Reset
 exports.resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -159,14 +206,16 @@ exports.resetPassword = async (req, res) => {
 
     if (!user) return res.status(400).json({ message: 'Invalid or expired code' });
 
-    // Verify OTP
     const isMatch = await bcrypt.compare(otp, user.resetOtp);
     if (!isMatch) return res.status(400).json({ message: 'Invalid code' });
 
-    // Update Password
     user.password = await bcrypt.hash(newPassword, 12);
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
+    
+    // 🔥 CRITICAL SECURITY FIX: Invalidate existing sessions
+    user.refreshToken = null; 
+
     await user.save();
 
     res.json({ message: 'Password updated successfully' });

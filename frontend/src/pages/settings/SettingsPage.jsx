@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import { useDispatch, useSelector } from 'react-redux';
-import { logout } from '../../redux/slices/authSlice';
-import { FaLock, FaUserShield, FaTrash, FaMoon, FaUserFriends, FaSearch, FaCheck, FaBolt, FaGoogle } from 'react-icons/fa';
+import { logout, updateAuthUser } from '../../redux/slices/authSlice';
+import { FaLock, FaUserShield, FaTrash, FaMoon, FaUserFriends, FaSearch, FaCheck, FaGoogle, FaBell, FaToggleOn, FaToggleOff, FaUserCircle, FaSave, FaArrowLeft } from 'react-icons/fa';
 import { useTheme } from '../../contexts/ThemeProvider';
+import { Link } from 'react-router-dom';
 
 export default function SettingsPage() {
   const { user } = useSelector(s => s.auth);
@@ -12,80 +13,72 @@ export default function SettingsPage() {
   const { add } = useToast();
   const { toggle: toggleTheme } = useTheme();
 
+  // Settings State
+  const [notifSettings, setNotifSettings] = useState({
+      likes: true, comments: true, follows: true, messages: true
+  });
+  const [status, setStatus] = useState('');
   const [pass, setPass] = useState({ current: '', new: '' });
-  const [privacy, setPrivacy] = useState(user?.privateProfile || false);
+  const [privacy, setPrivacy] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
 
-  // Close Friends State
+  // Close Friends
   const [showCF, setShowCF] = useState(false);
   const [cfList, setCfList] = useState([]); 
   const [cfQuery, setCfQuery] = useState('');
   const [cfResults, setCfResults] = useState([]);
 
-  // PWA Install State
-  const [installPrompt, setInstallPrompt] = useState(null);
-
+  // Load Initial Data
   useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+    if (user) {
+        if (user.notificationSettings) setNotifSettings(user.notificationSettings);
+        if (user.userStatus) setStatus(user.userStatus);
+        setPrivacy(user.privateProfile || false);
+    }
+    
+    // Fetch fresh CF list
+    API.get('/users/me').then(r => {
+        if (r.data.closeFriends) setCfList(r.data.closeFriends);
+    }).catch(() => {});
+  }, [user]);
 
-  const handleInstall = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') setInstallPrompt(null);
-  };
+  // --- Handlers ---
 
-  // Load settings data
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  const toggleNotif = async (key) => {
+      const newState = { ...notifSettings, [key]: !notifSettings[key] };
+      setNotifSettings(newState); // Optimistic UI
       try {
-        const r = await API.get('/users/me');
-        if (!mounted) return;
-        const existing = r?.data || {};
-        setCfList(Array.isArray(existing.closeFriends) ? existing.closeFriends : []);
-        setPrivacy(existing.privateProfile);
+          await API.put('/users/settings/notifications', newState);
+          dispatch(updateAuthUser({ notificationSettings: newState }));
       } catch (e) {
-        console.warn('Failed to load user settings', e);
+          setNotifSettings(prev => ({ ...prev, [key]: !prev[key] })); // Revert
+          add("Failed to update settings", { type: 'error' });
       }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // Toggle close friend inclusion
-  const toggleCF = async (targetUser) => {
-    try {
-      const isAdded = Boolean(cfList.find(u => u._id === targetUser._id));
-      let newList;
-      if (isAdded) {
-        newList = cfList.filter(u => u._id !== targetUser._id);
-      } else {
-        newList = [...cfList, targetUser];
-      }
-      setCfList(newList);
-
-      await API.put('/users/close-friends', { userIds: newList.map(u => u._id) });
-      add(isAdded ? 'Removed from Close Friends' : 'Added to Close Friends', { type: 'info' });
-    } catch (err) {
-      add(err?.userMessage || 'Failed to update Close Friends', { type: 'error' });
-    }
   };
 
-  const searchCF = async (q) => {
-    setCfQuery(q);
-    if (!q || q.length <= 2) {
-      setCfResults([]);
-      return;
-    }
+  const saveStatus = async () => {
+      setLoadingStatus(true);
+      try {
+          await API.put('/users/status', { status });
+          dispatch(updateAuthUser({ userStatus: status }));
+          add("Status updated!", { type: 'success' });
+      } catch (e) {
+          add("Failed to update status", { type: 'error' });
+      } finally { setLoadingStatus(false); }
+  };
+
+  const handlePrivacy = async () => {
     try {
-      const r = await API.get(`/users/search?q=${encodeURIComponent(q)}`);
-      setCfResults(r.data.users || []);
-    } catch (e) {}
+      const newVal = !privacy;
+      setPrivacy(newVal);
+      const fd = new FormData(); fd.append('isPrivate', newVal);
+      await API.put(`/users/${user._id}`, fd);
+      add(`Profile is now ${newVal ? 'Private' : 'Public'}`, { type: 'info' });
+      dispatch(updateAuthUser({ privateProfile: newVal }));
+    } catch (e) { 
+        setPrivacy(!privacy); 
+        add("Failed to change privacy", { type: 'error' }); 
+    }
   };
 
   const handlePassword = async (e) => {
@@ -99,18 +92,23 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePrivacy = async () => {
+  // Close Friends Logic
+  const toggleCF = async (targetUser) => {
     try {
-      const newVal = !privacy;
-      setPrivacy(newVal);
-      const fd = new FormData();
-      fd.append('isPrivate', newVal);
-      await API.put(`/users/${user._id}`, fd);
-      add(`Profile is now ${newVal ? 'Private' : 'Public'}`, { type: 'info' });
-    } catch (e) { 
-        setPrivacy(!privacy); // revert
-        add("Failed to change privacy", { type: 'error' }); 
-    }
+      const isAdded = Boolean(cfList.find(u => u._id === targetUser._id));
+      let newList = isAdded ? cfList.filter(u => u._id !== targetUser._id) : [...cfList, targetUser];
+      setCfList(newList);
+      await API.put('/users/close-friends', { userIds: newList.map(u => u._id) });
+    } catch (err) { add("Failed to update Close Friends", { type: 'error' }); }
+  };
+
+  const searchCF = async (q) => {
+    setCfQuery(q);
+    if (!q || q.length <= 2) { setCfResults([]); return; }
+    try {
+      const r = await API.get(`/users/search?q=${encodeURIComponent(q)}`);
+      setCfResults(r.data.users || []);
+    } catch (e) {}
   };
 
   const handleDeleteAccount = async () => {
@@ -119,99 +117,109 @@ export default function SettingsPage() {
       await API.delete('/users/me');
       dispatch(logout()); 
       window.location.href = '/login';
-    } catch (e) {
-      add("Failed to delete account", { type: 'error' });
-    }
+    } catch (e) { add("Failed to delete account", { type: 'error' }); }
   };
 
-  // 🔥 CHECK: Google users usually have a googleId but no password set initially
-  // Ideally, the backend 'me' endpoint should return a flag like `hasPassword: true/false`
-  // For now, if they have a googleId, we assume they might not have a password unless set.
   const isGoogleUser = !!user?.googleId; 
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6 pb-20">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
-
-      {/* PWA Install Banner */}
-      {installPrompt && (
-          <div className="card p-5 flex items-center justify-between bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg">
-            <div className="flex items-center gap-3">
-               <div className="p-2 bg-white/20 rounded-lg"><FaBolt /></div>
-               <div>
-                 <div className="font-bold">Install App</div>
-                 <div className="text-xs opacity-90">Add to Home Screen</div>
-               </div>
-            </div>
-            <button onClick={handleInstall} className="bg-white text-indigo-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-100 transition">
-               Install
-            </button>
-          </div>
-      )}
-
-      {/* Appearance */}
-      <div className="card p-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-100 dark:bg-indigo-900 rounded-lg"><FaMoon className="text-indigo-600 dark:text-indigo-300" /></div>
-          <div>
-            <div className="font-semibold">Dark Mode</div>
-            <div className="text-xs text-gray-500">Toggle theme</div>
-          </div>
-        </div>
-        <button onClick={toggleTheme} className="btn-primary py-1 px-3 text-sm">Toggle</button>
+      <div className="flex items-center gap-3 mb-6">
+          <Link to={`/profile/${user?._id}`} className="md:hidden text-gray-500"><FaArrowLeft /></Link>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Settings & Privacy</h1>
       </div>
 
-      {/* Privacy */}
-      <div className="card p-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg"><FaUserShield className="text-green-600 dark:text-green-300" /></div>
+      {/* --- 1. Custom Status --- */}
+      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg"><FaUserCircle size={20} /></div>
+              <div>
+                  <h3 className="font-bold text-gray-800 dark:text-gray-200">Custom Status</h3>
+                  <p className="text-xs text-gray-500">What are you doing right now?</p>
+              </div>
+          </div>
+          <div className="flex gap-2">
+              <input 
+                  value={status} 
+                  onChange={e => setStatus(e.target.value)} 
+                  placeholder="e.g. Working, Traveling ✈️" 
+                  className="flex-1 p-3 rounded-xl border bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-green-500 outline-none transition"
+              />
+              <button onClick={saveStatus} disabled={loadingStatus} className="bg-green-600 text-white px-4 rounded-xl font-bold hover:bg-green-700 transition flex items-center gap-2">
+                  <FaSave /> {loadingStatus ? '...' : 'Save'}
+              </button>
+          </div>
+      </div>
+
+      {/* --- 2. Notification Preferences --- */}
+      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><FaBell size={20} /></div>
           <div>
-            <div className="font-semibold">Private Account</div>
+            <div className="font-bold text-gray-800 dark:text-gray-200">Notifications</div>
+            <div className="text-xs text-gray-500">Manage your alerts</div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+            {Object.keys(notifSettings).map(key => (
+                <div key={key} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-xl transition cursor-pointer" onClick={() => toggleNotif(key)}>
+                    <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{key}</span>
+                    <div className={`text-2xl transition-colors ${notifSettings[key] ? 'text-green-500' : 'text-gray-300'}`}>
+                        {notifSettings[key] ? <FaToggleOn /> : <FaToggleOff />}
+                    </div>
+                </div>
+            ))}
+        </div>
+      </div>
+
+      {/* --- 3. Privacy --- */}
+      <div className="card p-5 flex items-center justify-between bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><FaUserShield /></div>
+          <div>
+            <div className="font-bold text-gray-800 dark:text-gray-200">Private Account</div>
             <div className="text-xs text-gray-500">Only followers can see your posts</div>
           </div>
         </div>
-        <div onClick={handlePrivacy} className={`w-12 h-6 rounded-full cursor-pointer transition-colors p-1 ${privacy ? 'bg-green-500' : 'bg-gray-300'}`}>
+        <div onClick={handlePrivacy} className={`w-12 h-6 rounded-full cursor-pointer transition-colors p-1 ${privacy ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
           <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition ${privacy ? 'translate-x-6' : ''}`} />
         </div>
       </div>
 
-      {/* Close Friends */}
-      <div className="card p-5">
+      {/* --- 4. Close Friends --- */}
+      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 text-green-600 rounded-lg"><FaUserFriends /></div>
+            <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-lg"><FaUserFriends /></div>
             <div>
-              <div className="font-bold">Close Friends</div>
-              <div className="text-xs text-gray-500">{cfList.length} people selected</div>
+              <div className="font-bold text-gray-800 dark:text-gray-200">Close Friends</div>
+              <div className="text-xs text-gray-500">{cfList.length} people</div>
             </div>
           </div>
-          <button onClick={() => setShowCF(!showCF)} className="btn-primary py-1 px-3 text-sm">Manage</button>
+          <button onClick={() => setShowCF(!showCF)} className="text-indigo-600 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">Manage</button>
         </div>
 
         {showCF && (
-          <div className="mt-4 border-t pt-4 animate-fade-in">
+          <div className="mt-4 border-t dark:border-gray-700 pt-4 animate-fade-in">
             <div className="relative mb-3">
               <input
-                className="w-full p-2 border rounded pr-10 dark:bg-gray-700 dark:border-gray-600"
+                className="w-full p-2.5 pl-10 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600 outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 placeholder="Search to add..."
                 value={cfQuery}
                 onChange={e => searchCF(e.target.value)}
               />
-              <div className="absolute right-2 top-2 text-gray-400"><FaSearch /></div>
+              <div className="absolute left-3 top-3 text-gray-400"><FaSearch /></div>
             </div>
 
-            <div className="max-h-40 overflow-y-auto space-y-2 custom-scrollbar">
+            <div className="max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
               {(cfQuery && cfQuery.length > 2 ? cfResults : cfList).map(u => (
-                <div
-                  key={u._id}
-                  onClick={() => toggleCF(u)}
-                  className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer rounded"
-                >
+                <div key={u._id} onClick={() => toggleCF(u)} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer rounded-lg transition">
                   <div className="flex items-center gap-2">
-                    <img src={u.avatar || '/default-avatar.png'} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
-                    <span className="text-sm">{u.name}</span>
+                    <img src={u.avatar || '/default-avatar.png'} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-600" />
+                    <span className="text-sm font-medium dark:text-gray-200">{u.name}</span>
                   </div>
-                  {cfList.find(s => s._id === u._id) ? <FaCheck className="text-green-500" /> : null}
+                  {cfList.find(s => s._id === u._id) && <FaCheck className="text-green-500" />}
                 </div>
               ))}
             </div>
@@ -219,43 +227,43 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Password Change - Hidden for Google Users without password capability */}
+      {/* --- 5. Theme --- */}
+      <div className="card p-5 flex items-center justify-between bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><FaMoon /></div>
+          <div>
+            <div className="font-bold text-gray-800 dark:text-gray-200">Dark Mode</div>
+            <div className="text-xs text-gray-500">Adjust appearance</div>
+          </div>
+        </div>
+        <div onClick={toggleTheme} className="cursor-pointer">
+            <FaToggleOn className="text-3xl text-gray-300 dark:text-purple-500 transition-colors" />
+        </div>
+      </div>
+
+      {/* --- 6. Security (Password / Delete) --- */}
       {!isGoogleUser ? (
-        <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4">
-            <FaLock className="text-gray-400" /> <span className="font-semibold">Change Password</span>
+        <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-lg"><FaLock /></div>
+                <h3 className="font-bold text-gray-800 dark:text-gray-200">Change Password</h3>
             </div>
             <form onSubmit={handlePassword} className="space-y-3">
-            <input
-                type="password"
-                placeholder="Current Password"
-                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                value={pass.current}
-                onChange={e => setPass({ ...pass, current: e.target.value })}
-            />
-            <input
-                type="password"
-                placeholder="New Password"
-                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                value={pass.new}
-                onChange={e => setPass({ ...pass, new: e.target.value })}
-            />
-            <button disabled={!pass.current || !pass.new} className="w-full bg-black dark:bg-white dark:text-black text-white py-2 rounded font-medium disabled:opacity-50">Update</button>
+                <input type="password" placeholder="Current Password" className="w-full p-3 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600" value={pass.current} onChange={e => setPass({ ...pass, current: e.target.value })} />
+                <input type="password" placeholder="New Password" className="w-full p-3 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600" value={pass.new} onChange={e => setPass({ ...pass, new: e.target.value })} />
+                <button disabled={!pass.current || !pass.new} className="w-full bg-gray-900 dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold disabled:opacity-50 hover:opacity-90 transition">Update</button>
             </form>
         </div>
       ) : (
-        <div className="card p-5 flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900">
-            <FaGoogle className="text-blue-500" />
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-                You are logged in via Google. Manage your security settings through your Google Account.
-            </div>
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl flex items-center gap-3 text-sm text-blue-800 dark:text-blue-200">
+            <FaGoogle /> Signed in with Google. Security managed by Google.
         </div>
       )}
 
-      {/* Danger Zone */}
-      <div className="p-5 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-xl">
-        <h3 className="text-red-600 font-bold mb-2 flex items-center gap-2"><FaTrash /> Danger Zone</h3>
-        <button onClick={handleDeleteAccount} className="text-red-600 border border-red-200 px-4 py-2 rounded hover:bg-red-100 transition text-sm font-bold">Delete Account</button>
+      <div className="pt-4 pb-8">
+        <button onClick={handleDeleteAccount} className="w-full py-3 border border-red-200 bg-red-50 dark:bg-red-900/10 text-red-600 font-bold rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 transition flex items-center justify-center gap-2">
+            <FaTrash /> Delete Account
+        </button>
       </div>
     </div>
   );

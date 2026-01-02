@@ -4,19 +4,20 @@ import StoryEditor from "./StoryEditor";
 import StoryViewer from "./StoryViewer";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaPlus } from "react-icons/fa";
-import { getImageUrl } from "../../utils/imageUtils"; // Ensure this util exists
+import { getImageUrl } from "../../utils/imageUtils";
 
 const Stories = () => {
   const [stories, setStories] = useState([]);
   const [editorFile, setEditorFile] = useState(null);
   const [viewIndex, setViewIndex] = useState(null);
 
-  // Load valid stories (non-expired)
   const load = async () => {
     try {
       const r = await API.get("/stories");
       setStories(r.data || []);
-    } catch (e) { console.error("Story load error", e); }
+    } catch (e) { 
+        // Silent fail
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -27,10 +28,10 @@ const Stories = () => {
 
   return (
     <>
-      <div className="mb-6 overflow-x-auto no-scrollbar py-2 px-2">
+      <div className="mb-6 overflow-x-auto no-scrollbar py-2 px-4 -mx-4 md:mx-0">
         <div className="flex gap-4">
           
-          {/* Add Story Button */}
+          {/* Add Story */}
           <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group relative">
             <div className="relative w-[72px] h-[72px] rounded-full border-2 border-dashed border-gray-400 dark:border-gray-600 flex items-center justify-center bg-gray-50 dark:bg-gray-800 hover:border-indigo-500 transition-colors">
               <FaPlus className="text-gray-400 group-hover:text-indigo-500 text-xl" />
@@ -47,7 +48,8 @@ const Stories = () => {
           {/* Story Rings */}
           {stories.map((story, i) => {
             const avatarUrl = getImageUrl(story.user?.avatar);
-            // Check if viewed logic can be added here (visual grey ring vs colorful ring)
+            const isMe = story.user?._id === localStorage.getItem('meId');
+            
             return (
               <motion.div 
                 key={story._id} 
@@ -57,7 +59,7 @@ const Stories = () => {
                 className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer"
                 onClick={() => setViewIndex(i)}
               >
-                <div className="w-[76px] h-[76px] rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-600 p-[2px] shadow-sm hover:scale-105 transition-transform">
+                <div className={`w-[76px] h-[76px] rounded-full p-[2px] shadow-sm hover:scale-105 transition-transform ${isMe ? 'bg-gray-300' : 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-600'}`}>
                   <div className="w-full h-full rounded-full p-[2px] bg-white dark:bg-gray-900 overflow-hidden">
                     <img 
                       src={avatarUrl} 
@@ -67,7 +69,7 @@ const Stories = () => {
                   </div>
                 </div>
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate w-16 text-center">
-                  {story.user?.name?.split(' ')[0]}
+                  {isMe ? 'Your Story' : story.user?.name?.split(' ')[0]}
                 </span>
               </motion.div>
             );
@@ -75,16 +77,14 @@ const Stories = () => {
         </div>
       </div>
 
-      {/* Editor Modal */}
       {editorFile && (
         <StoryEditor 
           file={editorFile} 
           onClose={() => setEditorFile(null)} 
-          onPosted={load} 
+          onPosted={load} // 🔥 Reloads stories after post
         />
       )}
 
-      {/* Viewer Modal - Rendered conditionally */}
       <AnimatePresence>
         {viewIndex !== null && (
           <StoryViewer 

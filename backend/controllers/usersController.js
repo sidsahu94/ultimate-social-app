@@ -2,16 +2,27 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
-const Notification = require('../models/Notification');
 const Story = require('../models/Story');
-const FollowRequest = require('../models/FollowRequest');
+const Notification = require('../models/Notification');
 const GameScore = require('../models/GameScore');
 const Product = require('../models/Product');
+const FollowRequest = require('../models/FollowRequest');
 const cloudinaryUtil = require('../utils/cloudinary');
-const createNotification = require('../utils/notify'); // 🔥 Import Notification Utility
+const createNotification = require('../utils/notify'); // Helper
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+
+// --- Helper: Calculate Profile Completion ---
+const calculateCompletion = (user) => {
+    let score = 20; // Base score for signing up
+    if (user.avatar) score += 20;
+    if (user.bio) score += 20;
+    if (user.location) score += 10;
+    if (user.website) score += 10;
+    if (user.coverPhoto) score += 20;
+    return Math.min(score, 100);
+};
 
 // Helper: upload handler (cloudinary fallback -> local file)
 const handleUpload = async (files, fieldName) => {
@@ -46,25 +57,22 @@ exports.getUserById = async (req, res) => {
     const user = await User.findById(targetId).select('-password').lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // 🔥 FIX: Privacy/Block Check
-    // If I am logged in, check if I am blocked by them OR if I blocked them
+    // Privacy/Block Check
     if (req.user) {
         const me = await User.findById(req.user._id).select('blockedUsers');
         
         // Case 1: They blocked me (Hide profile completely)
-        // (Assuming 'user' model has blockedUsers populated or we check raw array)
         const targetUserDoc = await User.findById(targetId).select('blockedUsers');
         if (targetUserDoc?.blockedUsers?.includes(req.user._id)) {
-            return res.status(404).json({ message: 'User not found' }); // Standard practice: simulate 404
+            return res.status(404).json({ message: 'User not found' }); 
         }
 
-        // Case 2: I blocked them (Show limited view or "You blocked this user")
+        // Case 2: I blocked them
         if (me.blockedUsers.includes(targetId)) {
             user.isBlockedByMe = true;
         }
     }
 
-    // Logic for "isFollowing" and "isMe"
     const me = req.user ? await User.findById(req.user._id) : null;
     const isFollowing = me ? (me.following || []).map(String).includes(String(user._id)) : false;
     const isMe = me ? String(me._id) === String(user._id) : false;
@@ -82,7 +90,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// PUT /users/:id (profile update)
+// PUT /users/:id (Profile Update)
 exports.updateProfile = async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.id.toString() && req.user.role !== 'admin') {
@@ -133,10 +141,14 @@ exports.updateProfile = async (req, res) => {
 
       const coverUrl = await handleUpload(req.files, 'coverPhoto');
       if (coverUrl) {
-          deleteOldFile(currentUser.coverPhoto); 
+          if (currentUser.coverPhoto) deleteOldFile(currentUser.coverPhoto); 
           updates.coverPhoto = coverUrl;
       }
     }
+
+    // 🔥 Recalculate Completion Score
+    const merged = { ...currentUser.toObject(), ...updates };
+    updates.profileCompletion = calculateCompletion(merged);
 
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
     res.json(user);
@@ -146,7 +158,60 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// GET /users/search?q=...
+// PUT /users/status (Update User Status like "Working", "Online")
+exports.updateStatus = async (req, res) => {
+    try {
+        const { status } = req.body; 
+        if (!status) return res.status(400).json({ message: 'Status required' });
+        
+        const user = await User.findByIdAndUpdate(
+            req.user._id, 
+            { userStatus: status }, 
+            { new: true }
+        ).select('userStatus');
+        
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ message: 'Error updating status' });
+    }
+};
+
+// PUT /users/settings/notifications
+exports.updateSettings = async (req, res) => {
+    try {
+        const settings = req.body;
+        const user = await User.findById(req.user._id);
+        
+        // Merge settings
+        user.notificationSettings = { ...user.notificationSettings, ...settings };
+        await user.save();
+        
+        res.json(user.notificationSettings);
+    } catch (e) {
+        res.status(500).json({ message: 'Error updating settings' });
+    }
+};
+
+// PUT /users/pin (Pin a post)
+exports.pinPost = async (req, res) => {
+    try {
+        const { postId } = req.body;
+        const user = await User.findById(req.user._id);
+        
+        if (user.pinnedPost && String(user.pinnedPost) === String(postId)) {
+            user.pinnedPost = null; // Unpin
+        } else {
+            user.pinnedPost = postId; // Pin
+        }
+        
+        await user.save();
+        res.json({ pinnedPost: user.pinnedPost });
+    } catch (e) {
+        res.status(500).json({ message: "Failed to pin post" });
+    }
+};
+
+// GET /users/search
 exports.searchUsers = async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -162,12 +227,11 @@ exports.searchUsers = async (req, res) => {
 
     res.json({ users });
   } catch (e) {
-    console.error('searchUsers error', e);
     res.status(500).json({ message: 'Search error' });
   }
 };
 
-// POST/PUT /users/:id/follow - toggle follow with Persistent Notification
+// POST/PUT /users/:id/follow
 exports.followToggle = async (req, res) => {
   try {
     const target = await User.findById(req.params.id);
@@ -182,7 +246,7 @@ exports.followToggle = async (req, res) => {
     const already = me.following.map(String).includes(String(target._id));
     
     if (already) {
-      // Unfollow Logic
+      // Unfollow
       me.following = me.following.filter(id => String(id) !== String(target._id));
       target.followers = target.followers.filter(id => String(id) !== String(me._id));
       await me.save();
@@ -195,31 +259,27 @@ exports.followToggle = async (req, res) => {
       const existing = await FollowRequest.findOne({ from: me._id, to: target._id, status: 'pending' });
       if (!existing) {
           await FollowRequest.create({ from: me._id, to: target._id });
-          // Notify target of request
           await createNotification(req, {
             toUser: target._id,
-            type: 'system', // or specific 'request' type
+            type: 'system',
             message: `${me.name} requested to follow you.`,
-            data: { link: '/requests' } // Deep link to requests page
+            data: { link: '/requests' }
           });
       }
       return res.json({ requested: true, following: false });
     }
 
-    // Follow Logic
+    // Follow
     me.following.push(target._id);
     target.followers.push(me._id);
     await me.save();
     await target.save();
 
-    // 🔥 FIX: Persistent Notification (DB + Socket)
     await createNotification(req, {
       toUser: target._id,
       type: 'follow',
       message: `${me.name} started following you`,
-      data: { 
-        link: `/profile/${me._id}` 
-      }
+      data: { link: `/profile/${me._id}` }
     });
 
     res.json({ following: true });
@@ -242,7 +302,6 @@ exports.updateCloseFriends = async (req, res) => {
     const populated = await User.findById(user._id).select('closeFriends').populate('closeFriends', 'name avatar');
     res.json({ success: true, closeFriends: populated.closeFriends || [] });
   } catch (e) {
-    console.error('updateCloseFriends error', e);
     res.status(500).json({ message: 'Error updating close friends' });
   }
 };
@@ -254,7 +313,6 @@ exports.updatePassword = async (req, res) => {
     const user = await User.findById(req.user._id).select('+password');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // 🔥 FIX: Allow setting password if none exists (Google Users)
     if (user.password) {
         if (!current) return res.status(400).json({ message: 'Current password required' });
         const isMatch = await bcrypt.compare(current, user.password);
@@ -270,18 +328,16 @@ exports.updatePassword = async (req, res) => {
 
     res.json({ message: 'Password updated successfully' });
   } catch (e) {
-    console.error('updatePassword error', e);
     res.status(500).json({ message: 'Error' });
   }
 };
 
-// GET /users/:id/followers (Paginated)
+// GET /users/:id/followers
 exports.getFollowers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
     const limit = parseInt(req.query.limit) || 20;
     
-    // 🔥 FIX: Pagination via populate options
     const user = await User.findById(req.params.id)
       .select('followers')
       .populate({
@@ -297,7 +353,7 @@ exports.getFollowers = async (req, res) => {
   }
 };
 
-// GET /users/:id/following (Paginated)
+// GET /users/:id/following
 exports.getFollowing = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
@@ -318,7 +374,7 @@ exports.getFollowing = async (req, res) => {
   }
 };
 
-// Follow request handlers
+// Follow Requests
 exports.getFollowRequests = async (req, res) => {
   try {
     const reqs = await FollowRequest.find({ to: req.user._id, status: 'pending' })
@@ -344,7 +400,6 @@ exports.acceptFollowRequest = async (req, res) => {
     fr.status = 'accepted';
     await Promise.all([fr.save(), me.save(), them.save()]);
     
-    // Notify requester
     await createNotification(req, {
         toUser: them._id,
         type: 'system',
@@ -367,39 +422,26 @@ exports.declineFollowRequest = async (req, res) => {
   }
 };
 
-// 🔥 DELETE ACCOUNT (Deep Clean)
+// 🔥 DELETE ACCOUNT (Soft Delete)
 exports.deleteMe = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 1. Content Cleanup
-    await Post.deleteMany({ user: userId });
-    await Comment.deleteMany({ user: userId });
-    await Story.deleteMany({ user: userId });
-    
-    // 2. Gamification & Market Cleanup
-    await GameScore.deleteMany({ user: userId });
-    await Product.deleteMany({ owner: userId }); 
+    // Soft Delete
+    await User.findByIdAndUpdate(userId, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      refreshToken: null // Force logout
+    });
 
-    // 3. Social Cleanup (Pull ID from other users' arrays)
-    await User.updateMany(
-      { $or: [{ followers: userId }, { following: userId }] },
-      { $pull: { followers: userId, following: userId } }
-    );
+    // Force Logout socket event
+    const io = req.app.get('io');
+    if (io) io.to(userId.toString()).emit('auth:force_logout');
 
-    // 4. Remove Likes/Reactions on other posts
-    await Post.updateMany({ likes: userId }, { $pull: { likes: userId } });
-
-    // 5. Notifications
-    await Notification.deleteMany({ $or: [{ user: userId }, { actor: userId }] });
-
-    // 6. Delete Account
-    await User.findByIdAndDelete(userId);
-
-    res.json({ message: 'Account and all associated data deleted successfully' });
+    res.json({ message: 'Account deactivated. You can restore it within 30 days.' });
   } catch (e) {
     console.error('deleteMe error', e);
-    res.status(500).json({ message: 'Server error during account deletion' });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -413,7 +455,7 @@ exports.blockUser = async (req, res) => {
       me.blockedUsers = me.blockedUsers.filter(id => String(id) !== String(targetId));
     } else {
       me.blockedUsers.push(targetId);
-      // Unfollow mutuals on block
+      // Unfollow mutuals
       me.following = me.following.filter(id => String(id) !== String(targetId));
       me.followers = me.followers.filter(id => String(id) !== String(targetId));
     }

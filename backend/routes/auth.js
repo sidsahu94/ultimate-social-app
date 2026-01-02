@@ -2,23 +2,19 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const { authLimiter } = require('../middleware/rateLimit');
+const { protect } = require('../middleware/authMiddleware'); // 🔥 Needed for logout
 
-// Register
-router.post('/register', authController.register);
+// Public Routes (Rate Limited)
+router.post('/register', authLimiter, authController.register);
+router.post('/verify-otp', authLimiter, authController.verifyOtp);
+router.post('/login', authLimiter, authController.login);
+router.post('/google-login', authLimiter, authController.googleLogin);
+router.post('/refresh', authLimiter, authController.refresh);
+router.post('/request-reset', authLimiter, authController.requestPasswordReset);
+router.post('/reset-password', authLimiter, authController.resetPassword);
 
-// Verify OTP
-router.post('/verify-otp', authController.verifyOtp);
-
-// Login
-router.post('/login', authController.login);
-
-// Google Login
-router.post('/google-login', authController.googleLogin); // <--- This route calls the function we just fixed
-
-// Request password reset
-router.post('/request-reset', authController.requestPasswordReset);
-
-// Reset password
-router.post('/reset-password', authController.resetPassword);
+// Protected Routes
+router.post('/logout', protect, authController.logout); // 🔥 NEW
 
 module.exports = router;

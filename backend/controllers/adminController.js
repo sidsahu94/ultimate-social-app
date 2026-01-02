@@ -1,83 +1,160 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
-const Comment = require('../models/Comment'); // 🔥 Added
-const Notification = require('../models/Notification'); // 🔥 Added
-const Story = require('../models/Story'); // 🔥 Added
-const GameScore = require('../models/GameScore'); // 🔥 Added
-const Product = require('../models/Product'); // 🔥 Added
+const Report = require('../models/Report'); // Ensure Report model exists
+const Comment = require('../models/Comment'); // For cleanup if needed
 
+// --- 1. DASHBOARD STATS ---
 exports.getStats = async (req, res) => {
   try {
     const userCount = await User.countDocuments();
     const postCount = await Post.countDocuments();
-    res.json({ userCount, postCount });
+    const reportCount = await Report.countDocuments({ status: 'open' });
+    
+    // Optional: Calculate active users today (if lastActive field exists)
+    // const activeToday = await User.countDocuments({ lastActive: { $gte: new Date(new Date().setHours(0,0,0,0)) } });
+
+    res.json({ 
+        userCount, 
+        postCount, 
+        reportCount,
+        // activeToday 
+    });
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('Stats error:', err);
+    res.status(500).json({ message: 'Server error fetching stats' });
   }
 };
 
+// --- 2. USER MANAGEMENT ---
 exports.listUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password').limit(200);
+    // Return latest 50 users with essential admin fields
+    const users = await User.find()
+      .select('name email role isVerified isDeleted createdAt avatar')
+      .sort({ createdAt: -1 })
+      .limit(50);
+      
     res.json(users);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error fetching users' });
   }
 };
 
-// 🔥 FIX: robust cleanup (copied logic from usersController)
+exports.banUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Toggle Ban Status
+    const isBanning = user.role !== 'banned';
+    user.role = isBanning ? 'banned' : 'user';
+    
+    // If banning, FORCE LOGOUT by clearing refresh token
+    if (isBanning) {
+        user.refreshToken = null; 
+        
+        // Optional: Emit socket event to force client logout immediately
+        const io = req.app.get('io');
+        if (io) {
+            io.to(id.toString()).emit('force_logout');
+        }
+    }
+    
+    await user.save();
+    res.json({ message: `User ${user.role}`, role: user.role });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error banning user' });
+  }
+};
+
+// --- 3. POST MANAGEMENT ---
+exports.listPosts = async (req, res) => {
+  try {
+    // Return latest 100 posts for moderation view
+    const posts = await Post.find()
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .populate('user', 'name email avatar');
+      
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error fetching posts' });
+  }
+};
+
+// --- 4. REPORT MANAGEMENT ---
+exports.getReports = async (req, res) => {
+  try {
+    const reports = await Report.find({ status: 'open' })
+      .populate('reporter', 'name email')
+      .populate('targetUser', 'name email') 
+      .populate('targetPost', 'content user') // Nested user pop might fail if simple ref, usually just content is enough
+      .sort({ createdAt: -1 });
+      
+    res.json(reports);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching reports' });
+  }
+};
+
+exports.handleReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'dismiss', 'ban_user', 'delete_post'
+    
+    const report = await Report.findById(id);
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    // Execute Action
+    if (action === 'ban_user' && report.targetUser) {
+        await User.findByIdAndUpdate(report.targetUser, { 
+            role: 'banned', 
+            refreshToken: null 
+        });
+        // Force socket logout
+        const io = req.app.get('io');
+        if (io) io.to(String(report.targetUser)).emit('force_logout');
+
+    } else if (action === 'delete_post' && report.targetPost) {
+        await Post.findByIdAndDelete(report.targetPost);
+        // Also cleanup associated data (simple version)
+        await Comment.deleteMany({ post: report.targetPost });
+    }
+
+    // Update Report Status
+    report.status = 'resolved';
+    report.action = action; // Track what was done
+    report.handledBy = req.user._id;
+    await report.save();
+
+    res.json({ message: `Report resolved: ${action}` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error handling report' });
+  }
+};
+
+// --- 5. CLEANUP ---
+// Re-using the robust delete logic from usersController is recommended, 
+// but here is a direct admin version if needed.
 exports.deleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // 1. Content Cleanup
+    // Soft delete is preferred, but admin might want HARD delete
+    await User.findByIdAndDelete(userId);
+    
+    // Cleanup related data (Minimal)
     await Post.deleteMany({ user: userId });
     await Comment.deleteMany({ user: userId });
-    await Story.deleteMany({ user: userId });
-    await GameScore.deleteMany({ user: userId });
-    await Product.deleteMany({ owner: userId });
 
-    // 2. Social Cleanup (Pull ID from arrays)
-    await User.updateMany(
-      { $or: [{ followers: userId }, { following: userId }] },
-      { $pull: { followers: userId, following: userId } }
-    );
-
-    // 3. Remove Likes
-    await Post.updateMany({ likes: userId }, { $pull: { likes: userId } });
-
-    // 4. Notifications
-    await Notification.deleteMany({ $or: [{ user: userId }, { actor: userId }] });
-
-    // 5. Delete User
-    await User.findByIdAndDelete(userId);
-
-    res.json({ message: 'User and all associated data deleted' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-// ... existing imports and functions ...
-
-exports.listPosts = async (req, res) => {
-  try {
-    // Return latest 100 posts for moderation
-    const posts = await Post.find()
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .populate('user', 'name email avatar');
-        
-    res.json(posts);
+    res.json({ message: 'User permanently deleted' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 };
-
-// Ensure exports.deletePost is also handled. 
-// Since postsController.deletePost handles cleanup (images, comments),
-// we can usually reuse it or replicate logic. 
-// Since you implemented a robust deleteUser, let's allow postsController.deletePost 
-// to handle admin deletion (it already checks req.user.role === 'admin').

@@ -7,11 +7,15 @@ export const loginUser = createAsyncThunk(
   async (credentials, thunkAPI) => {
     try {
       const res = await API.post("/auth/login", credentials);
-      // Correctly extract data structure from response variations
-      const token = res.data.token ?? res.data?.data?.token;
-      const user = res.data.user ?? res.data?.data?.user ?? res.data; 
       
+      // Extract data
+      const token = res.data.token;
+      const refreshToken = res.data.refreshToken; // 🔥 NEW: Get refresh token
+      const user = res.data.user; 
+      
+      // Store in LocalStorage
       if (token) localStorage.setItem("token", token);
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken); // 🔥 NEW: Store it
       if (user && user._id) localStorage.setItem("meId", user._id);
       
       return user;
@@ -31,6 +35,7 @@ export const fetchMe = createAsyncThunk("auth/fetchMe", async (_, thunkAPI) => {
   } catch (err) {
     // Clean up tokens on failure
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken"); // 🔥 Clean up here too
     localStorage.removeItem("meId");
     const msg = err?.response?.data?.message || "Failed to fetch user";
     return thunkAPI.rejectWithValue(msg);
@@ -41,22 +46,22 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: null,
-    loading: false, // for login/register
+    loading: false, 
     error: null,
-    checkingAuth: !!localStorage.getItem("token"), // for initial check
+    checkingAuth: !!localStorage.getItem("token"), 
   },
   reducers: {
     logout: (state) => {
       state.user = null;
       state.error = null;
       localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken"); // 🔥 NEW: Clear refresh token
       localStorage.removeItem("meId");
       state.checkingAuth = false;
     },
     clearError: (state) => { state.error = null; },
     setUser: (state, action) => { state.user = action.payload; state.checkingAuth = false; },
     
-    // 🔥 WIRED UP: Update user state locally (e.g. after profile edit)
     updateAuthUser: (state, action) => {
       if (state.user) {
         state.user = { ...state.user, ...action.payload };
@@ -69,7 +74,7 @@ const authSlice = createSlice({
       .addCase(loginUser.pending, (s) => { s.loading = true; s.error = null; })
       .addCase(loginUser.fulfilled, (s, a) => { s.loading = false; s.user = a.payload; s.checkingAuth = false; s.error = null; })
       .addCase(loginUser.rejected, (s, a) => { s.loading = false; s.user = null; s.error = a.payload; s.checkingAuth = false; })
-      // --- Fetch Me (Startup Check)
+      // --- Fetch Me
       .addCase(fetchMe.pending, (s) => { s.checkingAuth = true; })
       .addCase(fetchMe.fulfilled, (s, a) => { s.user = a.payload; s.checkingAuth = false; s.error = null; })
       .addCase(fetchMe.rejected, (s, a) => { s.user = null; s.checkingAuth = false; s.error = a.payload; });

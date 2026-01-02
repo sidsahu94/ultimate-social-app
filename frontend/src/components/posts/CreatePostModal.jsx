@@ -16,12 +16,15 @@ const FILTERS = [
   { name: 'Warm', val: 'sepia(0.3) saturate(1.4)' },
 ];
 
-export default function CreatePostModal({ isOpen, onClose, onPosted }) {
+export default function CreatePostModal({ isOpen, onClose, onPosted, initialData }) {
   const [activeTab, setActiveTab] = useState('post'); 
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  
+  // Draft State
+  const [draftId, setDraftId] = useState(null);
   
   // Poll State
   const [pollQ, setPollQ] = useState('');
@@ -30,28 +33,28 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
   // Filter State
   const [filter, setFilter] = useState('');
 
-  // Hashtag Autocomplete State
+  // Hashtag Autocomplete
   const [tagSuggestions, setTagSuggestions] = useState([]);
 
   const { add } = useToast();
 
-  // Reset state on close/open
+  // 🔥 EFFECT: Load Initial Data (Drafts/Reposts)
   useEffect(() => {
-    if (!isOpen) {
-      setText(''); setFiles([]); setPollQ(''); setPollOpts(['','']); setFilter(''); setTagSuggestions([]);
+    if (initialData) {
+        setText(initialData.content || '');
+        if (initialData.isDraft) setDraftId(initialData._id); // Track draft ID
+        // If it was a poll/reel, you'd load that logic here too, but for now we focus on text/media
+    } else if (!isOpen) {
+        // Reset on close
+        setText(''); 
+        setFiles([]); 
+        setPollQ(''); 
+        setPollOpts(['','']); 
+        setFilter(''); 
+        setTagSuggestions([]); 
+        setDraftId(null);
     }
-  }, [isOpen]);
-
-  // 🔥 Listen for external triggers (like Repost) to pre-fill content
-  useEffect(() => {
-    const handler = (e) => {
-        if (e.detail?.content) {
-            setText(e.detail.content);
-        }
-    };
-    window.addEventListener('openCreatePost', handler);
-    return () => window.removeEventListener('openCreatePost', handler);
-  }, []);
+  }, [isOpen, initialData]);
 
   // Handle Hashtag Detection
   const handleTextChange = async (e) => {
@@ -66,9 +69,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
         try {
             const res = await API.get(`/tags/search?q=${query}`);
             setTagSuggestions(res.data || []);
-        } catch(e) {
-            // Silent fail for tags
-        }
+        } catch(e) { /* silent fail */ }
     } else {
         setTagSuggestions([]);
     }
@@ -76,7 +77,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
 
   const insertTag = (tag) => {
     const words = text.split(/[\s\n]+/);
-    words.pop(); // Remove the partial tag
+    words.pop(); 
     const newText = words.join(' ') + ' #' + tag + ' ';
     setText(newText);
     setTagSuggestions([]);
@@ -94,7 +95,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isSaveDraft = false) => {
     setLoading(true);
     try {
       const fd = new FormData();
@@ -112,18 +113,23 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
       else {
          // Standard Post
          fd.append('content', text);
+         fd.append('isDraft', isSaveDraft); // 🔥 Flag for draft
          
          for (const f of files) {
              const processed = await compressImage(f);
              fd.append('media', processed);
          }
 
+         // Note: If editing a draft, your backend logic (Phase 3/4) might need a PUT /posts/:id endpoint.
+         // For now, this creates a NEW entry. If `draftId` exists, you could optionally DELETE the old one 
+         // or if your backend supports updating drafts, switch logic here.
+         // Below assumes creating a new version or new post.
          await API.post('/posts', fd);
       }
 
       if (onPosted) onPosted();
       onClose();
-      add('Posted successfully!', { type: 'success' });
+      add(isSaveDraft ? 'Draft saved!' : 'Posted successfully!', { type: 'success' });
     } catch(err) {
       console.error(err);
       add(err.response?.data?.message || err.message || "Failed to post", { type: 'error' });
@@ -224,12 +230,11 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
                 </button>
               </div>
 
-              {/* Media Preview & Filters */}
+              {/* Media Preview */}
               {files.length > 0 && (
                 <div className="mb-4">
                   <div className="relative h-64 w-full rounded-xl overflow-hidden border bg-black group">
                     <button onClick={() => setFiles([])} className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full z-20 hover:bg-red-500 transition"><FaTimes /></button>
-                    
                     {files[0].type.includes('video') ? (
                       <video src={URL.createObjectURL(files[0])} className="h-full w-full object-contain" controls />
                     ) : (
@@ -241,16 +246,11 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
                       />
                     )}
                   </div>
-
-                  {/* Filter Selector (Images Only) */}
+                  {/* Filters */}
                   {!files[0].type.includes('video') && (
                     <div className="flex gap-3 overflow-x-auto py-3 no-scrollbar">
                       {FILTERS.map(f => (
-                        <button 
-                          key={f.name}
-                          onClick={() => setFilter(f.val)}
-                          className={`px-4 py-1 rounded-full text-xs font-bold border transition whitespace-nowrap ${filter === f.val ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}
-                        >
+                        <button key={f.name} onClick={() => setFilter(f.val)} className={`px-4 py-1 rounded-full text-xs font-bold border transition whitespace-nowrap ${filter === f.val ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
                           {f.name}
                         </button>
                       ))}
@@ -278,13 +278,27 @@ export default function CreatePostModal({ isOpen, onClose, onPosted }) {
             </>
           )}
 
-          <button 
-            disabled={loading || (activeTab==='poll' ? !pollQ : (!text && files.length === 0))}
-            onClick={handleSubmit}
-            className="w-full mt-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50 transition shadow-lg shadow-indigo-500/30"
-          >
-            {loading ? 'Posting...' : 'Post'}
-          </button>
+          <div className="flex gap-3 mt-6">
+            {/* Draft Button (Only for posts) */}
+            {activeTab === 'post' && (
+                <button 
+                    disabled={loading || !text}
+                    onClick={() => handleSubmit(true)} // Pass true for draft
+                    className="flex-1 py-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                >
+                    Save Draft
+                </button>
+            )}
+            
+            {/* Post Button */}
+            <button 
+                disabled={loading || (activeTab==='poll' ? !pollQ : (!text && files.length === 0))}
+                onClick={() => handleSubmit(false)}
+                className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50 transition shadow-lg shadow-indigo-500/30"
+            >
+                {loading ? 'Posting...' : 'Post'}
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>
