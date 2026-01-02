@@ -27,6 +27,10 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// 🔥 CRITICAL FIX: Trust Proxy for Render Deployment
+// This fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" error
+app.set('trust proxy', 1);
+
 // -------------------- 1. DATABASE CONNECTION --------------------
 mongoose
   .connect(process.env.MONGO_URI)
@@ -36,7 +40,7 @@ mongoose
 // -------------------- 2. SECURITY & MIDDLEWARE --------------------
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: false // Disabled for dev to allow external images/scripts
+  contentSecurityPolicy: false 
 }));
 
 app.use(mongoSanitize());
@@ -52,7 +56,6 @@ app.use('/api', generalLimiter);
 app.use(express.json({ limit: '10kb' })); 
 app.use(cookieParser());
 
-// Allow requests from local dev and production domains
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ultimate-social-app.onrender.com'];
@@ -60,7 +63,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Janitor Cleanup (Run every 24h to clear orphan files)
+// Janitor Cleanup (Run every 24h)
 setInterval(() => { runJanitor(); }, 24 * 60 * 60 * 1000);
 
 // -------------------- 3. API ROUTES --------------------
@@ -94,14 +97,10 @@ try { app.use('/api/follow-suggest', require('./routes/followSuggest')); } catch
 // -------------------- 4. SERVE FRONTEND (PRODUCTION) --------------------
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '..', 'frontend', 'dist');
-  
-  // Serve Static Assets
   app.use(express.static(clientBuildPath));
-
-  // Handle React Routing (SPA) - Catch all requests that aren't APIs
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
-      return next();
+      return next(); 
     }
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
@@ -133,9 +132,6 @@ global.io = io;
 
 const userSockets = new Map(); 
 const onlineUsers = new Set(); 
-
-// 🔥 NIGHT LOUNGE STATE
-// Tracks active users in the audio lounge
 const activeLoungeUsers = new Map(); 
 
 // --- Strict Socket Authentication ---
@@ -178,26 +174,23 @@ io.on('connection', (socket) => {
   socket.on('leaveRoom', ({ room }) => { if (room) socket.leave(room); });
   socket.on('typing', (data) => { if(data.chatId) socket.to(data.chatId).emit('typing', data); });
 
-  // --- WebRTC (Video Calls) ---
+  // --- WebRTC ---
   socket.on('call:start', ({ toUserId, roomId, callerName, callerAvatar }) => {
     io.to(String(toUserId)).emit('call:incoming', { roomId, from: { _id: userId, name: callerName, avatar: callerAvatar } });
   });
   socket.on('call:signal', ({ to, signal, from }) => { io.to(to).emit('call:signal', { signal, from }); });
   socket.on('call:rejected', ({ roomId }) => { socket.to(roomId).emit('call:rejected'); socket.to(roomId).emit('call:ended'); });
 
-  // --- 🔥 NIGHT LOUNGE LOGIC (Real-time Audio Space) ---
+  // --- Night Lounge ---
   socket.on('lounge:join', () => {
       socket.join('global-lounge');
-      
       activeLoungeUsers.set(userId, {
           _id: userId,
           name: socket.user.name,
           avatar: socket.user.avatar,
-          isMuted: true, // Join muted
+          isMuted: true,
           isSpeaking: false
       });
-      
-      // Broadcast full list to everyone in lounge
       io.to('global-lounge').emit('lounge:update', Array.from(activeLoungeUsers.values()));
   });
 
@@ -211,7 +204,7 @@ io.on('connection', (socket) => {
       if (activeLoungeUsers.has(userId)) {
           const u = activeLoungeUsers.get(userId);
           u.isMuted = isMuted;
-          u.isSpeaking = !isMuted; // Visual simulation
+          u.isSpeaking = !isMuted;
           activeLoungeUsers.set(userId, u);
           io.to('global-lounge').emit('lounge:update', Array.from(activeLoungeUsers.values()));
       }
@@ -224,12 +217,10 @@ io.on('connection', (socket) => {
       onlineUsers.delete(String(userId));
       io.emit('user:offline', userId);
       
-      // Cleanup Lounge on disconnect
       if (activeLoungeUsers.has(userId)) {
           activeLoungeUsers.delete(userId);
           io.to('global-lounge').emit('lounge:update', Array.from(activeLoungeUsers.values()));
       }
-
       console.log(`🔴 User disconnected: ${userId}`);
     }
   });
