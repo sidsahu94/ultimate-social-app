@@ -1,4 +1,3 @@
-// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -9,6 +8,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      // 🔥 FIX: Increase cache limit to 10MB to handle large AI model chunks
+      workbox: {
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+      },
       manifest: {
         name: 'Ultimate Social App',
         short_name: 'SocialApp',
@@ -18,9 +21,8 @@ export default defineConfig({
         display: 'standalone',
         scope: '/',
         start_url: '/',
-        // 🔥 NEW: Share Target API configuration
         share_target: {
-            action: "/share-target", // Route handled in App.jsx
+            action: "/share-target",
             method: "POST",
             enctype: "multipart/form-data",
             params: {
