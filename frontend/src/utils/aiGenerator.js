@@ -1,3 +1,4 @@
+// frontend/src/utils/aiGenerator.js
 // Simulates an OpenAI call. Replace with real fetch to your backend if you have an API Key.
 export const generateCaption = async (keywords) => {
   return new Promise((resolve) => {

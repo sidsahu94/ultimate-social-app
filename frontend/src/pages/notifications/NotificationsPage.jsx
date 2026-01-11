@@ -1,3 +1,4 @@
+// frontend/src/pages/notifications/NotificationsPage.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import socket from "../../services/socket";
@@ -15,10 +16,12 @@ const getNotificationLink = (n) => {
 
     switch (n.type) {
         case 'like':
-        case 'comment':
-        case 'mention':
             // Go to specific post
             return n.data?.postId ? `/post/${n.data.postId}` : null;
+        case 'comment':
+        case 'mention':
+            // 🔥 FIX: Add ?comments=true parameter so comments open automatically
+            return n.data?.postId ? `/post/${n.data.postId}?comments=true` : null;
         case 'follow':
             // Go to the profile of the person who followed
             return n.actor?._id ? `/profile/${n.actor._id}` : null;

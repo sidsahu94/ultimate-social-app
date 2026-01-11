@@ -1,3 +1,4 @@
+// frontend/src/pages/shop/Shop.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 import { useToast } from '../../components/ui/ToastProvider';

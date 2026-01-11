@@ -1,3 +1,4 @@
+// frontend/src/components/widgets/LeaderboardWidget.jsx
 import React from 'react';
 import { FaTrophy, FaMedal } from 'react-icons/fa';
 

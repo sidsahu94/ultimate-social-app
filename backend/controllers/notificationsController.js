@@ -1,6 +1,7 @@
 // backend/controllers/notificationsController.js
 const Notification = require('../models/Notification');
-
+const User = require('../models/User'); // Ensure User model has pushSubscription field
+const { webpush, publicKey } = require('../utils/push');
 /**
  * GET /api/notifications
  * 🔥 FIXED: Added Pagination
@@ -67,4 +68,31 @@ exports.getUnreadCount = async (req, res) => {
   } catch (error) {
     res.status(500).json({ count: 0 });
   }
+};
+// 🔥 NEW: Get Public Key
+exports.getPushKey = (req, res) => {
+    res.json({ publicKey });
+};
+
+// 🔥 NEW: Subscribe User
+exports.subscribe = async (req, res) => {
+    try {
+        const subscription = req.body;
+        await User.findByIdAndUpdate(req.user.id, { pushSubscription: subscription });
+        res.status(201).json({ message: 'Push Subscribed' });
+    } catch (err) {
+        res.status(500).json({ message: 'Subscription failed' });
+    }
+};
+
+// 🔥 NEW: Send Push (Helper to be used in notify.js)
+exports.sendPushToUser = async (userId, payload) => {
+    try {
+        const user = await User.findById(userId).select('pushSubscription');
+        if (user && user.pushSubscription) {
+            await webpush.sendNotification(user.pushSubscription, JSON.stringify(payload));
+        }
+    } catch (err) {
+        console.error("Push Error (Expired sub?):", err.statusCode);
+    }
 };

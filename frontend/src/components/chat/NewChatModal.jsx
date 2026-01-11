@@ -1,3 +1,4 @@
+// frontend/src/components/chat/NewChatModal.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';

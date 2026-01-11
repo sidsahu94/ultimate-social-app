@@ -1,3 +1,4 @@
+// frontend/src/hooks/useVideoSettings.js
 import { useState, useEffect } from 'react';
 
 // Defined OUTSIDE the hook so it acts as a global singleton for the session

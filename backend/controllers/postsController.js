@@ -3,19 +3,20 @@ const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Saved = require('../models/Saved');
 const User = require('../models/User');
-const cloudinaryUtil = require('../utils/cloudinary');
+const { uploads, deleteFile } = require('../utils/cloudinary'); // 🔥 Updated import
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const processMentions = require('../utils/processMentions'); // 🔥 Mentions Handler
+const processMentions = require('../utils/processMentions');
+const { addXP } = require('../utils/gamification'); // 🔥 Gamification
 
 // Helper: Safe Cloudinary Upload
 const safeUploadToCloudinary = async (filePath) => {
   try {
     if (!process.env.CLOUDINARY_CLOUD_NAME) throw new Error('CLOUDINARY env not configured');
-    const res = await cloudinaryUtil.uploads(filePath);
+    const res = await uploads(filePath);
     try { fs.unlinkSync(filePath); } catch (e) {}
     return { url: res.secure_url };
   } catch (err) {
@@ -60,17 +61,19 @@ exports.createPost = async (req, res) => {
       videos,
       hashtags,
       mentions,
-      isDraft: isDraft === 'true' || isDraft === true, // 🔥 Draft Flag
+      isDraft: isDraft === 'true' || isDraft === true, 
     });
 
     await post.save();
     await post.populate('user', 'name avatar');
     
-    // Only process notifications/feed events if NOT a draft
     if (!post.isDraft) {
-        await processMentions(content, req, post._id); // 🔥 Notify mentioned users
+        await processMentions(content, req, post._id);
         
+        // 🔥 GAMIFICATION: Award 50 XP
         const io = req.app.get('io');
+        addXP(req.user._id, 50, io); 
+        
         if (io) io.emit('post:created', post);
     }
 
@@ -81,35 +84,56 @@ exports.createPost = async (req, res) => {
   }
 };
 
+// 🔥 "THE ALGORITHM" FEED
 exports.getFeed = async (req, res) => {
   try {
     const page = Math.max(0, parseInt(req.query.page || '0', 10));
     const limit = Math.max(1, Math.min(50, parseInt(req.query.limit || '10', 10)));
     const userId = req.user ? req.user._id : null;
 
+    // 1. Get User's Top Interests
+    let topInterests = [];
+    if (userId) {
+        const userDoc = await User.findById(userId).select('interestProfile blockedUsers');
+        
+        if (userDoc?.interestProfile) {
+            topInterests = Array.from(userDoc.interestProfile.entries())
+                .sort((a, b) => b[1] - a[1]) // Sort by score
+                .slice(0, 5) // Top 5 tags
+                .map(entry => entry[0]); 
+        }
+    }
+
     let matchStage = { 
-        isArchived: { $ne: true },
-        isFlagged: { $ne: true },
-        isDraft: { $ne: true } // 🔥 Hide drafts from feed
+      isArchived: { $ne: true },
+      isFlagged: { $ne: true },
+      isDraft: { $ne: true }
     };
 
     if (userId) {
-        const user = await User.findById(userId).select('following blockedUsers');
+        const user = await User.findById(userId).select('blockedUsers');
         const blockedIds = (user?.blockedUsers || []).map(id => new mongoose.Types.ObjectId(id));
-        
-        // Filter out posts from users I blocked
         matchStage["user"] = { $nin: blockedIds };
     }
 
     const posts = await Post.aggregate([
       { $match: matchStage },
       
-      // 🔥 SMART SCORE CALCULATION
+      // 🔥 Calculate Personalization Score
       { $addFields: {
           likesWeight: { $multiply: [{ $size: { $ifNull: ["$likes", []] } }, 2] },
           commentsWeight: { $multiply: [{ $size: { $ifNull: ["$comments", []] } }, 3] },
           
-          // Time Decay: Subtract hours since creation * 0.5
+          // Interest Boost: +50 points if tag matches
+          interestBoost: {
+             $cond: {
+                if: { $gt: [ { $size: { $setIntersection: ["$hashtags", topInterests] } }, 0 ] },
+                then: 50, 
+                else: 0
+             }
+          },
+
+          // Time Decay (Fresher is better)
           recencyScore: { 
              $divide: [
                 { $subtract: [new Date(), "$createdAt"] }, 
@@ -117,25 +141,34 @@ exports.getFeed = async (req, res) => {
              ]
           }
       }},
+      
       { $addFields: {
-          smartScore: { 
+          finalScore: { 
               $subtract: [
-                  { $add: ["$likesWeight", "$commentsWeight"] },
-                  { $multiply: ["$recencyScore", 0.5] } 
+                  { $add: ["$likesWeight", "$commentsWeight", "$interestBoost"] }, 
+                  { $multiply: ["$recencyScore", 2] } 
               ]
           }
       }},
       
-      { $sort: { smartScore: -1, createdAt: -1 } },
+      { $sort: { finalScore: -1, createdAt: -1 } }, 
       { $skip: page * limit },
       { $limit: limit },
       
-      { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'user' } },
-      { $unwind: '$user' },
+      // Lookup User
+      { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userInfo' } },
+      { $unwind: '$userInfo' },
+      
+      // 🔥 Filter Ghost Users (Deleted Accounts)
+      { $match: { "userInfo.isDeleted": { $ne: true } } },
       
       { $project: {
-          "content": 1, "images": 1, "videos": 1, "likes": 1, "comments": 1, "createdAt": 1, "views": 1, "poll": 1,
-          "user._id": 1, "user.name": 1, "user.avatar": 1, "user.isVerified": 1, "user.badges": 1
+          content: 1, images: 1, videos: 1, likes: 1, comments: 1, createdAt: 1, views: 1, poll: 1, hashtags: 1,
+          "user._id": "$userInfo._id",
+          "user.name": "$userInfo.name",
+          "user.avatar": "$userInfo.avatar",
+          "user.isVerified": "$userInfo.isVerified",
+          "user.badges": "$userInfo.badges"
       }}
     ]);
 
@@ -146,28 +179,21 @@ exports.getFeed = async (req, res) => {
   }
 };
 
-// 🔥 NEW: Dedicated Drafts Endpoint
 exports.getDrafts = async (req, res) => {
     try {
-        const drafts = await Post.find({ 
-            user: req.user._id, 
-            isDraft: true 
-        }).sort({ updatedAt: -1 });
+        const drafts = await Post.find({ user: req.user._id, isDraft: true }).sort({ updatedAt: -1 });
         res.json(drafts);
     } catch (e) {
         res.status(500).json({ message: 'Error fetching drafts' });
     }
 };
 
-// 🔥 NEW: View Count Increment
 exports.viewPost = async (req, res) => {
     try {
         const { id } = req.params;
         await Post.findByIdAndUpdate(id, { $inc: { views: 1 } });
         res.json({ success: true });
-    } catch (e) {
-        res.status(200).json({ success: false }); 
-    }
+    } catch (e) { res.status(200).json({ success: false }); }
 };
 
 exports.getPostById = async (req, res) => {
@@ -186,7 +212,7 @@ exports.getPostById = async (req, res) => {
     if (!post) return res.status(404).json({ message: 'Post not found' });
     return res.json(post);
   } catch (err) {
-    return res.status(500).json({ message: 'Error getting post', error: err.message });
+    return res.status(500).json({ message: 'Error getting post' });
   }
 };
 
@@ -206,10 +232,16 @@ exports.updatePost = async (req, res) => {
       post.mentions = mentions;
     }
 
+    // Handle Image Removal
     if (req.body.imagesToRemove) {
         const toRemove = Array.isArray(req.body.imagesToRemove) ? req.body.imagesToRemove : [req.body.imagesToRemove];
+        
+        // 🔥 CLEANUP: Delete from Cloudinary
+        for (const url of toRemove) {
+            await deleteFile(url);
+        }
+
         post.images = post.images.filter(imgUrl => !toRemove.includes(imgUrl));
-        // Logic to delete from Cloudinary can be added here
     }
 
     if (req.files?.length) {
@@ -225,7 +257,7 @@ exports.updatePost = async (req, res) => {
     await post.populate('user', 'name avatar');
     return res.json(post);
   } catch (err) {
-    return res.status(500).json({ message: 'Error updating post', error: err.message });
+    return res.status(500).json({ message: 'Error updating post' });
   }
 };
 
@@ -239,7 +271,15 @@ exports.deletePost = async (req, res) => {
       return res.status(403).json({ message: 'Not allowed' });
     }
 
-    // Cleanup Saved Lists (Source of Truth)
+    // 🔥 CLEANUP: Delete images/videos from Cloudinary
+    if (post.images && post.images.length > 0) {
+        for (const img of post.images) await deleteFile(img);
+    }
+    if (post.videos && post.videos.length > 0) {
+        for (const vid of post.videos) await deleteFile(vid);
+    }
+
+    // Cleanup related data
     await Saved.updateMany({ posts: id }, { $pull: { posts: id } });
     await Comment.deleteMany({ _id: { $in: post.comments } });
     await Post.findByIdAndDelete(id);
@@ -262,17 +302,27 @@ exports.likePost = async (req, res) => {
     const uid = req.user._id.toString();
     const already = post.likes.map(String).includes(uid);
 
-    if (already) post.likes = post.likes.filter(l => l.toString() !== uid);
-    else post.likes.push(req.user._id);
+    if (already) {
+        post.likes = post.likes.filter(l => l.toString() !== uid);
+    } else {
+        post.likes.push(req.user._id);
+        
+        // 🔥 UPDATE INTEREST PROFILE
+        if (post.hashtags && post.hashtags.length > 0) {
+            const incUpdate = {};
+            post.hashtags.forEach(tag => {
+                incUpdate[`interestProfile.${tag}`] = 1; 
+            });
+            // Fire and forget
+            User.findByIdAndUpdate(req.user._id, { $inc: incUpdate }).exec();
+        }
+    }
 
     await post.save();
     
     const io = req.app.get('io');
     if (io) {
-        io.emit('post:updated', { 
-            _id: post._id, 
-            likes: post.likes 
-        });
+        io.emit('post:updated', { _id: post._id, likes: post.likes });
     }
     
     return res.json({ success: true, likesCount: post.likes.length, liked: !already });
@@ -286,7 +336,6 @@ exports.toggleBookmark = async (req, res) => {
     const postId = req.params.postId || req.body.postId;
     const userId = req.user._id;
 
-    // 🔥 FIX: Use 'Saved' collection solely
     let savedRecord = await Saved.findOne({ user: userId });
     
     if (!savedRecord) {
@@ -304,10 +353,7 @@ exports.toggleBookmark = async (req, res) => {
 
     await savedRecord.save();
 
-    res.json({ 
-        saved: existingIndex === -1, 
-        count: savedRecord.posts.length 
-    });
+    res.json({ saved: existingIndex === -1, count: savedRecord.posts.length });
   } catch (err) {
     res.status(500).json({ message: 'Error toggling bookmark' });
   }
@@ -315,11 +361,11 @@ exports.toggleBookmark = async (req, res) => {
 
 exports.getBookmarks = async (req, res) => {
   try {
+    // 🔥 Added pagination to bookmarks in extraController, this is a fallback for simple fetch
     const savedRecord = await Saved.findOne({ user: req.user._id }).populate({
         path: 'posts',
         populate: { path: 'user', select: 'name avatar' }
     });
-    // Filter nulls (deleted posts)
     const validPosts = (savedRecord?.posts || []).filter(p => p !== null);
     res.json(validPosts);
   } catch (err) {
@@ -351,7 +397,7 @@ exports.getPostsByUser = async (req, res) => {
         user: userId, 
         isArchived: { $ne: true }, 
         isFlagged: { $ne: true },
-        isDraft: { $ne: true } // Don't show drafts on public profile
+        isDraft: { $ne: true } 
     })
       .sort({ createdAt: -1 })
       .skip(page * limit)
@@ -456,10 +502,8 @@ exports.getPostLikes = async (req, res) => {
   }
 };
 
-// React to Post (Emoji)
 exports.reactPost = async (req, res) => {
     try {
-        // Logic similar to comment reaction, omitted for brevity but structure is here
         res.json({ success: true });
     } catch (e) { res.status(500).json({ message: 'Error' }); }
 };

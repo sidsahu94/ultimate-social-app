@@ -1,10 +1,14 @@
+// frontend/src/pages/auth/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser } from '../../redux/slices/authSlice';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Spinner from '../../components/common/Spinner';
 import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { motion } from 'framer-motion';
+// 🔥 FIX: Added FaGoogle to imports here to prevent reference errors if used directly
+import { FaEye, FaEyeSlash, FaGoogle } from 'react-icons/fa'; 
+import AppIcon from '../../components/ui/AppIcon'; 
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -15,118 +19,142 @@ const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
 
-  // 🔥 FIX: Deep Linking Logic
-  // If the user was redirected here from a protected route, 'from' will hold that path.
-  // Otherwise, default to '/' (Home).
+  // Deep link redirect logic
   const from = location.state?.from?.pathname || "/";
 
-  // Watch for successful login (user state update) and redirect
   useEffect(() => {
     if (user) {
       navigate(from, { replace: true });
     }
   }, [user, navigate, from]);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    dispatch(loginUser(form));
+    // We manually dispatch API call here instead of Redux thunk 
+    // to handle the special 2FA flow logic locally first
+    try {
+        const res = await API.post('/auth/login', form);
+        
+        // 🔥 NEW: Check for 2FA
+        if (res.data.requires2FA) {
+            navigate('/verify-account', { 
+                state: { email: res.data.email, isLogin: true } // Pass flag
+            });
+            return;
+        }
+
+        // Normal Success
+        const { token, refreshToken, user } = res.data;
+        localStorage.setItem('token', token);
+        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('meId', user._id);
+        dispatch(setUser(user));
+        navigate(from, { replace: true });
+
+    } catch (err) {
+        // Handle error manually since we skipped thunk
+        const msg = err.response?.data?.message || 'Login failed';
+        // You might need a local error state or dispatch a failure action to show it
+        alert(msg); // Or set local error state
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-black transition-all duration-1000 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#E0E5EC] dark:bg-[#1A1B1E] p-6 transition-colors duration-500">
       
-      {/* Glass Card */}
-      <div className="w-full max-w-md bg-white/10 dark:bg-black/40 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/10">
-        
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black bg-gradient-to-r from-indigo-400 to-pink-500 bg-clip-text text-transparent mb-2 tracking-tight">
-            Welcome Back
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }} 
+        animate={{ y: 0, opacity: 1 }} 
+        className="neu-card w-full max-w-md relative overflow-hidden flex flex-col gap-6"
+      >
+        {/* Decorative Top Glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-primary-glow to-transparent shadow-neon-cyan" />
+
+        {/* Header Section */}
+        <div className="text-center mt-4">
+          <div className="inline-block p-4 rounded-[20px] shadow-neu-flat dark:shadow-neu-dark-flat mb-4 bg-[#E0E5EC] dark:bg-[#1A1B1E] border border-white/40 dark:border-white/5">
+             <AppIcon size={48} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter mb-1">
+            WELCOME BACK
           </h1>
-          <p className="text-gray-300 text-sm">Enter the ultimate social experience</p>
+          <p className="text-slate-500 text-sm font-medium">Log in to the future.</p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="p-3 mb-4 bg-red-500/20 border border-red-500/50 text-red-200 rounded-xl text-sm text-center animate-pulse">
+          <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm text-center font-bold animate-pulse">
             {error}
           </div>
         )}
 
-        <div className="space-y-5">
-          
-          {/* Google Login Component */}
-          <div className="w-full">
-             <GoogleLoginButton />
+        {/* Google Login (Styled) */}
+        <div className="w-full">
+           <GoogleLoginButton />
+        </div>
+
+        <div className="relative flex items-center">
+          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
+          <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">Or Email</span>
+          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
+        </div>
+
+        {/* Login Form */}
+        <form onSubmit={submit} className="space-y-5">
+          <div className="space-y-1">
+            <input
+              className="neu-input"
+              placeholder="Email address"
+              type="email"
+              name="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
+              required
+            />
           </div>
           
-          {/* Divider */}
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-gray-600"></div>
-            <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase font-bold tracking-wider">Or Email</span>
-            <div className="flex-grow border-t border-gray-600"></div>
-          </div>
-
-          {/* Login Form */}
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <input
-                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-white placeholder-gray-500 transition hover:bg-white/10"
-                placeholder="Email address"
-                type="email"
-                name="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={e => setForm({...form, email: e.target.value})}
-                required
-              />
-            </div>
-            
-            {/* Password Input with Toggle */}
-            <div className="relative">
-              <input
-                className="w-full p-4 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-white placeholder-gray-500 transition hover:bg-white/10 pr-12"
-                placeholder="Password"
-                type={showPass ? "text" : "password"}
-                name="password"
-                autoComplete="current-password"
-                value={form.password}
-                onChange={e => setForm({...form, password: e.target.value})}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(!showPass)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors cursor-pointer"
-                title={showPass ? "Hide password" : "Show password"}
-              >
-                {showPass ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
-              </button>
-            </div>
-
-            {/* Forgot Password Link */}
-            <div className="flex justify-end">
-                <Link 
-                    to="/forgot-password" 
-                    className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition"
-                >
-                    Forgot Password?
-                </Link>
-            </div>
-
-            <button 
-              disabled={loading} 
-              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95 flex justify-center items-center gap-2"
+          <div className="space-y-1 relative">
+            <input
+              className="neu-input pr-12"
+              placeholder="Password"
+              type={showPass ? "text" : "password"}
+              name="password"
+              autoComplete="current-password"
+              value={form.password}
+              onChange={e => setForm({...form, password: e.target.value})}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
+              className="absolute right-4 top-3.5 text-gray-400 hover:text-primary transition-colors cursor-pointer"
             >
-              {loading ? <Spinner /> : 'Sign In'}
+              {showPass ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
             </button>
-          </form>
-        </div>
+          </div>
 
-        <div className="mt-8 text-center text-sm text-gray-400">
-          Don't have an account? <Link to="/register" className="text-indigo-400 font-semibold hover:text-indigo-300 hover:underline">Create one</Link>
+          <div className="flex justify-end">
+              <Link 
+                  to="/forgot-password" 
+                  className="text-xs font-bold text-primary hover:text-secondary transition"
+              >
+                  Forgot Password?
+              </Link>
+          </div>
+
+          <button 
+            disabled={loading} 
+            className="btn-neon w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {loading ? <Spinner /> : 'ENTER SYSTEM'}
+          </button>
+        </form>
+
+        <div className="text-center text-sm text-gray-500">
+          New here? <Link to="/register" className="text-primary font-bold hover:text-secondary transition">Create Account</Link>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

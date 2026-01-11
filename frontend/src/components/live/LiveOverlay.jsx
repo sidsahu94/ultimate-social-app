@@ -1,3 +1,4 @@
+// frontend/src/components/live/LiveOverlay.jsx
 import React, { useEffect, useState } from 'react';
 import socket from '../../services/socket';
 

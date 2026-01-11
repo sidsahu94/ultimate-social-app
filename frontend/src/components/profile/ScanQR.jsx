@@ -1,3 +1,4 @@
+// frontend/src/components/profile/ScanQR.jsx
 import React from 'react';
 import { QrReader } from 'react-qr-reader';
 import { useNavigate } from 'react-router-dom';

@@ -1,3 +1,4 @@
+// backend/controllers/moderationController.js
 const Report = require('../models/ModerationReport');
 const User = require('../models/User');
 const Post = require('../models/Post');

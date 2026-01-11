@@ -1,8 +1,9 @@
+// frontend/src/pages/explore/Explore.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import { Link } from "react-router-dom";
 import Spinner from "../../components/common/Spinner";
-import { FaHashtag, FaUserPlus, FaSearch, FaFire } from 'react-icons/fa';
+import { FaHashtag, FaUserPlus, FaSearch, FaFire, FaHistory, FaTimes } from 'react-icons/fa'; // 🔥 Added Icons
 import UserAvatar from "../../components/ui/UserAvatar";
 
 export default function Explore() {
@@ -10,12 +11,39 @@ export default function Explore() {
     const [results, setResults] = useState({ users: [], posts: [], hashtags: [] });
     const [suggestions, setSuggestions] = useState({ users: [], trendingHashtags: [] });
     const [loading, setLoading] = useState(false);
+    
+    // 🔥 NEW: Recent Search State
+    const [recentSearches, setRecentSearches] = useState([]);
 
-    // 🔥 Load Initial Suggestions (Default View)
+    // Load Recents on Mount
+    useEffect(() => {
+        const saved = localStorage.getItem('recent_searches');
+        if (saved) {
+            try { setRecentSearches(JSON.parse(saved)); } catch(e) {}
+        }
+    }, []);
+
+    // 🔥 NEW: Helper to Add to History
+    const addToHistory = (term) => {
+        if (!term || term.length < 2) return;
+        const newSet = new Set([term, ...recentSearches]);
+        const newArr = Array.from(newSet).slice(0, 5); // Keep top 5
+        setRecentSearches(newArr);
+        localStorage.setItem('recent_searches', JSON.stringify(newArr));
+    };
+
+    // 🔥 NEW: Helper to Remove from History
+    const removeFromHistory = (term, e) => {
+        e.stopPropagation();
+        const newArr = recentSearches.filter(s => s !== term);
+        setRecentSearches(newArr);
+        localStorage.setItem('recent_searches', JSON.stringify(newArr));
+    };
+
+    // Load Initial Suggestions
     useEffect(() => {
         const fetchSuggestions = async () => {
             try {
-                // Ensure this endpoint exists in backend/routes/extra.js linked to searchSuggestController
                 const r = await API.get('/extra/suggestions');
                 setSuggestions(r.data || { users: [], trendingHashtags: [] });
             } catch (e) {
@@ -37,12 +65,17 @@ export default function Explore() {
             try {
                 const r = await API.get(`/search/global?q=${encodeURIComponent(query)}`);
                 setResults(r.data || { users: [], posts: [], hashtags: [] });
+                
+                // 🔥 Add to history if results found
+                if (r.data?.users?.length > 0 || r.data?.posts?.length > 0) {
+                    addToHistory(query);
+                }
             } catch (e) {
                 console.error(e);
             } finally {
                 setLoading(false);
             }
-        }, 500); // Debounce 500ms
+        }, 500); 
 
         return () => clearTimeout(timer);
     }, [query]);
@@ -104,9 +137,30 @@ export default function Explore() {
                     )}
                 </div>
             ) : (
-                // --- DEFAULT SUGGESTIONS VIEW (The "Without Searching" part) ---
+                // --- DEFAULT VIEW ---
                 <div className="space-y-8 animate-fade-in">
                     
+                    {/* 🔥 NEW: Recent Searches */}
+                    {recentSearches.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="font-bold text-gray-500 text-xs uppercase mb-3 flex items-center gap-2">
+                                <FaHistory /> Recent
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {recentSearches.map(term => (
+                                    <div 
+                                        key={term} 
+                                        onClick={() => setQuery(term)}
+                                        className="px-4 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2 group transition"
+                                    >
+                                        {term}
+                                        <span onClick={(e) => removeFromHistory(term, e)} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><FaTimes size={10} /></span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Swipe Mode CTA */}
                     <div className="bg-gradient-to-r from-pink-500 to-orange-500 rounded-2xl p-6 text-white flex items-center justify-between shadow-lg transform hover:scale-[1.02] transition cursor-pointer">
                         <div>
@@ -119,6 +173,7 @@ export default function Explore() {
                     </div>
 
                     {/* Trending Hashtags */}
+                    {/* ... (Existing code) ... */}
                     <div>
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 dark:text-white">
                             <FaFire className="text-orange-500" /> Trending Now
@@ -141,6 +196,7 @@ export default function Explore() {
                     </div>
 
                     {/* People Suggestions */}
+                    {/* ... (Existing code) ... */}
                     <div>
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 dark:text-white">
                             <FaUserPlus className="text-green-500" /> Suggested for You
@@ -161,7 +217,6 @@ export default function Explore() {
                                 </Link>
                             ))}
                         </div>
-                        {suggestions.users?.length === 0 && <div className="text-gray-400 text-sm">No suggestions available.</div>}
                     </div>
                 </div>
             )}

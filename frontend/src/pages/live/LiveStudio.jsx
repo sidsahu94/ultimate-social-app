@@ -1,3 +1,4 @@
+// frontend/src/pages/live/LiveStudio.jsx
 import React,{useEffect,useRef,useState} from 'react';
 import API from '../../services/api';
 import socket from '../../services/socket';

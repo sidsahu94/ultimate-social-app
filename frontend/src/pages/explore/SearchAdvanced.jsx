@@ -1,3 +1,4 @@
+// frontend/src/pages/explore/SearchAdvanced.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { Link } from 'react-router-dom';

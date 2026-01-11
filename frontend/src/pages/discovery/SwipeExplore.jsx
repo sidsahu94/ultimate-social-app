@@ -1,3 +1,4 @@
+// frontend/src/pages/discovery/SwipeExplore.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import API from '../../services/api';

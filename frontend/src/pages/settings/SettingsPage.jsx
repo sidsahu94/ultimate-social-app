@@ -1,270 +1,309 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/pages/settings/SettingsPage.jsx
+import React, { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateAuthUser, logout } from '../../redux/slices/authSlice';
 import API from '../../services/api';
 import { useToast } from '../../components/ui/ToastProvider';
-import { useDispatch, useSelector } from 'react-redux';
-import { logout, updateAuthUser } from '../../redux/slices/authSlice';
-import { FaLock, FaUserShield, FaTrash, FaMoon, FaUserFriends, FaSearch, FaCheck, FaGoogle, FaBell, FaToggleOn, FaToggleOff, FaUserCircle, FaSave, FaArrowLeft } from 'react-icons/fa';
-import { useTheme } from '../../contexts/ThemeProvider';
-import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  FaUserCog, FaLock, FaMoon, FaShieldAlt, FaToggleOn, FaToggleOff, 
+  FaTrash, FaCamera 
+} from 'react-icons/fa';
+import UserAvatar from '../../components/ui/UserAvatar';
+import ThemeToggle from '../../components/ui/ThemeToggle';
+import Spinner from '../../components/common/Spinner';
 
 export default function SettingsPage() {
-  const { user } = useSelector(s => s.auth);
+  const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const { add } = useToast();
-  const { toggle: toggleTheme } = useTheme();
 
-  // Settings State
-  const [notifSettings, setNotifSettings] = useState({
-      likes: true, comments: true, follows: true, messages: true
+  const [activeTab, setActiveTab] = useState('account'); // account | security | appearance
+  const [loading, setLoading] = useState(false);
+  
+  // Profile Form State
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    bio: user?.bio || '',
+    location: user?.location || '',
   });
-  const [status, setStatus] = useState('');
-  const [pass, setPass] = useState({ current: '', new: '' });
-  const [privacy, setPrivacy] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState(false);
 
-  // Close Friends
-  const [showCF, setShowCF] = useState(false);
-  const [cfList, setCfList] = useState([]); 
-  const [cfQuery, setCfQuery] = useState('');
-  const [cfResults, setCfResults] = useState([]);
-
-  // Load Initial Data
-  useEffect(() => {
-    if (user) {
-        if (user.notificationSettings) setNotifSettings(user.notificationSettings);
-        if (user.userStatus) setStatus(user.userStatus);
-        setPrivacy(user.privateProfile || false);
-    }
-    
-    // Fetch fresh CF list
-    API.get('/users/me').then(r => {
-        if (r.data.closeFriends) setCfList(r.data.closeFriends);
-    }).catch(() => {});
-  }, [user]);
+  // Password Form State
+  const [passData, setPassData] = useState({ currentPassword: '', newPassword: '' });
+  
+  // Security State
+  const [twoFactor, setTwoFactor] = useState(user?.is2FAEnabled || false);
 
   // --- Handlers ---
 
-  const toggleNotif = async (key) => {
-      const newState = { ...notifSettings, [key]: !notifSettings[key] };
-      setNotifSettings(newState); // Optimistic UI
-      try {
-          await API.put('/users/settings/notifications', newState);
-          dispatch(updateAuthUser({ notificationSettings: newState }));
-      } catch (e) {
-          setNotifSettings(prev => ({ ...prev, [key]: !prev[key] })); // Revert
-          add("Failed to update settings", { type: 'error' });
-      }
-  };
-
-  const saveStatus = async () => {
-      setLoadingStatus(true);
-      try {
-          await API.put('/users/status', { status });
-          dispatch(updateAuthUser({ userStatus: status }));
-          add("Status updated!", { type: 'success' });
-      } catch (e) {
-          add("Failed to update status", { type: 'error' });
-      } finally { setLoadingStatus(false); }
-  };
-
-  const handlePrivacy = async () => {
-    try {
-      const newVal = !privacy;
-      setPrivacy(newVal);
-      const fd = new FormData(); fd.append('isPrivate', newVal);
-      await API.put(`/users/${user._id}`, fd);
-      add(`Profile is now ${newVal ? 'Private' : 'Public'}`, { type: 'info' });
-      dispatch(updateAuthUser({ privateProfile: newVal }));
-    } catch (e) { 
-        setPrivacy(!privacy); 
-        add("Failed to change privacy", { type: 'error' }); 
-    }
-  };
-
-  const handlePassword = async (e) => {
+  const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      await API.put('/users/password', pass);
-      add("Password updated!", { type: 'success' });
-      setPass({ current: '', new: '' });
-    } catch (e) {
-      add(e.userMessage || "Failed", { type: 'error' });
+      // Assuming your backend expects PUT /users/:id for updates
+      const { data } = await API.put(`/users/${user._id}`, formData);
+      dispatch(updateAuthUser(data));
+      add('Profile updated successfully', { type: 'success' });
+    } catch (err) {
+      add('Failed to update profile', { type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Close Friends Logic
-  const toggleCF = async (targetUser) => {
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     try {
-      const isAdded = Boolean(cfList.find(u => u._id === targetUser._id));
-      let newList = isAdded ? cfList.filter(u => u._id !== targetUser._id) : [...cfList, targetUser];
-      setCfList(newList);
-      await API.put('/users/close-friends', { userIds: newList.map(u => u._id) });
-    } catch (err) { add("Failed to update Close Friends", { type: 'error' }); }
+      await API.put('/auth/update-password', passData);
+      add('Password changed successfully', { type: 'success' });
+      setPassData({ currentPassword: '', newPassword: '' });
+    } catch (err) {
+      add(err.response?.data?.message || 'Failed to change password', { type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const searchCF = async (q) => {
-    setCfQuery(q);
-    if (!q || q.length <= 2) { setCfResults([]); return; }
+  const toggle2FA = async () => {
+    // Optimistic Update
+    const newVal = !twoFactor;
+    setTwoFactor(newVal); 
+
     try {
-      const r = await API.get(`/users/search?q=${encodeURIComponent(q)}`);
-      setCfResults(r.data.users || []);
-    } catch (e) {}
+      await API.put(`/users/${user._id}`, { is2FAEnabled: newVal });
+      dispatch(updateAuthUser({ is2FAEnabled: newVal }));
+      add(newVal ? "Two-Factor Auth Enabled" : "Two-Factor Auth Disabled", { type: 'info' });
+    } catch(e) {
+      setTwoFactor(!newVal); // Revert on error
+      add("Failed to update 2FA settings", { type: 'error' });
+    }
   };
 
   const handleDeleteAccount = async () => {
-    if (!confirm("Are you absolutely sure? This cannot be undone.")) return;
+    const confirmStr = prompt("Type 'DELETE' to confirm account deletion. This cannot be undone.");
+    if (confirmStr !== 'DELETE') return;
+
     try {
-      await API.delete('/users/me');
-      dispatch(logout()); 
+      await API.delete(`/users/${user._id}`);
+      dispatch(logout());
       window.location.href = '/login';
-    } catch (e) { add("Failed to delete account", { type: 'error' }); }
+    } catch (e) {
+      add("Failed to delete account", { type: 'error' });
+    }
   };
 
-  const isGoogleUser = !!user?.googleId; 
+  const tabs = [
+    { id: 'account', label: 'Account', icon: <FaUserCog /> },
+    { id: 'security', label: 'Security', icon: <FaShieldAlt /> },
+    { id: 'appearance', label: 'Appearance', icon: <FaMoon /> },
+  ];
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6 pb-20">
-      <div className="flex items-center gap-3 mb-6">
-          <Link to={`/profile/${user?._id}`} className="md:hidden text-gray-500"><FaArrowLeft /></Link>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Settings & Privacy</h1>
-      </div>
-
-      {/* --- 1. Custom Status --- */}
-      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg"><FaUserCircle size={20} /></div>
-              <div>
-                  <h3 className="font-bold text-gray-800 dark:text-gray-200">Custom Status</h3>
-                  <p className="text-xs text-gray-500">What are you doing right now?</p>
-              </div>
-          </div>
-          <div className="flex gap-2">
-              <input 
-                  value={status} 
-                  onChange={e => setStatus(e.target.value)} 
-                  placeholder="e.g. Working, Traveling ✈️" 
-                  className="flex-1 p-3 rounded-xl border bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-green-500 outline-none transition"
-              />
-              <button onClick={saveStatus} disabled={loadingStatus} className="bg-green-600 text-white px-4 rounded-xl font-bold hover:bg-green-700 transition flex items-center gap-2">
-                  <FaSave /> {loadingStatus ? '...' : 'Save'}
-              </button>
-          </div>
-      </div>
-
-      {/* --- 2. Notification Preferences --- */}
-      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><FaBell size={20} /></div>
-          <div>
-            <div className="font-bold text-gray-800 dark:text-gray-200">Notifications</div>
-            <div className="text-xs text-gray-500">Manage your alerts</div>
-          </div>
+    <div className="max-w-4xl mx-auto p-4 pb-24 min-h-screen">
+      
+      {/* Header */}
+      <div className="mb-8 flex items-center gap-4">
+        <div className="p-4 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl">
+            <FaUserCog size={32} />
         </div>
+        <div>
+            <h1 className="text-3xl font-black text-gray-800 dark:text-white tracking-tight">Settings</h1>
+            <p className="text-gray-500">Manage your profile and preferences</p>
+        </div>
+      </div>
 
-        <div className="space-y-3">
-            {Object.keys(notifSettings).map(key => (
-                <div key={key} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-xl transition cursor-pointer" onClick={() => toggleNotif(key)}>
-                    <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{key}</span>
-                    <div className={`text-2xl transition-colors ${notifSettings[key] ? 'text-green-500' : 'text-gray-300'}`}>
-                        {notifSettings[key] ? <FaToggleOn /> : <FaToggleOff />}
+      {/* Tabs Navigation */}
+      <div className="flex overflow-x-auto gap-4 mb-8 pb-2 custom-scrollbar">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap
+              ${activeTab === tab.id 
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 scale-105' 
+                : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }
+            `}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content Area */}
+      <AnimatePresence mode='wait'>
+        
+        {/* --- ACCOUNT TAB --- */}
+        {activeTab === 'account' && (
+          <motion.div 
+            key="account"
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {/* Avatar Section */}
+            <div className="neu-card flex flex-col items-center p-8 bg-white dark:bg-gray-800">
+                <div className="relative group cursor-pointer">
+                    <UserAvatar src={user.avatar} name={user.name} className="w-24 h-24 border-4 border-white dark:border-gray-700 shadow-xl" />
+                    <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                        <FaCamera />
                     </div>
                 </div>
-            ))}
-        </div>
-      </div>
-
-      {/* --- 3. Privacy --- */}
-      <div className="card p-5 flex items-center justify-between bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><FaUserShield /></div>
-          <div>
-            <div className="font-bold text-gray-800 dark:text-gray-200">Private Account</div>
-            <div className="text-xs text-gray-500">Only followers can see your posts</div>
-          </div>
-        </div>
-        <div onClick={handlePrivacy} className={`w-12 h-6 rounded-full cursor-pointer transition-colors p-1 ${privacy ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition ${privacy ? 'translate-x-6' : ''}`} />
-        </div>
-      </div>
-
-      {/* --- 4. Close Friends --- */}
-      <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-lg"><FaUserFriends /></div>
-            <div>
-              <div className="font-bold text-gray-800 dark:text-gray-200">Close Friends</div>
-              <div className="text-xs text-gray-500">{cfList.length} people</div>
-            </div>
-          </div>
-          <button onClick={() => setShowCF(!showCF)} className="text-indigo-600 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">Manage</button>
-        </div>
-
-        {showCF && (
-          <div className="mt-4 border-t dark:border-gray-700 pt-4 animate-fade-in">
-            <div className="relative mb-3">
-              <input
-                className="w-full p-2.5 pl-10 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600 outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                placeholder="Search to add..."
-                value={cfQuery}
-                onChange={e => searchCF(e.target.value)}
-              />
-              <div className="absolute left-3 top-3 text-gray-400"><FaSearch /></div>
+                <h2 className="mt-4 text-xl font-bold dark:text-white">{user.name}</h2>
+                <span className="text-sm text-gray-400">@{user.username || 'user'}</span>
             </div>
 
-            <div className="max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
-              {(cfQuery && cfQuery.length > 2 ? cfResults : cfList).map(u => (
-                <div key={u._id} onClick={() => toggleCF(u)} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer rounded-lg transition">
-                  <div className="flex items-center gap-2">
-                    <img src={u.avatar || '/default-avatar.png'} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-600" />
-                    <span className="text-sm font-medium dark:text-gray-200">{u.name}</span>
-                  </div>
-                  {cfList.find(s => s._id === u._id) && <FaCheck className="text-green-500" />}
-                </div>
-              ))}
+            {/* Edit Profile Form */}
+            <div className="neu-card p-6 bg-white dark:bg-gray-800">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 dark:text-white">
+                    Edit Profile
+                </h3>
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Full Name</label>
+                            <input 
+                                className="neu-input" 
+                                value={formData.name} 
+                                onChange={e => setFormData({...formData, name: e.target.value})}
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Email</label>
+                            <input 
+                                className="neu-input opacity-70 cursor-not-allowed" 
+                                value={formData.email} 
+                                disabled
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Bio</label>
+                        <textarea 
+                            className="neu-input h-24 resize-none" 
+                            value={formData.bio} 
+                            onChange={e => setFormData({...formData, bio: e.target.value})}
+                            placeholder="Tell the world about yourself..."
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Location</label>
+                        <input 
+                            className="neu-input" 
+                            value={formData.location} 
+                            onChange={e => setFormData({...formData, location: e.target.value})}
+                            placeholder="City, Country"
+                        />
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                        <button disabled={loading} className="btn-neon px-8 flex items-center gap-2">
+                            {loading && <Spinner className="w-4 h-4" />} Save Changes
+                        </button>
+                    </div>
+                </form>
             </div>
-          </div>
+            
+            {/* Danger Zone */}
+            <div className="neu-card p-6 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 dark:border-red-800">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Danger Zone</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Once you delete your account, there is no going back. All your data will be permanently removed.
+                </p>
+                <button onClick={handleDeleteAccount} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition flex items-center gap-2">
+                    <FaTrash /> Delete Account
+                </button>
+            </div>
+          </motion.div>
         )}
-      </div>
 
-      {/* --- 5. Theme --- */}
-      <div className="card p-5 flex items-center justify-between bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><FaMoon /></div>
-          <div>
-            <div className="font-bold text-gray-800 dark:text-gray-200">Dark Mode</div>
-            <div className="text-xs text-gray-500">Adjust appearance</div>
-          </div>
-        </div>
-        <div onClick={toggleTheme} className="cursor-pointer">
-            <FaToggleOn className="text-3xl text-gray-300 dark:text-purple-500 transition-colors" />
-        </div>
-      </div>
+        {/* --- SECURITY TAB --- */}
+        {activeTab === 'security' && (
+          <motion.div 
+            key="security"
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+             {/* 2FA Toggle */}
+             <div className="neu-card p-6 bg-white dark:bg-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-xl">
+                        <FaShieldAlt size={24} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg dark:text-white">Two-Factor Authentication</h3>
+                        <p className="text-sm text-gray-500">Require an email OTP when logging in from new devices.</p>
+                    </div>
+                </div>
+                <button onClick={toggle2FA} className="text-4xl transition-colors cursor-pointer">
+                    {twoFactor ? (
+                        <FaToggleOn className="text-green-500 drop-shadow-md" />
+                    ) : (
+                        <FaToggleOff className="text-gray-300 dark:text-gray-600" />
+                    )}
+                </button>
+             </div>
 
-      {/* --- 6. Security (Password / Delete) --- */}
-      {!isGoogleUser ? (
-        <div className="card p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-lg"><FaLock /></div>
-                <h3 className="font-bold text-gray-800 dark:text-gray-200">Change Password</h3>
-            </div>
-            <form onSubmit={handlePassword} className="space-y-3">
-                <input type="password" placeholder="Current Password" className="w-full p-3 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600" value={pass.current} onChange={e => setPass({ ...pass, current: e.target.value })} />
-                <input type="password" placeholder="New Password" className="w-full p-3 border rounded-xl bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600" value={pass.new} onChange={e => setPass({ ...pass, new: e.target.value })} />
-                <button disabled={!pass.current || !pass.new} className="w-full bg-gray-900 dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold disabled:opacity-50 hover:opacity-90 transition">Update</button>
-            </form>
-        </div>
-      ) : (
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl flex items-center gap-3 text-sm text-blue-800 dark:text-blue-200">
-            <FaGoogle /> Signed in with Google. Security managed by Google.
-        </div>
-      )}
+             {/* Change Password */}
+             <div className="neu-card p-6 bg-white dark:bg-gray-800">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 dark:text-white">
+                    <FaLock className="text-indigo-500"/> Change Password
+                </h3>
+                <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Current Password</label>
+                        <input 
+                            type="password"
+                            className="neu-input" 
+                            value={passData.currentPassword} 
+                            onChange={e => setPassData({...passData, currentPassword: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">New Password</label>
+                        <input 
+                            type="password"
+                            className="neu-input" 
+                            value={passData.newPassword} 
+                            onChange={e => setPassData({...passData, newPassword: e.target.value})}
+                        />
+                    </div>
+                    <button disabled={loading} className="btn-neon px-6 mt-4">
+                        Update Password
+                    </button>
+                </form>
+             </div>
+          </motion.div>
+        )}
 
-      <div className="pt-4 pb-8">
-        <button onClick={handleDeleteAccount} className="w-full py-3 border border-red-200 bg-red-50 dark:bg-red-900/10 text-red-600 font-bold rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 transition flex items-center justify-center gap-2">
-            <FaTrash /> Delete Account
-        </button>
-      </div>
+        {/* --- APPEARANCE TAB --- */}
+        {activeTab === 'appearance' && (
+          <motion.div 
+            key="appearance"
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="neu-card p-8 bg-white dark:bg-gray-800 flex flex-col items-center text-center"
+          >
+             <div className="mb-6">
+                 <h2 className="text-2xl font-black mb-2 dark:text-white">Customize Interface</h2>
+                 <p className="text-gray-500">Choose a theme that fits your vibe.</p>
+             </div>
+             
+             <div className="flex gap-8">
+                 <div className="scale-150">
+                    <ThemeToggle />
+                 </div>
+             </div>
+             
+             <div className="mt-8 text-sm text-gray-400">
+                 Current Version: v2.5.0 (Neumorphic Build)
+             </div>
+          </motion.div>
+        )}
+
+      </AnimatePresence>
     </div>
   );
 }

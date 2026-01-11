@@ -1,3 +1,4 @@
+// backend/controllers/tagSuggestionController.js
 // simple heuristics: extract hashtags + most frequent nouns via regex + stopwords
 const stop = new Set(['the','a','and','of','to','in','for','on','is','with','that','this','it','an','as','are']);
 

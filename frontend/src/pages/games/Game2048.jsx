@@ -1,3 +1,4 @@
+// frontend/src/pages/games/Game2048.jsx
 import React, { useState, useEffect } from 'react';
 import { FaUndo, FaSave, FaTimes } from 'react-icons/fa';
 import API from '../../services/api';

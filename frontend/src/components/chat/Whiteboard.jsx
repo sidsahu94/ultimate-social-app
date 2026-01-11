@@ -1,3 +1,4 @@
+// frontend/src/components/chat/Whiteboard.jsx
 import React, { useRef, useEffect, useState } from 'react';
 import socket from '../../services/socket';
 import { FaEraser, FaPen, FaSave, FaTimes } from 'react-icons/fa';

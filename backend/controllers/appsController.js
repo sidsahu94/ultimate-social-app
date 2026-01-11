@@ -69,7 +69,7 @@ exports.getWallet = async (req, res) => {
   } catch (e) { res.status(500).json({ message: 'Error fetching wallet' }); }
 };
 
-// --- ANALYTICS (Fixed) ---
+// --- ANALYTICS ---
 exports.getAnalytics = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -112,19 +112,27 @@ exports.getLeaderboard = async (req, res) => {
   } catch (e) { res.status(500).json({ message: 'Error' }); }
 };
 
-// 🔥 TRANSACTIONAL SCORE SUBMISSION
+// 🔥 TRANSACTIONAL SCORE SUBMISSION (Updated)
 exports.submitScore = async (req, res) => {
-  let session;
+  let session = null;
   try {
     const { gameId, score } = req.body;
     const userId = req.user._id;
 
-    // Start ACID Session
-    session = await mongoose.startSession();
-    session.startTransaction();
+    // Start ACID Session (Safe Fallback)
+    // Check if we can use transactions (Replica Set only)
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (err) {
+        // Fallback for standalone DB (Local Dev)
+        session = null;
+    }
+
+    const opts = session ? { session } : {};
 
     // 1. Save Score
-    await GameScore.create([{ user: userId, gameId, score }], { session });
+    await GameScore.create([{ user: userId, gameId, score }], opts);
 
     // 2. Reward Logic
     const reward = Math.floor(score / 100); // 1 Coin per 100 points
@@ -139,7 +147,7 @@ exports.submitScore = async (req, res) => {
         type: 'credit',
         description: { $regex: /Reward for/ }, 
         createdAt: { $gte: today }
-    });
+    }); // Transactions don't need session read usually for this check
 
     const earnedToday = todaysTransactions.reduce((acc, t) => acc + t.amount, 0);
     let earned = 0;
@@ -152,7 +160,7 @@ exports.submitScore = async (req, res) => {
             await User.findByIdAndUpdate(
                 userId, 
                 { $inc: { "wallet.balance": actualReward, "wallet.totalReceived": actualReward } },
-                { session }
+                opts
             );
 
             // Log Transaction
@@ -161,31 +169,34 @@ exports.submitScore = async (req, res) => {
                 type: 'credit',
                 amount: actualReward,
                 description: `Reward for ${gameId} score: ${score}`
-            }], { session });
+            }], opts);
             
             earned = actualReward;
         }
     }
 
     // Commit Transaction
-    await session.commitTransaction();
+    if (session) {
+        await session.commitTransaction();
+        session.endSession();
+    }
     
     // Emit socket event for instant wallet update on frontend
     const io = req.app.get('io') || global.io;
     if (io && earned > 0) {
-        // We calculate new balance manually or fetch again. 
-        // Manually is faster here since we know the increment.
-        const currentBalance = req.user.wallet.balance + earned;
-        io.to(String(userId)).emit('wallet:update', { balance: currentBalance });
+        // 🔥 FIX: Fetch fresh balance to guarantee consistency
+        const freshUser = await User.findById(userId).select('wallet.balance');
+        io.to(String(userId)).emit('wallet:update', { balance: freshUser.wallet.balance });
     }
 
     res.json({ message: 'Score saved', earned });
 
   } catch (e) { 
-    if (session) await session.abortTransaction();
+    if (session) {
+        await session.abortTransaction();
+        session.endSession();
+    }
     console.error(e);
     res.status(500).json({ message: 'Error saving score' }); 
-  } finally {
-    if (session) session.endSession();
   }
 };

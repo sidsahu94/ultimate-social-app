@@ -1,3 +1,4 @@
+// backend/scripts/create_admin.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();

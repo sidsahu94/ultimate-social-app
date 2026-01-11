@@ -4,6 +4,7 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const notificationsController = require('../controllers/notificationsController');
 const Notification = require('../models/Notification');
+const { getPushKey, subscribe } = require('../controllers/notificationsController');
 
 router.get('/', protect, notificationsController.getNotifications);
 
@@ -27,5 +28,8 @@ router.post('/:id/read', protect, async (req, res) => {
   }
 });
 router.get('/unread-count', protect, notificationsController.getUnreadCount);
+// 🔥 NEW ROUTES
+router.get('/push-key', protect, getPushKey);
+router.post('/subscribe', protect, subscribe);
 
 module.exports = router;

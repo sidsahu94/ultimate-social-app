@@ -1,3 +1,4 @@
+// frontend/src/pages/memories/Memories.jsx
 import React,{useEffect,useState} from 'react';
 import API from '../../services/api';
 import PostCard from '../../components/posts/PostCard';

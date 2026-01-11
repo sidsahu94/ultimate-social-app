@@ -1,3 +1,4 @@
+// frontend/src/components/profile/MyQR.jsx
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useSelector } from 'react-redux';

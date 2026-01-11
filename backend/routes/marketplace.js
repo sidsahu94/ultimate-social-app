@@ -1,3 +1,4 @@
+// backend/routes/marketplace.js
 const router = require('express').Router();
 const { protect } = require('../middleware/authMiddleware');
 const upload = require('../utils/multer');

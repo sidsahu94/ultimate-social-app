@@ -1,3 +1,4 @@
+// frontend/src/components/posts/ShareModal.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';

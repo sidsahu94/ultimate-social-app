@@ -1,3 +1,4 @@
+// frontend/src/components/chat/CreateGroupModal.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';

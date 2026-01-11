@@ -1,3 +1,4 @@
+// frontend/src/pages/shop/Marketplace.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import ProductCard from '../../components/shop/ProductCard';

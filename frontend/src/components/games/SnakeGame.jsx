@@ -1,3 +1,4 @@
+// frontend/src/components/games/SnakeGame.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { FaTrophy, FaTimes, FaPlay, FaRedo, FaArrowUp, FaArrowDown, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import API from '../../services/api';

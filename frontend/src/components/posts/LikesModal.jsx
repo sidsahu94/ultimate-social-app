@@ -1,3 +1,4 @@
+// frontend/src/components/posts/LikesModal.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';

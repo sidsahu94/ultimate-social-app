@@ -5,57 +5,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 🎨 THE TRICK: Remapping 'indigo' to a vibrant "Electric Violet" palette
-        // This instantly changes every primary button/link in your app.
-        indigo: {
-          50: '#f0fdfa',  // Cyan-ish white
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf', // Bright Teal
-          500: '#0d9488', // Deep Teal (Text)
-          600: '#7c3aed', // 🟣 PRIMARY: Electric Violet (Buttons)
-          700: '#6d28d9',
-          800: '#5b21b6',
-          900: '#4c1d95',
-          950: '#2e1065',
+        // Theme: Electric Blue & Royal Purple
+        primary: {
+          DEFAULT: '#2979FF', // Electric Blue
+          glow: '#00E5FF',    // Neon Cyan Accent
         },
-        // 🌑 New Dark Mode Backgrounds (Deep Space)
-        dark: {
-          bg: '#050505',
-          card: '#0f0f11', // Almost black, slightly tinted
-          border: '#27272a',
+        secondary: {
+          DEFAULT: '#7E57C2', // Royal Purple
         },
-      },
-      backgroundImage: {
-        // 🌈 The "Extraordinary" Gradient
-        'brand-gradient': 'linear-gradient(135deg, #06b6d4 0%, #7c3aed 50%, #db2777 100%)', // Cyan -> Violet -> Pink
-        'nav-gradient': 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0) 100%)',
-        'glass-shine': 'linear-gradient(45deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%)',
+        // Ultra-Soft Backgrounds
+        bg: {
+          light: '#E0E5EC', // Classic Neumorphism Base
+          dark: '#1A1B1E',  // Dark Neumorphism Base
+        }
       },
       boxShadow: {
-        'glow': '0 0 20px rgba(124, 58, 237, 0.5)', // Purple glow
-        'neon': '0 0 10px rgba(6, 182, 212, 0.5), 0 0 20px rgba(124, 58, 237, 0.3)',
+        // Neumorphism: Light Mode (Soft, Extruded)
+        'neu-flat': '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5)',
+        'neu-pressed': 'inset 6px 6px 10px 0 rgba(163,177,198, 0.7), inset -6px -6px 10px 0 rgba(255,255,255, 0.8)',
+        
+        // Neumorphism: Dark Mode (Deep, Sharp)
+        'neu-dark-flat': '5px 5px 10px #0b0c0d, -5px -5px 10px #292a2f',
+        'neu-dark-pressed': 'inset 5px 5px 10px #0b0c0d, inset -5px -5px 10px #292a2f',
+
+        // Neon Glows
+        'neon-blue': '0 0 10px #2979FF, 0 0 20px #2979FF',
+        'neon-cyan': '0 0 10px #00E5FF, 0 0 20px #00E5FF',
       },
-      animation: {
-        'gradient-x': 'gradient-x 3s ease infinite',
-        'float': 'float 6s ease-in-out infinite',
-      },
-      keyframes: {
-        'gradient-x': {
-          '0%, 100%': {
-            'background-size': '200% 200%',
-            'background-position': 'left center'
-          },
-          '50%': {
-            'background-size': '200% 200%',
-            'background-position': 'right center'
-          },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        }
+      fontFamily: {
+        sans: ['"Exo 2"', 'Inter', 'sans-serif'], // Futuristic Font
       }
     },
   },

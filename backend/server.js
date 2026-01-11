@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -9,13 +8,17 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
+const compression = require('compression'); 
 
 // --- Security Imports ---
 const helmet = require('helmet');
 const xss = require('xss-clean');
 const mongoSanitize = require('express-mongo-sanitize');
 
-// --- Custom Middleware & Utilities ---
+// --- Redis Adapter Imports ---
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
+
 const { generalLimiter } = require('./middleware/rateLimit'); 
 const errorHandler = require('./middleware/errorHandler');    
 const AppError = require('./utils/AppError');
@@ -27,15 +30,24 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// 🔥 CRITICAL FIX: Trust Proxy for Render Deployment
-// This fixes the "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR" error
 app.set('trust proxy', 1);
 
-// -------------------- 1. DATABASE CONNECTION --------------------
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch((err) => console.error('❌ MongoDB Error:', err));
+// -------------------- 1. DATABASE CONNECTION (Resilient) --------------------
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('✅ MongoDB Connected');
+  } catch (err) {
+    console.error('❌ MongoDB Connection Error:', err);
+    // Retry logic for production resilience
+    setTimeout(connectDB, 5000);
+  }
+};
+connectDB();
+
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB Disconnected. Attempting reconnect...');
+});
 
 // -------------------- 2. SECURITY & MIDDLEWARE --------------------
 app.use(helmet({
@@ -45,20 +57,19 @@ app.use(helmet({
 
 app.use(mongoSanitize());
 app.use(xss());
+app.use(compression()); 
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Global Rate Limiter
 app.use('/api', generalLimiter);
-
-app.use(express.json({ limit: '10kb' })); 
+app.use(express.json({ limit: '50kb' })); 
 app.use(cookieParser());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ultimate-social-app.onrender.com'];
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -83,8 +94,9 @@ app.use('/api/reels', require('./routes/reels'));
 app.use('/api/apps', require('./routes/apps'));
 app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/tags', require('./routes/tags'));
+app.use('/api/integrations', require('./routes/integrations'));
 
-// Optional Modules (Safe Load)
+// Optional Modules
 try { app.use('/api/search', require('./routes/search')); } catch {}
 try { app.use('/api/live', require('./routes/live')); } catch {}
 try { app.use('/api/social', require('./routes/social')); } catch {}
@@ -94,7 +106,7 @@ try { app.use('/api/payouts', require('./routes/payouts')); } catch {}
 try { app.use('/api/moderation', require('./routes/moderation')); } catch {}
 try { app.use('/api/follow-suggest', require('./routes/followSuggest')); } catch {}
 
-// -------------------- 4. SERVE FRONTEND (PRODUCTION) --------------------
+// -------------------- 4. SERVE FRONTEND --------------------
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '..', 'frontend', 'dist');
   app.use(express.static(clientBuildPath));
@@ -125,16 +137,33 @@ const io = socketio(server, {
   },
   path: '/socket.io',
   transports: ['websocket', 'polling'],
+  pingTimeout: 60000, 
 });
 
 app.set('io', io);
 global.io = io;
 
+// 🔥 REDIS ADAPTER SETUP
+// Only run this if a REDIS_URL is provided in .env
+if (process.env.REDIS_URL) {
+  (async () => {
+    const pubClient = createClient({ url: process.env.REDIS_URL });
+    const subClient = pubClient.duplicate();
+
+    try {
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('✅ Redis Adapter Connected');
+    } catch (err) {
+      console.warn('⚠️ Redis connection failed, falling back to memory adapter.', err.message);
+    }
+  })();
+}
+
 const userSockets = new Map(); 
 const onlineUsers = new Set(); 
 const activeLoungeUsers = new Map(); 
 
-// --- Strict Socket Authentication ---
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
@@ -143,8 +172,7 @@ io.use(async (socket, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('_id name avatar role isDeleted');
     
-    if (!user) return next(new Error('Unauthorized: User not found'));
-    if (user.isDeleted) return next(new Error('Unauthorized: Account deleted'));
+    if (!user || user.isDeleted) return next(new Error('Unauthorized'));
 
     socket.user = user; 
     socket.handshake.auth.userId = user._id.toString(); 
@@ -156,7 +184,6 @@ io.use(async (socket, next) => {
   }
 });
 
-// --- Socket Connection Logic ---
 io.on('connection', (socket) => {
   const userId = socket.handshake.auth.userId;
 
@@ -164,7 +191,6 @@ io.on('connection', (socket) => {
     userSockets.set(String(userId), socket.id);
     onlineUsers.add(String(userId));
     io.emit('user:online', userId);
-    console.log(`🟢 User connected: ${userId}`);
   }
 
   socket.emit('users:list', Array.from(onlineUsers));
@@ -180,6 +206,7 @@ io.on('connection', (socket) => {
   });
   socket.on('call:signal', ({ to, signal, from }) => { io.to(to).emit('call:signal', { signal, from }); });
   socket.on('call:rejected', ({ roomId }) => { socket.to(roomId).emit('call:rejected'); socket.to(roomId).emit('call:ended'); });
+  socket.on('call:ended', ({ roomId }) => { socket.to(roomId).emit('call:ended'); });
 
   // --- Night Lounge ---
   socket.on('lounge:join', () => {
@@ -210,7 +237,6 @@ io.on('connection', (socket) => {
       }
   });
 
-  // --- Disconnect ---
   socket.on('disconnect', () => {
     if (userId) {
       userSockets.delete(String(userId));
@@ -221,13 +247,23 @@ io.on('connection', (socket) => {
           activeLoungeUsers.delete(userId);
           io.to('global-lounge').emit('lounge:update', Array.from(activeLoungeUsers.values()));
       }
-      console.log(`🔴 User disconnected: ${userId}`);
     }
   });
 });
 
-// -------------------- 7. START SERVER --------------------
+// -------------------- 7. START SERVER (Graceful) --------------------
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
+
+// Graceful Shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    console.log('Process terminated.');
+    mongoose.connection.close(false, () => {
+      process.exit(0);
+    });
+  });
+});

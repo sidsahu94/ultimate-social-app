@@ -1,3 +1,4 @@
+// frontend/src/pages/auth/ResetPassword.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';

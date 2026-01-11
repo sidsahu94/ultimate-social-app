@@ -13,19 +13,18 @@ exports.aiAvatar = async (req, res) => {
   res.json({ url: up.secure_url });
 };
 
-// ✅ VOICE CONTROLLER: Handles audio upload and socket emit
+// VOICE CONTROLLER
 exports.voice = async (req, res) => {
   try {
     const chat = await Chat.findById(req.params.chatId);
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
 
-    // Upload audio file to Cloudinary (or local)
-    const up = await cloud.uploads(req.file.path, 'voice', { resource_type: 'video' }); // 'video' resource type often used for audio in Cloudinary
+    const up = await cloud.uploads(req.file.path, 'voice', { resource_type: 'video' }); 
     
     const message = {
       sender: req.user._id,
-      content: '', // No text content
-      audio: up.secure_url, // Save URL to audio field
+      content: '', 
+      audio: up.secure_url, 
       createdAt: new Date()
     };
 
@@ -33,12 +32,10 @@ exports.voice = async (req, res) => {
     chat.updatedAt = Date.now();
     await chat.save();
 
-    // Populate for response
     const populatedChat = await Chat.findById(req.params.chatId)
       .populate('participants', 'name avatar')
       .populate('messages.sender', 'name avatar');
 
-    // Emit via Socket.io
     const io = req.app.get('io') || global.io;
     const newMessage = populatedChat.messages[populatedChat.messages.length - 1];
     
@@ -89,20 +86,27 @@ exports.toggleSave = async (req, res) => {
   }
 };
 
-// ... existing imports ...
-
-// Get saved posts for a user
+// 🔥 UPDATED: Get saved posts for a user with Pagination
 exports.getSavedByUser = async (req, res) => {
   try {
     const userId = req.params.id;
+    const page = parseInt(req.query.page || 0);
+    const limit = parseInt(req.query.limit || 12); // Fetch 12 at a time
+
     if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: 'Invalid user id' });
     
-    const record = await Saved.findOne({ user: userId }).populate({
-      path: 'posts',
-      populate: { path: 'user', select: 'name avatar' } 
-    });
+    // Slice projection for pagination
+    const record = await Saved.findOne({ user: userId })
+        .populate({
+            path: 'posts',
+            options: { 
+                sort: { createdAt: -1 }, 
+                skip: page * limit,
+                limit: limit 
+            },
+            populate: { path: 'user', select: 'name avatar' } 
+        });
 
-    // 🔥 FIX: Filter out nulls (deleted posts) to prevent frontend crash
     const validPosts = (record?.posts || []).filter(post => post !== null);
 
     return res.json(validPosts);
@@ -111,8 +115,6 @@ exports.getSavedByUser = async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 };
-
-
 
 // Simple reels placeholder
 exports.getReels = async (req, res) => {
@@ -136,7 +138,6 @@ exports.getShopItems = async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 };
-// ... existing imports
 
 exports.uploadFile = async (req, res) => {
   try {

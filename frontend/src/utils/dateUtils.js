@@ -1,3 +1,4 @@
+// frontend/src/utils/dateUtils.js
 export function timeAgo(dateParam) {
   if (!dateParam) return null;
   const date = typeof dateParam === 'object' ? dateParam : new Date(dateParam);

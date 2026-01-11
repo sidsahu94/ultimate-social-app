@@ -1,3 +1,4 @@
+// frontend/src/pages/games/GamesPage.jsx
 import React, { useState, useEffect } from 'react';
 import { FaGamepad, FaTrophy, FaPlay } from 'react-icons/fa';
 import API from '../../services/api';

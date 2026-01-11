@@ -1,3 +1,4 @@
+// frontend/src/pages/reels/ReelsPage.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import API from '../../services/api';
 import {
@@ -62,7 +63,6 @@ const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
       }
 
       // 🔥 FIX: Count view after 3 seconds of active watching
-      // Only if it's a real reel (not demo)
       if (!String(reel._id).startsWith('demo')) {
           viewTimer = setTimeout(() => {
             API.post(`/reels/${reel._id}/view`).catch(() => {});
@@ -292,7 +292,8 @@ export default function ReelsPage() {
 
   const deleteReel = async (id) => {
     try {
-      await API.delete(`/posts/${id}`);
+      // 🔥 FIX: Correct API endpoint for reels
+      await API.delete(`/reels/${id}`);
       setReels(prev => prev.filter(r => r._id !== id));
       addToast('Reel deleted', { type: 'info' });
     } catch (e) {

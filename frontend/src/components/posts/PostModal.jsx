@@ -1,4 +1,5 @@
-// frontend/src/components/posts/PostModal.jsximport React, { useEffect, useState } from "react";
+// frontend/src/components/posts/PostModal.jsx
+
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import { motion } from "framer-motion";

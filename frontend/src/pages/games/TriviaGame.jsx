@@ -1,4 +1,4 @@
-
+// frontend/src/pages/games/TriviaGame.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { FaCheck, FaTimes } from 'react-icons/fa';

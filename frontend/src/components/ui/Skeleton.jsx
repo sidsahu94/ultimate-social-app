@@ -1,3 +1,4 @@
+// frontend/src/components/ui/Skeleton.jsx
 import React from 'react';
 
 export const Skeleton = ({ className }) => (

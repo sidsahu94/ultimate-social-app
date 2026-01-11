@@ -1,3 +1,4 @@
+// frontend/src/pages/events/EventsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaCalendarPlus, FaMapMarkerAlt, FaUsers, FaClock, FaCalendarAlt, FaTrash } from 'react-icons/fa'; // 🔥 Added FaTrash

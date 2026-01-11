@@ -1,3 +1,4 @@
+// frontend/src/utils/compressor.js
 import imageCompression from 'browser-image-compression';
 
 export const compressImage = async (file) => {

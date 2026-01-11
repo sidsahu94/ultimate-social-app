@@ -1,3 +1,4 @@
+// frontend/src/pages/profile/Analytics.jsx
 import React,{useEffect,useState} from 'react';
 import API from '../../services/api';
 import { Line } from 'react-chartjs-2';

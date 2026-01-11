@@ -1,3 +1,4 @@
+// frontend/src/redux/slices/postSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../services/api";
 

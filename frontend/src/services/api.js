@@ -1,70 +1,76 @@
+// frontend/src/services/api.js
 import axios from 'axios';
 
-// Vite proxy handles forwarding to backend
-const API_BASE = '/api';
+// Create Instance
+const API = axios.create({
+  baseURL: 'http://localhost:5000/api', // Change this to your production URL if deployed
+  headers: { 
+    'Content-Type': 'application/json' 
+  },
+  withCredentials: true // Important for cross-site cookies if used, good practice generally
+});
 
-const API = axios.create({ baseURL: API_BASE, timeout: 30000 });
+// --- REQUEST INTERCEPTOR ---
+// Automatically adds the JWT token to the Authorization header
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// Request Interceptor
-API.interceptors.request.use(config => {
-  const t = localStorage.getItem('token');
-  if (t) config.headers = config.headers || {}, config.headers.Authorization = `Bearer ${t}`;
-  return config;
-}, e => Promise.reject(e));
-
-// Response Interceptor (Auto-Refresh Logic)
+// --- RESPONSE INTERCEPTOR ---
+// Handles 401 errors (Token Expiry) by trying to refresh the token
 API.interceptors.response.use(
-  (res) => res,
-  async (err) => {
-    const originalRequest = err.config;
-    let message = 'Network error';
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
 
-    // 1. Handle Rate Limiting
-    if (err.response?.status === 429) {
-        message = "You're doing that too fast. Please slow down.";
-        err.userMessage = message;
-        return Promise.reject(err);
-    }
+    // Check if error is 401 (Unauthorized) and we haven't tried refreshing yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true; // Mark as retried to prevent infinite loops
 
-    // 2. 🔥 HANDLE 401 (UNAUTHORIZED) & AUTO-REFRESH
-    if (err.response?.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true; // Mark as retried to prevent infinite loop
-
-        try {
-            // Attempt to get a new token using the Refresh Token
-            const refreshToken = localStorage.getItem('refreshToken'); // Ensure you store this on login!
-            if (!refreshToken) throw new Error("No refresh token");
-
-            const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
-
-            // Save new tokens
-            localStorage.setItem('token', data.token);
-            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-
-            // Retry original request with new token
-            originalRequest.headers.Authorization = `Bearer ${data.token}`;
-            return API(originalRequest);
-
-        } catch (refreshErr) {
-            // Refresh failed (expired/invalid) -> Force Logout
-            console.warn("Session expired, logging out.");
-            localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('meId');
-            window.dispatchEvent(new Event('auth:logout'));
-            message = "Session expired. Please login again.";
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        
+        if (!refreshToken) {
+            throw new Error("No refresh token available");
         }
-    } 
-    
-    // 3. Handle Other Errors
-    else if (err.response?.data?.message || err.response?.data?.error) {
-        message = err.response.data.message || err.response.data.error;
-    } else if (err.message) {
-        message = err.message;
-    }
 
-    err.userMessage = message;
-    return Promise.reject(err);
+        // Call backend to get a new access token
+        const { data } = await axios.post('http://localhost:5000/api/auth/refresh', { 
+            refreshToken 
+        });
+
+        // Save new token
+        localStorage.setItem('token', data.accessToken);
+        
+        // Update the header of the failed request with the new token
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        
+        // Retry the original request
+        return API(originalRequest);
+
+      } catch (refreshError) {
+        console.error("Token refresh failed:", refreshError);
+        
+        // If refresh fails, the session is truly dead. Clean up and redirect.
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('meId');
+        
+        // Dispatch a custom event so App.jsx can handle the UI redirect safely
+        window.dispatchEvent(new Event('auth:logout'));
+        
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    return Promise.reject(error);
   }
 );
 

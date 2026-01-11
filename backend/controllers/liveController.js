@@ -1,3 +1,4 @@
+// backend/controllers/liveController.js
 const Live = require('../models/LiveStream');
 const User = require('../models/User');
 

@@ -1,3 +1,4 @@
+// frontend/src/components/common/FAB.jsx
 // FAB button that opens the CreatePost modal using local state via props or centralized UI state
 import React from 'react';
 import { motion } from 'framer-motion';

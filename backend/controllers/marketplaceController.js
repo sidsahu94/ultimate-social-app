@@ -1,3 +1,4 @@
+// backend/controllers/marketplaceController.js
 const Product = require('../models/Product');
 
 exports.list = async (_req,res)=>{

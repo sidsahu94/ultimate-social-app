@@ -1,3 +1,4 @@
+// frontend/src/components/stories/Stories.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import StoryEditor from "./StoryEditor";

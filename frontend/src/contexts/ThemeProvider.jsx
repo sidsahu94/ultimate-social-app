@@ -1,3 +1,4 @@
+// frontend/src/contexts/ThemeProvider.jsx
 import React, { createContext, useEffect, useState, useContext } from 'react';
 
 export const ThemeContext = createContext();

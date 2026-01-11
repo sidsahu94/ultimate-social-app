@@ -1,3 +1,4 @@
+// frontend/src/components/ui/SkeletonPost.jsx
 import React from 'react';
 
 const SkeletonPost = () => {

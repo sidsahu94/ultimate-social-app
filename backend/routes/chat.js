@@ -30,9 +30,12 @@ router.get('/:chatId/messages', protect, chatController.getMessages);
 router.get('/meta/unread', protect, chatController.getUnreadCount);
 router.delete('/:chatId/messages/:messageId', protect, chatController.unsendMessage);
 router.post('/:chatId/messages/:messageId/react', protect, chatController.reactMessage);
-
+// 🔥 NEW: Poll Voting Route
+router.post('/message/:messageId/vote', protect, chatController.votePoll);
 // Mark Read
 // Note: Frontend currently uses /chat/extras/:chatId/read, but keeping this for consistency if needed
 router.post('/:chatId/read', protect, chatController.markRead);
+router.put('/:chatId/members', protect, chatController.updateGroupMember);
+router.put('/:chatId/details', protect, chatController.updateGroupDetails);
 
 module.exports = router;

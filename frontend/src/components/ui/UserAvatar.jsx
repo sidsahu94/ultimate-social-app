@@ -1,15 +1,15 @@
+// frontend/src/components/ui/UserAvatar.jsx
 import React, { useState } from 'react';
-import { getImageUrl } from '../../utils/imageUtils'; // Correct path to utils
+import { getImageUrl } from '../../utils/imageUtils'; 
 import { useSocket } from '../../contexts/SocketContext';
 
 const UserAvatar = ({ src, name, userId, className = "w-10 h-10", showStatus = true }) => {
   const [error, setError] = useState(false);
-  const { onlineUsers } = useSocket(); // Access global state
+  const { onlineUsers } = useSocket(); 
 
-  // Resolve image source
-  const finalSrc = error ? '/default-avatar.png' : getImageUrl(src);
+  // 🔥 FIX: Request optimized 'avatar' variant (small, square, face-cropped)
+  const finalSrc = error ? '/default-avatar.png' : getImageUrl(src, 'avatar');
   
-  // Check online status if userId is provided
   const isOnline = userId && onlineUsers.has(userId);
 
   return (

@@ -1,15 +1,18 @@
-const router = require("express").Router();
-const { protect, adminOnly } = require("../middleware/authMiddleware");
-const User = require("../models/User");
+// backend/routes/payouts.js
+const express = require('express');
+const router = express.Router();
+const { protect, restrictTo } = require('../middleware/authMiddleware');
+const payoutController = require('../controllers/payoutController');
 
-// simple fake payout list
-router.get("/", protect, adminOnly, async (req, res) => {
-  const creators = await User.find({ role: "creator" }).select("name avatar earnings");
-  res.json(creators);
-});
+// --- User Routes ---
+// POST /api/payouts/create - Request a withdrawal
+router.post('/create', protect, payoutController.create);
 
-router.post("/send/:id", protect, adminOnly, async (req, res) => {
-  res.json({ message: `Payout sent to ${req.params.id}` });
-});
+// --- Admin Routes ---
+// GET /api/payouts - List all requests
+router.get('/', protect, restrictTo('admin'), payoutController.list);
+
+// POST /api/payouts/:id/paid - Mark as paid
+router.post('/:id/paid', protect, restrictTo('admin'), payoutController.markPaid);
 
 module.exports = router;

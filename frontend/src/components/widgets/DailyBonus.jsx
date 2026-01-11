@@ -1,3 +1,4 @@
+// frontend/src/components/widgets/DailyBonus.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaGift, FaCoins } from 'react-icons/fa';

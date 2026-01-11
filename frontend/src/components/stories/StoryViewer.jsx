@@ -1,6 +1,10 @@
+// frontend/src/components/stories/StoryViewer.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaPause } from 'react-icons/fa';
+import { FaTimes, FaPause, FaTrash } from 'react-icons/fa';
 import { getImageUrl } from '../../utils/imageUtils';
+import API from '../../services/api';
+import { useToast } from '../ui/ToastProvider';
+import { useSelector } from 'react-redux';
 
 export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
   const [current, setCurrent] = useState(initialIndex);
@@ -8,10 +12,13 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
   const [paused, setPaused] = useState(false);
   
   const videoRef = useRef(null);
+  const { add } = useToast();
+  const myId = useSelector(s => s.auth.user?._id);
+
   const activeStory = stories[current];
   const IMAGE_DURATION = 5000; // 5 seconds for images
 
-  // Reset progress and pause state when slide changes
+  // Reset progress when slide changes
   useEffect(() => {
     setProgress(0);
     setPaused(false);
@@ -23,9 +30,6 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
     // Check if current story is a video
     const isVideo = activeStory.type === 'video' || (activeStory.media && activeStory.media.match(/\.(mp4|webm)$/i));
 
-    // 🔥 VIDEO LOGIC:
-    // If it's a video, we do NOT use the manual timer. 
-    // We rely on <video> events (timeupdate, ended) handled in the JSX below.
     if (isVideo) {
       if(videoRef.current && videoRef.current.paused) {
           videoRef.current.play().catch(e => console.log("Autoplay prevented", e));
@@ -33,28 +37,31 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
       return; 
     } 
     
-    // 🔥 IMAGE LOGIC:
-    // Use RequestAnimationFrame for smooth 5s timer
+    // Image Timer Logic
     let animationFrame;
     let startTime;
 
     const tick = (timestamp) => {
       if (!startTime) startTime = timestamp;
+      if (paused) {
+          startTime = timestamp - (progress / 100) * IMAGE_DURATION; // Adjust start time if paused
+          return requestAnimationFrame(tick);
+      }
+
       const elapsed = timestamp - startTime;
-      
       const pct = Math.min((elapsed / IMAGE_DURATION) * 100, 100);
       setProgress(pct);
 
       if (elapsed < IMAGE_DURATION) {
         animationFrame = requestAnimationFrame(tick);
       } else {
-        next(); // Time up, go next
+        next(); // Time up
       }
     };
 
     animationFrame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrame);
-  }, [current, paused, activeStory]);
+  }, [current, paused, activeStory, progress]);
 
   const next = () => {
     if (current < stories.length - 1) {
@@ -70,7 +77,36 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
     }
   };
 
-  // 🔥 Event: Update Progress bar based on actual video time
+  const handleDelete = async (e) => {
+      e.stopPropagation();
+      setPaused(true); // Pause while confirming
+      
+      if(!confirm("Delete this story permanently?")) {
+          setPaused(false);
+          return;
+      }
+      
+      try {
+          await API.delete(`/stories/${activeStory._id}`);
+          add("Story deleted", { type: "success" });
+          
+          // If it was the only story, close viewer
+          if (stories.length === 1) {
+              onClose();
+              window.location.reload(); 
+          } else if (current === stories.length - 1) {
+              // If it was the last story, close
+              onClose();
+          } else {
+              // Otherwise go next (and remove from local list ideally, but reload covers it)
+              window.location.reload();
+          }
+      } catch(err) {
+          add("Failed to delete", { type: "error" });
+          setPaused(false);
+      }
+  };
+
   const handleVideoUpdate = () => {
     if (videoRef.current && videoRef.current.duration) {
         const pct = (videoRef.current.currentTime / videoRef.current.duration) * 100;
@@ -78,16 +114,16 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
     }
   };
 
-  // 🔥 Event: Go to next slide when video ends
   const handleVideoEnded = () => {
     next();
   };
 
   if (!activeStory) return null;
 
-  const mediaUrl = getImageUrl(activeStory.media);
-  const userAvatar = getImageUrl(activeStory.user?.avatar);
+  const mediaUrl = getImageUrl(activeStory.media, 'story');
+  const userAvatar = getImageUrl(activeStory.user?.avatar, 'avatar');
   const isVideo = activeStory.type === 'video' || (activeStory.media && activeStory.media.match(/\.(mp4|webm)$/i));
+  const isMine = activeStory.user?._id === myId;
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
@@ -114,11 +150,25 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
           <span className="text-white/70 text-xs ml-2">{new Date(activeStory.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         </div>
 
-        <button onClick={onClose} className="absolute top-6 right-4 z-30 text-white p-2 opacity-80 hover:opacity-100 bg-black/20 rounded-full backdrop-blur-sm">
-          <FaTimes size={20} />
-        </button>
+        {/* Top Right Controls */}
+        <div className="absolute top-6 right-4 z-30 flex gap-4">
+            {/* 🔥 Delete Button (Owner Only) */}
+            {isMine && (
+                <button 
+                    onClick={handleDelete} 
+                    className="text-white p-2 opacity-80 hover:opacity-100 bg-black/20 rounded-full backdrop-blur-sm hover:bg-red-500/50 transition"
+                    title="Delete Story"
+                >
+                    <FaTrash size={16} />
+                </button>
+            )}
+            
+            <button onClick={onClose} className="text-white p-2 opacity-80 hover:opacity-100 bg-black/20 rounded-full backdrop-blur-sm">
+                <FaTimes size={20} />
+            </button>
+        </div>
 
-        {/* Tap Zones & Hold to Pause Logic */}
+        {/* Tap Zones */}
         <div 
             className="absolute inset-y-0 left-0 w-1/3 z-10" 
             onClick={prev}
@@ -157,8 +207,8 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }) {
                 src={mediaUrl} 
                 autoPlay 
                 playsInline 
-                onTimeUpdate={handleVideoUpdate} // 🔥 Drives progress
-                onEnded={handleVideoEnded}       // 🔥 Drives navigation
+                onTimeUpdate={handleVideoUpdate}
+                onEnded={handleVideoEnded}
                 className="w-full h-full object-cover" 
             />
           ) : (

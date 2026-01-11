@@ -1,3 +1,4 @@
+// frontend/src/components/ui/Lightbox.jsx
 import React, { useEffect } from "react";
 
 const Lightbox = ({ images = [], open = false, index = 0, onClose = () => {} }) => {

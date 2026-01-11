@@ -1,3 +1,4 @@
+// backend/middleware/rateLimit.js
 const rateLimit = require('express-rate-limit');
 
 // Generic limiter (safe default for all routes)

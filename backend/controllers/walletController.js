@@ -1,8 +1,7 @@
-// backend/controllers/walletController.js
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs'); // 🔥 Import bcrypt
+const bcrypt = require('bcryptjs');
 
 // Get current wallet status
 exports.me = async (req, res) => {
@@ -13,6 +12,38 @@ exports.me = async (req, res) => {
         lastAirdrop: me.lastAirdrop,
         referralCode: me.referralCode
     });
+  } catch (e) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// 🔥 NEW: Set or Update Wallet PIN
+exports.setPin = async (req, res) => {
+  try {
+    const { pin } = req.body;
+    
+    // Validation: Must be exactly 6 digits
+    if (!pin || pin.length !== 6 || isNaN(pin)) {
+      return res.status(400).json({ message: 'PIN must be exactly 6 digits' });
+    }
+
+    const hashed = await bcrypt.hash(pin, 10);
+    
+    // Update user
+    await User.findByIdAndUpdate(req.user._id, { walletPin: hashed });
+
+    res.json({ message: 'Wallet PIN updated successfully' });
+  } catch (e) {
+    console.error("Set PIN Error:", e);
+    res.status(500).json({ message: 'Error setting PIN' });
+  }
+};
+
+// 🔥 NEW: Check if user has a PIN set (for UI toggle)
+exports.checkPinStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('walletPin');
+    res.json({ hasPin: !!user.walletPin });
   } catch (e) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -63,26 +94,37 @@ exports.airdrop = async (req, res) => {
   }
 };
 
-// Send Coins (Tip)
+// Send Coins (Tip) - Updated with PIN Security
 exports.tip = async (req, res) => {
+  let session = null;
   try {
-    const { to, amount, password } = req.body;
+    const { to, amount, pin } = req.body;
     const numAmount = Number(amount);
 
     if (numAmount <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
-    const me = await User.findById(req.user._id).select('+password');
-    if (me.wallet.balance < numAmount) return res.status(400).json({ message: 'Insufficient balance' });
-
-    // 🔥 FIX: Only verify password if the user actually HAS one (Email/Pass users)
-    // Google users bypass this check since they are already authenticated via JWT
-    if (me.password) {
-        if (!password) return res.status(400).json({ message: 'Password required to confirm transaction' });
-        const isMatch = await bcrypt.compare(password, me.password);
-        if (!isMatch) return res.status(401).json({ message: 'Incorrect password' });
+    // 1. Fetch Sender with PIN field
+    const me = await User.findById(req.user._id).select('+walletPin');
+    
+    // 2. Validate Balance
+    if (me.wallet.balance < numAmount) {
+        return res.status(400).json({ message: 'Insufficient balance' });
     }
 
-    // Smart Recipient Lookup (ID or Email)
+    // 3. 🔥 SECURITY CHECK: Wallet PIN
+    if (!me.walletPin) {
+        return res.status(403).json({ message: 'Please set a Wallet PIN first in Security Settings.' });
+    }
+    if (!pin) {
+        return res.status(400).json({ message: 'PIN required' });
+    }
+    
+    const isMatch = await bcrypt.compare(pin, me.walletPin);
+    if (!isMatch) {
+        return res.status(401).json({ message: 'Incorrect PIN' });
+    }
+
+    // 4. Find Recipient
     let recipient;
     if (mongoose.Types.ObjectId.isValid(to)) {
       recipient = await User.findById(to);
@@ -94,25 +136,41 @@ exports.tip = async (req, res) => {
     if (!recipient) return res.status(404).json({ message: 'User not found' });
     if (recipient._id.equals(me._id)) return res.status(400).json({ message: 'Cannot tip yourself' });
 
-    // Execute Transfer
+    // 5. Execute Transaction (Atomic if possible, here using standard save)
     me.wallet.balance -= numAmount;
     me.wallet.totalSent += numAmount;
+    
     recipient.wallet.balance += numAmount;
     recipient.wallet.totalReceived += numAmount;
 
     await me.save();
     await recipient.save();
 
-    // Log Transactions
-    await Transaction.create({ user: me._id, type: 'debit', amount: numAmount, description: `Tip to ${recipient.name}` });
-    await Transaction.create({ user: recipient._id, type: 'credit', amount: numAmount, description: `Tip from ${me.name}` });
+    // 6. Log Transactions
+    await Transaction.create({ 
+        user: me._id, 
+        type: 'debit', 
+        amount: numAmount, 
+        description: `Tip to ${recipient.name}` 
+    });
+    
+    await Transaction.create({ 
+        user: recipient._id, 
+        type: 'credit', 
+        amount: numAmount, 
+        description: `Tip from ${me.name}` 
+    });
 
-    // Real-time Updates
+    // 7. Real-time Updates
     const io = req.app.get('io') || global.io;
     if (io) {
+        // Update Sender Balance
         io.to(String(me._id)).emit('wallet:update', { balance: me.wallet.balance });
+        
+        // Update Recipient Balance
         io.to(String(recipient._id)).emit('wallet:update', { balance: recipient.wallet.balance });
         
+        // Notify Recipient
         io.to(String(recipient._id)).emit('notification', {
             type: 'wallet',
             message: `You received ${numAmount} coins from ${me.name}!`
@@ -120,8 +178,9 @@ exports.tip = async (req, res) => {
     }
 
     res.json({ ok: true, message: `Sent ${numAmount} to ${recipient.name}` });
+
   } catch (err) {
-    console.error(err);
+    console.error("Tip Error:", err);
     res.status(500).json({ message: 'Transaction failed' });
   }
 };

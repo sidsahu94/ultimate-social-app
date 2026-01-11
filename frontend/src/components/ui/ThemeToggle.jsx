@@ -1,3 +1,4 @@
+// frontend/src/components/ui/ThemeToggle.jsx
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeProvider';
 import { FaSun, FaMoon } from 'react-icons/fa';

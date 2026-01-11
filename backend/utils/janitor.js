@@ -1,3 +1,4 @@
+// backend/utils/janitor.js
 const fs = require('fs');
 const path = require('path');
 const Post = require('../models/Post');

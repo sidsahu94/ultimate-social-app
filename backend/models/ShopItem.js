@@ -1,3 +1,4 @@
+// backend/models/ShopItem.js
 const mongoose = require('mongoose');
 
 const ShopItemSchema = new mongoose.Schema({

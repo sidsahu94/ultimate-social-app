@@ -1,3 +1,4 @@
+// backend/controllers/shopController.js
 const ShopItem = require('../models/ShopItem');
 const User = require('../models/User');
 

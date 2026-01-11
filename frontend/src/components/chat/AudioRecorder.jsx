@@ -1,13 +1,25 @@
-import React, { useState, useRef } from 'react';
-import { FaMicrophone, FaStop, FaTrash } from 'react-icons/fa';
+// frontend/src/components/chat/AudioRecorder.jsx
+import React, { useState, useRef, useEffect } from 'react';
+import { FaMicrophone, FaStop, FaTrash, FaPaperPlane, FaPlay, FaPause } from 'react-icons/fa';
 import API from '../../services/api';
 
-export default function AudioRecorder({ chatId, onSent }) {
+export default function AudioRecorder({ chatId, onSent, onFileReady }) {
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
   const [uploading, setUploading] = useState(false);
+  
+  // 🔥 NEW: Preview State
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef(new Audio());
+
   const mediaRecorder = useRef(null);
   const chunks = useRef([]);
+
+  useEffect(() => {
+      // Cleanup URL on unmount
+      return () => { if(previewUrl) URL.revokeObjectURL(previewUrl); };
+  }, [previewUrl]);
 
   const startRecording = async () => {
     try {
@@ -18,18 +30,27 @@ export default function AudioRecorder({ chatId, onSent }) {
       mediaRecorder.current.ondataavailable = (e) => chunks.current.push(e.data);
       mediaRecorder.current.onstop = () => {
         const blob = new Blob(chunks.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
+        const file = new File([blob], "voice_note.webm", { type: "audio/webm" });
+        
+        if (onFileReady) {
+            onFileReady(file);
+            setAudioBlob(null);
+        } else {
+            setAudioBlob(blob);
+            // 🔥 NEW: Create preview URL
+            const url = URL.createObjectURL(blob);
+            setPreviewUrl(url);
+            audioRef.current.src = url;
+            audioRef.current.onended = () => setIsPlaying(false);
+        }
+        
         chunks.current = [];
-        // Stop all tracks to release mic
         stream.getTracks().forEach(t => t.stop());
       };
       
       mediaRecorder.current.start();
       setRecording(true);
-    } catch (err) {
-      console.error("Mic error", err);
-      alert("Microphone access denied");
-    }
+    } catch (err) { alert("Microphone access denied"); }
   };
 
   const stopRecording = () => {
@@ -37,46 +58,58 @@ export default function AudioRecorder({ chatId, onSent }) {
     setRecording(false);
   };
 
-  const sendAudio = async () => {
-    if (!audioBlob) return;
+  // 🔥 NEW: Toggle Preview
+  const togglePreview = () => {
+      if (isPlaying) audioRef.current.pause();
+      else audioRef.current.play();
+      setIsPlaying(!isPlaying);
+  };
+
+  const discard = () => {
+      setAudioBlob(null);
+      setPreviewUrl(null);
+      setIsPlaying(false);
+  };
+
+  const sendAudioToChat = async () => {
+    if (!audioBlob || !chatId) return;
     setUploading(true);
     const fd = new FormData();
-    fd.append('audio', audioBlob, 'voice-note.webm'); 
-    
+    fd.append('audio', audioBlob, 'voice.webm'); 
     try {
-        // 1. Upload
-        // Note: Ensure backend/routes/extra.js handles 'audio' fieldname in multer
-        const res = await API.post(`/extra/voice/${chatId}`, fd, { 
-            headers: { 'Content-Type': 'multipart/form-data'}
-        });
-        
-        // 2. Trigger parent refresh or callback
-        if (onSent) onSent(res.data); // Expecting the updated chat/message obj
-        setAudioBlob(null);
-    } catch (e) {
-        console.error(e);
-        alert("Failed to send audio");
-    } finally {
-        setUploading(false);
-    }
+        const res = await API.post(`/extra/voice/${chatId}`, fd);
+        if (onSent) onSent(res.data);
+        discard();
+    } catch (e) { console.error(e); } 
+    finally { setUploading(false); }
   };
+
+  if (onFileReady) {
+      return (
+        <button type="button" onClick={recording ? stopRecording : startRecording} className={`p-2 rounded-full transition-all ${recording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-indigo-500'}`}>
+          {recording ? <FaStop /> : <FaMicrophone size={18} />}
+        </button>
+      );
+  }
 
   return (
     <div className="flex items-center gap-2">
       {audioBlob ? (
-        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 pr-3 rounded-full animate-fade-in">
-          <button onClick={() => setAudioBlob(null)} className="p-2 text-red-500 hover:bg-red-100 rounded-full"><FaTrash size={12}/></button>
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Audio Recorded</span>
-          <button onClick={sendAudio} disabled={uploading} className="text-indigo-600 dark:text-indigo-400 font-bold text-sm hover:underline ml-2">
-            {uploading ? 'Sending...' : 'Send'}
+        <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 p-1.5 pr-3 rounded-full border border-indigo-100 dark:border-indigo-800 transition-all">
+          <button onClick={discard} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full transition"><FaTrash size={10}/></button>
+          
+          {/* 🔥 NEW: Preview Button */}
+          <button onClick={togglePreview} className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 min-w-[60px]">
+             {isPlaying ? <FaPause size={10} /> : <FaPlay size={10} />} 
+             {isPlaying ? 'Playing' : 'Listen'}
+          </button>
+
+          <button onClick={sendAudioToChat} disabled={uploading} className="p-1.5 bg-indigo-600 text-white rounded-full shadow-md hover:bg-indigo-700 transition">
+            {uploading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FaPaperPlane size={10}/>}
           </button>
         </div>
       ) : (
-        <button 
-          type="button" // Prevent form submit
-          onClick={recording ? stopRecording : startRecording}
-          className={`p-2 rounded-full transition-all ${recording ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-lg' : 'text-gray-400 hover:text-indigo-500'}`}
-        >
+        <button onClick={recording ? stopRecording : startRecording} className={`p-2 rounded-full transition-all ${recording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'text-gray-400 hover:text-indigo-500'}`}>
           {recording ? <FaStop /> : <FaMicrophone size={20} />}
         </button>
       )}

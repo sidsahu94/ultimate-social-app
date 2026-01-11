@@ -1,3 +1,4 @@
+// backend/routes/social.js
 const router = require('express').Router();
 const { protect } = require('../middleware/authMiddleware');
 const social = require('../controllers/socialController');

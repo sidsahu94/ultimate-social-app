@@ -1,14 +1,16 @@
+// frontend/src/components/stories/StoryEditor.jsx
 import React, { useState } from 'react';
-import { FaTimes, FaPaperPlane, FaFont, FaPalette } from 'react-icons/fa';
+import { FaTimes, FaPaperPlane, FaFont, FaPalette, FaStar } from 'react-icons/fa'; // 🔥 Added FaStar
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';
-import { compressImage } from '../../utils/compressor'; // 🔥 Import compressor
+import { compressImage } from '../../utils/compressor';
 
 const COLORS = ['#ffffff', '#000000', '#ff0055', '#00ccff', '#ffcc00'];
 
 export default function StoryEditor({ file, onClose, onPosted }) {
   const [caption, setCaption] = useState('');
   const [color, setColor] = useState('#ffffff');
+  const [isCloseFriends, setIsCloseFriends] = useState(false); // 🔥 NEW State
   const [loading, setLoading] = useState(false);
   const { add } = useToast();
 
@@ -20,7 +22,6 @@ export default function StoryEditor({ file, onClose, onPosted }) {
     try {
       const fd = new FormData();
       
-      // 🔥 FIX: Compress file if it is an image
       let fileToSend = file;
       if (!isVideo) {
           try {
@@ -32,10 +33,13 @@ export default function StoryEditor({ file, onClose, onPosted }) {
 
       fd.append('media', fileToSend);
       fd.append('caption', caption);
-      // For a real text overlay, you'd canvas-draw this on backend or frontend.
-      // Here we store it as metadata.
       fd.append('color', color); 
       
+      // 🔥 NEW: Send Privacy Flag
+      if (isCloseFriends) {
+        fd.append('privacy', 'close_friends');
+      }
+
       await API.post('/stories', fd);
       add('Story added to your ring!', { type: 'success' });
       onPosted();
@@ -77,7 +81,6 @@ export default function StoryEditor({ file, onClose, onPosted }) {
           <img src={previewUrl} className="w-full h-full object-contain" />
         )}
         
-        {/* Caption Overlay Input */}
         <div className="absolute bottom-32 w-full px-8 text-center">
           <input 
             value={caption}
@@ -90,10 +93,16 @@ export default function StoryEditor({ file, onClose, onPosted }) {
       </div>
 
       {/* Footer */}
-      <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent absolute bottom-0 w-full flex justify-between items-center">
-        <div className="text-white text-xs font-medium bg-white/20 px-3 py-1 rounded-full">
-          Your Story
-        </div>
+      <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent absolute bottom-0 w-full flex justify-between items-center gap-4">
+        
+        {/* 🔥 NEW: Close Friends Toggle */}
+        <button 
+            onClick={() => setIsCloseFriends(!isCloseFriends)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${isCloseFriends ? 'bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.6)]' : 'bg-white/20 text-white'}`}
+        >
+            <FaStar /> {isCloseFriends ? 'Close Friends' : 'Everyone'}
+        </button>
+
         <button 
           onClick={handlePost}
           disabled={loading}

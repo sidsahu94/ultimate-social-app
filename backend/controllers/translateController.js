@@ -1,3 +1,4 @@
+// backend/controllers/translateController.js
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 exports.translate = async (req,res)=>{

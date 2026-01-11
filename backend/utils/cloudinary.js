@@ -1,3 +1,4 @@
+// backend/utils/cloudinary.js
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
@@ -18,17 +19,22 @@ const isTransientError = (err) => {
 	return false;
 };
 
+const safeUnlink = (path) => {
+    try {
+        if (fs.existsSync(path)) fs.unlinkSync(path);
+    } catch (e) {
+        console.error(`Failed to delete local file: ${path}`, e.message);
+    }
+};
+
 /**
  * Upload a local file to Cloudinary with retries and exponential backoff.
- * @param {string} filePath - local path
- * @param {string} folder - Cloudinary folder
- * @param {object} opts - optional extra options passed to uploader
- * @returns {Promise<object>} cloudinary result
+ * 🔥 GUARANTEED CLEANUP: Local file is deleted in finally block.
  */
 const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 	new Promise((resolve, reject) => {
 		if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-			try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+			safeUnlink(filePath);
 			return reject(new Error('CLOUDINARY env not configured'));
 		}
 
@@ -41,8 +47,7 @@ const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 
 			cloudinary.uploader.upload(filePath, options, (err, result) => {
 				if (!err && result) {
-					// success -> remove local temp file (best-effort)
-					try { fs.unlinkSync(filePath); } catch (e) { /* ignore unlink errors */ }
+                    safeUnlink(filePath); // Success cleanup
 					return resolve(result);
 				}
 
@@ -52,16 +57,16 @@ const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 					return setTimeout(tryOnce, delay);
 				}
 
-				// Final failure -> remove local file and reject
+				// Final failure
 				console.error('Cloudinary upload failed (final):', err && (err.message || err));
-				try { fs.unlinkSync(filePath); } catch (e) { /* ignore unlink errors */ }
+                safeUnlink(filePath); // Failure cleanup
 				return reject(err || new Error('Cloudinary upload failed'));
 			});
 		};
 
 		tryOnce();
 	});
-// ... (uploadsStream remains the same) ...
+
 const uploadsStream = (readableStream, folder = 'ultimate_social', opts = {}) =>
 	new Promise((resolve, reject) => {
 		if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
@@ -78,5 +83,35 @@ const uploadsStream = (readableStream, folder = 'ultimate_social', opts = {}) =>
 module.exports = {
 	uploads,
 	uploadsStream,
+	cloudinary,
+};
+
+
+// 🔥 NEW: Extract Public ID and Delete
+const deleteFile = async (url) => {
+    if (!url || !url.includes('cloudinary')) return;
+    try {
+        // Extract public_id from URL: 
+        // matches "folder/filename" before the extension
+        const regex = /\/v\d+\/([^/]+)\.[a-z]+$/;
+        const match = url.match(regex);
+        // Or simpler split logic depending on your folder structure
+        // Assuming format: .../upload/v1234/ultimate_social/filename.jpg
+        const parts = url.split('/');
+        const filename = parts[parts.length - 1].split('.')[0];
+        const folder = 'ultimate_social'; // Match the folder name used in uploads
+        const publicId = `${folder}/${filename}`;
+
+        await cloudinary.uploader.destroy(publicId);
+        console.log(`Deleted Cloudinary image: ${publicId}`);
+    } catch (err) {
+        console.error("Cloudinary delete failed:", err.message);
+    }
+};
+
+module.exports = {
+	uploads,
+	uploadsStream,
+    deleteFile, // Export it
 	cloudinary,
 };

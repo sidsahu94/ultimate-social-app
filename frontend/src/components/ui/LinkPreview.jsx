@@ -1,3 +1,4 @@
+// frontend/src/components/ui/LinkPreview.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 

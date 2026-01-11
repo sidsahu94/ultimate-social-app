@@ -1,3 +1,4 @@
+// backend/controllers/reelsController.js
 const Reel = require('../models/Reel');
 const fs = require('fs');
 const path = require('path');
@@ -108,5 +109,26 @@ exports.viewReel = async (req, res) => {
   } catch (err) {
     // Fail silently for analytics
     res.status(200).json({ success: false }); 
+  }
+};
+// 🔥 NEW: Delete Reel
+exports.deleteReel = async (req, res) => {
+  try {
+    const reel = await Reel.findById(req.params.id);
+    if (!reel) return res.status(404).json({ message: 'Reel not found' });
+
+    // Check ownership or admin
+    if (String(reel.user) !== String(req.user._id) && req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // Optional: Delete video from Cloudinary here using utils/cloudinary deleteFile
+    // await deleteFile(reel.videoUrl);
+
+    await Reel.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Reel deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 };

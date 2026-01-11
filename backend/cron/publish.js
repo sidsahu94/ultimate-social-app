@@ -1,3 +1,4 @@
+// backend/cron/publish.js
 const Post = require('../models/Post');
 
 setInterval(async () => {

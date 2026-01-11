@@ -1,3 +1,4 @@
+// backend/models/LiveStream.js
 const mongoose = require('mongoose');
 
 const SuperchatSchema = new mongoose.Schema({

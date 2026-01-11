@@ -1,3 +1,4 @@
+// backend/models/User.js
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
@@ -5,23 +6,19 @@ const UserSchema = new mongoose.Schema({
   email: { type:String, unique:true, required:true },
   password: { type:String, select:false },
   
-  // Profile Details
-  avatar: String,
-  coverPhoto: String,
-  bio: String,
+  // --- Profile Visuals ---
+  avatar: { type: String, default: "" },
+  coverPhoto: { type: String, default: "" },
+  bio: { type: String, default: "" },
   website: String,
   location: String,
   
-  // 🔥 NEW: Custom Status (e.g., "Working", "Travel")
+  // --- Status & Meta ---
   userStatus: { type: String, default: 'Available' },
-  
-  // 🔥 NEW: Profile Health Score (0-100)
   profileCompletion: { type: Number, default: 20 },
-
-  // 🔥 NEW: Pinned Post on Profile
   pinnedPost: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
 
-  // 🔥 NEW: Notification Preferences
+  // --- Notification Preferences ---
   notificationSettings: {
       likes: { type: Boolean, default: true },
       comments: { type: Boolean, default: true },
@@ -29,29 +26,50 @@ const UserSchema = new mongoose.Schema({
       messages: { type: Boolean, default: true },
   },
 
+  // Web Push Subscription (JSON stored as Object)
+  pushSubscription: { type: Object, select: false },
+
   role: { type:String, default:'user' },
   isVerified: { type:Boolean, default:false },
   googleId: String,
   
-  // Social Graph
+  // --- Social Graph ---
   followers: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
   following: [{ type:mongoose.Schema.Types.ObjectId, ref:'User' }],
   blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   closeFriends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   saved: [{ type:mongoose.Schema.Types.ObjectId, ref:'Post' }],
 
-  // Gamification & Wallet
+  // --- Gamification & Wallet ---
+  xp: { type: Number, default: 0 },
+  level: { type: Number, default: 1 },
   badges: [{ type:String }],
+  
+  // Interest Graph (The Brain)
+  interestProfile: { 
+    type: Map, 
+    of: Number, 
+    default: {} 
+  },
+  
   wallet: {
     balance: { type:Number, default: 100 },
     totalReceived: { type:Number, default: 0 },
     totalSent: { type:Number, default: 0 }
   },
+
+  // 🔥 NEW: Wallet Security PIN
+  walletPin: { type: String, select: false }, 
+  
+  streak: {
+    count: { type: Number, default: 0 },
+    lastLogin: { type: Date }
+  },
   lastAirdrop: { type: Date, default: null },
   referralCode: { type: String, unique: true, sparse: true }, 
   referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
-  // Links & Metadata
+  // --- Links & IDs ---
   socialLinks: {
     twitter: String,
     instagram: String,
@@ -62,28 +80,29 @@ const UserSchema = new mongoose.Schema({
   nftPfpUrl: String,
   privateProfile: { type:Boolean, default:false },
 
-  // Geo Location
+  // --- Geo Location ---
   geo: {
     type: { type:String, enum:['Point'], default:'Point' },
     coordinates: { type:[Number], default: [0,0] }
   },
 
-  // Soft Delete & Security
+  // --- Security ---
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date, default: null },
-  refreshToken: { type: String, select: false }, // 🔥 Security Hardening
+  refreshToken: { type: String, select: false },
+  is2FAEnabled: { type: Boolean, default: false },
 
-  // OTPs
+  // --- OTPs ---
   tempOtp: { type:String, select:false },
   resetOtp: { type:String, select:false },
   resetOtpExpires: { type:Number, select:false },
 }, { timestamps:true });
 
-// Indexes for Search
+// Indexes for Search and Geo
 UserSchema.index({ name:'text', email:'text' });
 UserSchema.index({ geo: '2dsphere' });
 
-// Auto-generate referral code on save
+// Middleware: Auto-generate Referral Code
 UserSchema.pre('save', function(next) {
     if (!this.referralCode) {
         this.referralCode = this._id.toString().slice(-6).toUpperCase();
@@ -91,7 +110,7 @@ UserSchema.pre('save', function(next) {
     next();
 });
 
-// 🔥 Global Query Middleware: Hide soft-deleted users
+// Middleware: Soft Delete Filter
 UserSchema.pre(/^find/, function(next) {
   this.find({ isDeleted: { $ne: true } });
   next();

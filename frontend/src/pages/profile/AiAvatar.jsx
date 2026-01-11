@@ -1,3 +1,4 @@
+// frontend/src/pages/profile/AiAvatar.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 

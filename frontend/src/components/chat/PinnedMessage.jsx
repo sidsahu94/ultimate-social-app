@@ -1,3 +1,4 @@
+// frontend/src/components/chat/PinnedMessage.jsx
 import React, { useState } from 'react';
 import { FaThumbtack, FaChevronDown, FaTimes } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';

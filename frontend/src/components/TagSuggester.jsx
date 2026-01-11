@@ -1,3 +1,4 @@
+// frontend/src/components/TagSuggester.jsx
 import React, { useState } from 'react';
 import API from '../services/api';
 

@@ -1,3 +1,4 @@
+// frontend/src/contexts/SocketContext.jsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import socket, { updateSocketAuth } from '../services/socket';

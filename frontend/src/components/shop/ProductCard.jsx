@@ -1,3 +1,4 @@
+// frontend/src/components/shop/ProductCard.jsx
 import React from 'react';
 import { FaTag, FaGavel, FaTrash } from 'react-icons/fa';
 

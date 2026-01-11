@@ -1,4 +1,3 @@
-// frontend/src/pages/chat/CallRoom.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Peer from 'simple-peer';
@@ -10,11 +9,24 @@ import {
   FaVideo,
   FaVideoSlash,
   FaPhoneSlash,
+  FaDesktop, 
+  FaStopCircle
 } from 'react-icons/fa';
 
+// 🔥 UPDATED: ICE Server Config
+// In production, you MUST uncomment the TURN section and fill in credentials.
+// STUN alone only works ~80% of the time (fails on 4G/Corporate WiFi).
 const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.l.google.com:19302' }, 
   { urls: 'stun:global.stun.twilio.com:3478' },
+  // 🚨 UNCOMMENT FOR PRODUCTION:
+  /*
+  {
+    urls: "turn:your-turn-server.com:3478",
+    username: "user",
+    credential: "password"
+  }
+  */
 ];
 
 export default function CallRoom() {
@@ -25,12 +37,14 @@ export default function CallRoom() {
   const myVideo = useRef(null);
   const peerVideo = useRef(null);
   const peerRef = useRef(null);
+  const streamRef = useRef(null); // 🔥 CRITICAL: Holds stream for cleanup
   const initialized = useRef(false);
 
   const [stream, setStream] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -38,25 +52,38 @@ export default function CallRoom() {
 
     const initCall = async () => {
       try {
-        const localStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
+        let localStream;
+        try {
+            // Try Video + Audio
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user" },
+                audio: true
+            });
+        } catch (videoErr) {
+            console.warn("Video access denied, trying audio only...", videoErr);
+            // Fallback to Audio Only
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+            setIsVideoOff(true);
+        }
 
         setStream(localStream);
-        if (myVideo.current) {
+        streamRef.current = localStream; // Save to ref for cleanup
+
+        if (myVideo.current && localStream.getVideoTracks().length > 0) {
             myVideo.current.srcObject = localStream;
         }
 
         if (!socket.connected) socket.connect();
         socket.emit('joinRoom', { room: roomId });
 
-        // Host creates offer
+        // Socket Listeners
         socket.on('user-joined', ({ userId }) => {
           createPeer(userId, localStream);
         });
 
-        // Guest receives offer
         socket.on('call:signal', ({ from, signal }) => {
           if (!peerRef.current) {
             answerPeer(from, signal, localStream);
@@ -65,7 +92,6 @@ export default function CallRoom() {
           }
         });
 
-        // 🔥 WIRE UP: Handle Rejection/End
         socket.on('call:rejected', () => {
             add('Call rejected or busy', { type: 'error' });
             cleanupAndLeave();
@@ -78,7 +104,7 @@ export default function CallRoom() {
 
       } catch (err) {
         console.error("Media Error:", err);
-        add('Camera/Microphone permission denied', { type: 'error' });
+        add('Microphone/Camera permission denied. Cannot join call.', { type: 'error' });
         navigate('/chat');
       }
     };
@@ -90,12 +116,21 @@ export default function CallRoom() {
       socket.off('call:signal');
       socket.off('call:rejected');
       socket.off('call:ended');
-      // Cleanup tracks on unmount
-      if (stream) stream.getTracks().forEach((t) => t.stop());
+      
+      // 🔥 CRITICAL FIX: Explicitly stop all tracks to turn off hardware light
+      if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      
+      if (myVideo.current) myVideo.current.srcObject = null;
+      if (peerVideo.current) peerVideo.current.srcObject = null;
+      
+      if (peerRef.current) peerRef.current.destroy();
     };
   }, [roomId, navigate, add]);
 
-  // HOST
+  // --- PEER CONNECTION LOGIC ---
+
   const createPeer = (toSocketId, stream) => {
     const peer = new Peer({
       initiator: true,
@@ -122,7 +157,6 @@ export default function CallRoom() {
     peerRef.current = peer;
   };
 
-  // GUEST
   const answerPeer = (from, signal, stream) => {
     const peer = new Peer({
       initiator: false,
@@ -149,30 +183,72 @@ export default function CallRoom() {
     peerRef.current = peer;
   };
 
+  // --- CONTROLS ---
+
   const toggleMute = () => {
     if (stream) {
-        stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
-        setIsMuted(!stream.getAudioTracks()[0].enabled);
+        const track = stream.getAudioTracks()[0];
+        if(track) {
+            track.enabled = !track.enabled;
+            setIsMuted(!track.enabled);
+        }
     }
   };
 
   const toggleVideo = () => {
     if (stream) {
-        stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
-        setIsVideoOff(!stream.getVideoTracks()[0].enabled);
+        const track = stream.getVideoTracks()[0];
+        if(track) {
+            track.enabled = !track.enabled;
+            setIsVideoOff(!track.enabled);
+        }
+    }
+  };
+
+  const handleScreenShare = async () => {
+    if (isScreenSharing) {
+        // STOP SHARING: Revert to Camera
+        const videoTrack = stream.getVideoTracks()[0];
+        if (peerRef.current) {
+            peerRef.current.replaceTrack(
+                peerRef.current.streams[0].getVideoTracks()[0],
+                videoTrack,
+                stream
+            );
+        }
+        
+        if (myVideo.current) myVideo.current.srcObject = stream;
+        setIsScreenSharing(false);
+    } else {
+        // START SHARING
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            // Handle user clicking "Stop Sharing" on browser UI
+            screenTrack.onended = () => {
+                if (isScreenSharing) handleScreenShare(); // Revert logic
+            };
+
+            const videoTrack = stream.getVideoTracks()[0];
+            if (peerRef.current) {
+                peerRef.current.replaceTrack(videoTrack, screenTrack, stream);
+            }
+
+            if (myVideo.current) myVideo.current.srcObject = screenStream;
+            setIsScreenSharing(true);
+        } catch (e) {
+            console.error("Screen share failed", e);
+        }
     }
   };
 
   const cleanupAndLeave = () => {
-    if (peerRef.current) peerRef.current.destroy();
-    if (stream) stream.getTracks().forEach(t => t.stop());
     navigate('/chat');
-    // window.location.reload(); // Optional: force refresh to clear WebRTC states if buggy
   };
 
   const leaveCall = () => {
-    // Notify other peer
-    socket.emit('call:rejected', { roomId }); // Reuse rejection event to signal end
+    socket.emit('call:ended', { roomId }); 
     cleanupAndLeave();
   };
 
@@ -189,25 +265,38 @@ export default function CallRoom() {
             className="w-full h-full object-cover rounded-xl"
           />
         ) : (
-            <div className="text-white animate-pulse">Waiting for answer...</div>
+            <div className="text-white animate-pulse font-semibold text-lg">Waiting for answer...</div>
         )}
 
-        {/* Local Video (PiP) */}
-        <video
-          ref={myVideo}
-          autoPlay
-          muted
-          playsInline
-          className={`object-cover rounded-xl border-2 border-gray-700 shadow-lg bg-black transition-all duration-300
-            ${callAccepted 
-              ? 'w-32 h-48 absolute bottom-24 right-6 z-20' 
-              : 'w-2/3 h-2/3 rounded-3xl opacity-50 blur-sm absolute' 
-            }`}
-        />
+        {/* Local Video */}
+        {stream && !isVideoOff ? (
+            <video
+            ref={myVideo}
+            autoPlay
+            muted
+            playsInline
+            className={`object-cover rounded-xl border-2 border-gray-700 shadow-lg bg-black transition-all duration-300
+                ${callAccepted 
+                ? 'w-32 h-48 absolute bottom-24 right-6 z-20' 
+                : 'w-2/3 h-2/3 rounded-3xl opacity-50 blur-sm absolute' 
+                }`}
+            />
+        ) : (
+            <div className={`flex items-center justify-center bg-gray-800 rounded-xl border-2 border-gray-700 shadow-lg transition-all duration-300 ${callAccepted ? 'w-32 h-48 absolute bottom-24 right-6 z-20' : 'w-2/3 h-2/3 absolute opacity-50'}`}>
+                <div className="text-white text-xs">Video Off</div>
+            </div>
+        )}
+
+        {/* Status Indicator */}
+        {isScreenSharing && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse z-30">
+                You are sharing your screen
+            </div>
+        )}
       </div>
 
-      {/* Controls */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-6 bg-gray-800/80 backdrop-blur-md p-4 rounded-full shadow-2xl z-30 border border-gray-700">
+      {/* Control Bar */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 md:gap-6 bg-gray-800/80 backdrop-blur-md p-4 rounded-full shadow-2xl z-30 border border-gray-700">
         <button 
             onClick={toggleMute} 
             className={`p-4 rounded-full transition ${isMuted ? 'bg-white text-gray-900' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
@@ -217,9 +306,18 @@ export default function CallRoom() {
 
         <button 
             onClick={toggleVideo}
-            className={`p-4 rounded-full transition ${isVideoOff ? 'bg-white text-gray-900' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            disabled={!stream || isScreenSharing} // Disable camera toggle while sharing
+            className={`p-4 rounded-full transition ${isVideoOff ? 'bg-white text-gray-900' : 'bg-gray-700 text-white hover:bg-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isVideoOff ? <FaVideoSlash size={20} /> : <FaVideo size={20} />}
+        </button>
+
+        <button 
+            onClick={handleScreenShare}
+            className={`p-4 rounded-full transition ${isScreenSharing ? 'bg-blue-500 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="Share Screen"
+        >
+          {isScreenSharing ? <FaStopCircle size={20} /> : <FaDesktop size={20} />}
         </button>
 
         <button onClick={leaveCall} className="p-4 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-lg shadow-red-600/30">

@@ -1,3 +1,4 @@
+// frontend/src/pages/settings/RequestsPage.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 

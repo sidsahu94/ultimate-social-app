@@ -1,3 +1,4 @@
+// frontend/src/pages/misc/NotFound.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaHome } from 'react-icons/fa';

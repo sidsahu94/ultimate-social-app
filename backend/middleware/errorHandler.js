@@ -1,3 +1,4 @@
+// backend/middleware/errorHandler.js
 module.exports = (err, req, res, next) => {
   // Log error for debugging
   console.error('🔥 ERROR:', err);

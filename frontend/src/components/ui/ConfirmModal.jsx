@@ -1,3 +1,4 @@
+// frontend/src/components/ui/ConfirmModal.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 

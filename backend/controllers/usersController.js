@@ -176,22 +176,33 @@ exports.updateStatus = async (req, res) => {
     }
 };
 
-// PUT /users/settings/notifications
 exports.updateSettings = async (req, res) => {
     try {
         const settings = req.body;
         const user = await User.findById(req.user._id);
         
-        // Merge settings
-        user.notificationSettings = { ...user.notificationSettings, ...settings };
+        // 1. Notification Settings
+        if (settings.likes !== undefined || settings.comments !== undefined || settings.follows !== undefined) {
+             user.notificationSettings = { ...user.notificationSettings, ...settings };
+        }
+
+        // 🔥 2. Security Settings (2FA)
+        if (req.body.is2FAEnabled !== undefined) {
+            user.is2FAEnabled = req.body.is2FAEnabled;
+        }
+
         await user.save();
         
-        res.json(user.notificationSettings);
+        // Return combined settings
+        res.json({
+            notificationSettings: user.notificationSettings,
+            is2FAEnabled: user.is2FAEnabled
+        });
     } catch (e) {
+        console.error(e);
         res.status(500).json({ message: 'Error updating settings' });
     }
 };
-
 // PUT /users/pin (Pin a post)
 exports.pinPost = async (req, res) => {
     try {
@@ -466,6 +477,54 @@ exports.blockUser = async (req, res) => {
     res.status(500).json({ message: 'Error' });
   }
 };
+// ... existing imports
+
+// 🔥 NEW: Get list of blocked users
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate('blockedUsers', 'name avatar');
+    res.json(user.blockedUsers || []);
+  } catch (e) {
+    res.status(500).json({ message: 'Error fetching blocked users' });
+  }
+};
+
+
+// 🔥 NEW: Change Password
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id).select('+password');
+
+    // Check current
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
+
+    // Update
+    user.password = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    
+    res.json({ message: 'Password updated' });
+  } catch (e) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// 🔥 NEW: Delete Account (Soft Delete)
+exports.deleteAccount = async (req, res) => {
+  try {
+    // Soft delete: keep data for legal reasons or recovery, but hide from app
+    await User.findByIdAndUpdate(req.user._id, { 
+        isDeleted: true, 
+        email: `deleted_${req.user._id}_${Date.now()}@deleted.com` // Free up email
+    });
+    
+    res.json({ message: 'Account deleted' });
+  } catch (e) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+exports.getBlockedUsers = exports.getBlockedUsers;
 
 // Aliases
 exports.approveRequest = exports.acceptFollowRequest;

@@ -1,11 +1,15 @@
+// frontend/src/components/posts/CommentsModal.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import { motion } from "framer-motion";
 import { useToast } from "../ui/ToastProvider";
 import socket from '../../services/socket';
 import UserAvatar from "../ui/UserAvatar";
-import { FaTrash, FaHeart, FaRegHeart } from "react-icons/fa"; // 🔥 Added Heart Icons
+import { FaTrash, FaHeart, FaRegHeart, FaTimes } from "react-icons/fa"; // Added FaTimes
 import { useSelector } from "react-redux"; 
+
+// 🔥 Import AudioRecorder
+import AudioRecorder from "../chat/AudioRecorder"; 
 
 const CommentsModal = ({ postId, isOpen, onClose }) => {
     const [post, setPost] = useState(null);
@@ -13,6 +17,9 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
     const [content, setContent] = useState("");
     const [sending, setSending] = useState(false);
     
+    // 🔥 NEW: State to hold audio blob before uploading
+    const [audioFile, setAudioFile] = useState(null);
+
     // Pagination State
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
@@ -26,7 +33,6 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
         socket.emit('joinRoom', { room: `post:${postId}` });
         
         const onNewComment = (newComment) => {
-            // 🔥 FIX: Ignore event if I created the comment (API response already added it)
             if (newComment.user?._id === myId || newComment.user === myId) {
                 return;
             }
@@ -46,12 +52,6 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
             }));
         };
 
-        // Listen for socket like events on comments (optional, but good for consistency)
-        const onLikeComment = ({ commentId, likesCount }) => {
-             // For simplicity, we might just re-fetch or assume simple count update
-             // But usually, liking is a local interaction first.
-        };
-
         socket.on('comment:created', onNewComment);
         socket.on('comment:deleted', onDeleteComment); 
 
@@ -59,7 +59,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
             socket.off('comment:created', onNewComment);
             socket.off('comment:deleted', onDeleteComment);
         };
-    }, [postId, post, myId]); // Added myId to dependencies
+    }, [postId, post, myId]); 
 
     // --- Load Comments with Pagination ---
     const loadComments = async (isReset = false) => {
@@ -83,7 +83,6 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
             setPage(p + 1);
         } catch(e) {
             if (isReset) {
-                // Fallback to fetch single post
                 try {
                     const r = await API.get(`/posts/${postId}`);
                     setPost(r.data);
@@ -103,20 +102,45 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
         }
     }, [isOpen, postId]);
 
+    // --- 🔥 UPDATED: SUBMIT COMMENT (Text + Optional Audio) ---
     const submit = async (e) => {
         e.preventDefault();
-        if (!content.trim()) return;
+        
+        // Validation: Must have text OR audio
+        if (!content.trim() && !audioFile) return;
+
         setSending(true);
+
         try {
-            const res = await API.post(`/comments/${postId}`, { text: content });
-            // Add immediately (Optimistic UI handled by API response return)
+            let audioUrl = null;
+
+            // 1. Upload Audio if exists
+            if (audioFile) {
+                const fd = new FormData();
+                fd.append('media', audioFile); 
+                const upRes = await API.post('/extra/upload', fd);
+                audioUrl = upRes.data.url;
+            }
+
+            // 2. Submit Comment (Content + Audio URL)
+            const res = await API.post(`/comments/${postId}`, { 
+                text: content, 
+                audio: audioUrl 
+            });
+
+            // 3. Update UI
             setPost(prev => ({
                 ...prev,
                 comments: [res.data, ...(prev.comments || [])]
             }));
+
+            // Reset Form
             setContent("");
+            setAudioFile(null);
+
         } catch (err) {
             add("Failed to comment", { type: "error" });
+            console.error(err);
         } finally {
             setSending(false);
         }
@@ -136,9 +160,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
         }
     };
 
-    // 🔥 NEW: Toggle Like Function
     const toggleCommentLike = async (commentId, likesArray) => {
-        // Optimistic UI update
         setPost(prev => ({
             ...prev,
             comments: prev.comments.map(c => {
@@ -157,9 +179,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
 
         try {
             await API.post(`/comments/like/${commentId}`);
-        } catch (e) {
-            // Revert on failure (could be implemented here if strict consistency needed)
-        }
+        } catch (e) { }
     };
 
     if (!isOpen) return null;
@@ -190,9 +210,17 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
                                 <div className="flex-1">
                                     <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none relative pr-8">
                                         <div className="font-bold text-xs mb-1">{c.user?.name}</div>
-                                        <div className="text-sm text-gray-800 dark:text-gray-200">{c.text || c.content}</div>
                                         
-                                        {/* 🔥 NEW: Like Button */}
+                                        {/* Display Text */}
+                                        {c.text && <div className="text-sm text-gray-800 dark:text-gray-200">{c.text}</div>}
+                                        
+                                        {/* Display Audio */}
+                                        {c.audio && (
+                                            <div className="mt-2">
+                                                <audio controls src={c.audio} className="w-full h-8" />
+                                            </div>
+                                        )}
+                                        
                                         <button 
                                             onClick={() => toggleCommentLike(c._id, c.likes)}
                                             className="absolute bottom-2 right-3 text-xs flex items-center gap-1 transition"
@@ -201,7 +229,6 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
                                             <span className="text-gray-400">{c.likes?.length || 0}</span>
                                         </button>
 
-                                        {/* Delete Button */}
                                         {(String(c.user?._id) === String(myId) || String(post?.user?._id) === String(myId)) && (
                                             <button 
                                                 onClick={() => deleteComment(c._id)}
@@ -230,16 +257,40 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
                     )}
                 </div>
 
-                {/* Input */}
-                <form onSubmit={submit} className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 flex gap-2">
-                    <input 
-                        value={content} 
-                        onChange={(e) => setContent(e.target.value)} 
-                        placeholder="Write a comment..." 
-                        className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" 
-                    />
-                    <button disabled={sending} className="text-indigo-600 font-bold px-3 disabled:opacity-50">Post</button>
-                </form>
+                {/* Input Area */}
+                <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900">
+                    <div className="flex items-center gap-2">
+                        
+                        {/* 🔥 Audio Recorder with Staged File State */}
+                        {audioFile ? (
+                           <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full border border-green-200 dark:border-green-800 text-xs font-bold animate-pulse whitespace-nowrap">
+                               <span>🎵 Voice Note Ready</span>
+                               <button 
+                                   type="button"
+                                   onClick={() => setAudioFile(null)} 
+                                   className="text-red-500 hover:text-red-700 ml-1 p-1"
+                               >
+                                   <FaTimes />
+                               </button>
+                           </div>
+                        ) : (
+                           <AudioRecorder 
+                               chatId="comment_temp"
+                               onFileReady={(file) => setAudioFile(file)} 
+                           />
+                        )}
+
+                        <form onSubmit={submit} className="flex-1 flex gap-2">
+                            <input 
+                                value={content} 
+                                onChange={(e) => setContent(e.target.value)} 
+                                placeholder={audioFile ? "Add text (optional)..." : "Write a comment..."}
+                                className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white" 
+                            />
+                            <button disabled={sending || (!content && !audioFile)} className="text-indigo-600 font-bold px-3 disabled:opacity-50">Post</button>
+                        </form>
+                    </div>
+                </div>
             </motion.div>
         </div>
     );

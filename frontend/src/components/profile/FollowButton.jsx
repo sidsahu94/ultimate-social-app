@@ -1,3 +1,4 @@
+// frontend/src/components/profile/FollowButton.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+// frontend/src/pages/home/Feed.jsx
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import socket from "../../services/socket";
@@ -11,32 +12,31 @@ import FAB from "../../components/common/FAB";
 import CreatePostModal from "../../components/posts/CreatePostModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { FaArrowUp } from "react-icons/fa";
+import useScrollRestoration from "../../hooks/useScrollRestoration"; // 🔥 Import Hook
 
-// Utility to remove duplicates based on _id
+// Utility to deduplicate posts
 const uniqueById = (arr) => {
   const seen = new Set();
   const out = [];
   for (const a of arr) {
     if (!a?._id) continue;
-    if (!seen.has(a._id)) { 
-        seen.add(a._id); 
-        out.push(a); 
-    }
+    if (!seen.has(a._id)) { seen.add(a._id); out.push(a); }
   }
   return out;
 };
 
 export default function Feed() {
+  // 🔥 FIX: Enable Scroll Restoration (Remembers position on back navigation)
+  useScrollRestoration('feed_scroll_pos');
+
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   
-  // Scroll to Top Button State
+  // UI State
   const [showTopBtn, setShowTopBtn] = useState(false);
-  
-  // Pull to Refresh State
   const [refreshing, setRefreshing] = useState(false);
   const [startY, setStartY] = useState(0);
 
@@ -54,7 +54,6 @@ export default function Feed() {
 
       setPosts(prev => {
         if (reset) return uniqueById(newPosts);
-        // Merge and dedupe
         return uniqueById([...prev, ...newPosts]);
       });
 
@@ -67,27 +66,25 @@ export default function Feed() {
 
     } catch (err) {
       console.error("Feed load error", err);
-      // Don't disable hasMore on error, allows retry
     } finally {
       setLoading(false);
     }
   }, [page, loading]);
 
-  // Initial Load
-  useEffect(() => { load(true); }, []);
+  // Initial Load (Only if empty, otherwise ScrollRestoration handles it)
+  useEffect(() => { 
+      if(posts.length === 0) load(true); 
+  }, []);
 
   // --- REAL-TIME UPDATES ---
   useEffect(() => {
     const onPostCreated = (ev) => {
-      // Handles both Socket.io event and CustomEvent from CreatePostModal
       const newPost = ev.detail || ev; 
-      
       if (newPost && newPost._id) {
         setPosts(prev => uniqueById([newPost, ...prev])); // Add to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
         addToast('New post loaded!', { type: 'info' });
       } else {
-        // Fallback: Reload feed if data is partial
         load(true);
       }
     };
@@ -98,11 +95,10 @@ export default function Feed() {
       setPosts(prev => prev.filter(p => p._id !== id));
     };
 
-    // Scheduled Post Published Event
     const onScheduled = (newPost) => {
         if(newPost) {
             setPosts(prev => uniqueById([newPost, ...prev]));
-            addToast(`Scheduled post by ${newPost.user?.name || 'User'} is now live!`, { type: 'info' });
+            addToast(`Scheduled post is live!`, { type: 'info' });
         }
     };
 
@@ -228,9 +224,7 @@ export default function Feed() {
             isOpen={openCreate} 
             onClose={() => setOpenCreate(false)} 
             onPosted={(newPost) => {
-                if (newPost) {
-                    // Handled by event listener above
-                }
+                // Socket listener handles update, but this ensures modal closes
             }} 
         />
 

@@ -1,4 +1,3 @@
-
 // backend/controllers/commentsController.js
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
@@ -17,20 +16,33 @@ exports.create = async (req, res) => {
     const post = await Post.findById(req.params.postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // 1. Create Comment
+    // 🔥 NEW SECURITY CHECK: Block Loophole Fix
+    // 1. Check if the Post Owner has blocked the Commenter
+    const postOwner = await User.findById(post.user).select('blockedUsers');
+    if (postOwner.blockedUsers && postOwner.blockedUsers.includes(req.user._id)) {
+        return res.status(403).json({ message: "You are unable to comment on this post." });
+    }
+
+    // 2. Check if the Commenter has blocked the Post Owner (Optional, prevents interaction)
+    const me = await User.findById(req.user._id).select('blockedUsers');
+    if (me.blockedUsers && me.blockedUsers.includes(post.user)) {
+        return res.status(403).json({ message: "You have blocked this user." });
+    }
+
+    // --- Proceed to Create Comment ---
     const comment = await Comment.create({
       post: post._id,
       user: req.user._id,
       text: text.trim(),
     });
 
-    // 2. Atomic Push to Post Array
+    // Atomic Push to Post Array
     await Post.findByIdAndUpdate(post._id, { $push: { comments: comment._id } });
 
-    // 3. Populate User Details for Frontend
+    // Populate User Details for Frontend
     await comment.populate("user", "name avatar");
 
-    // 4. Emit Real-time Event
+    // Emit Real-time Event
     try {
       const io = req.app.get("io") || global.io;
       if (io) {
@@ -40,7 +52,7 @@ exports.create = async (req, res) => {
       console.warn("Socket emit failed", e?.message);
     }
 
-    // 5. Send Notification (if not commenting on own post)
+    // Send Notification (if not commenting on own post)
     if (String(post.user) !== String(req.user._id)) {
       await createNotification(req, {
         toUser: post.user,
@@ -60,7 +72,6 @@ exports.create = async (req, res) => {
 /**
  * GET /api/comments/:postId
  * List all comments for a post (Simple)
- * 🔥 RENAMED from 'list' to 'listAll' to avoid conflicts
  */
 exports.listAll = async (req, res) => {
   try {
@@ -77,7 +88,6 @@ exports.listAll = async (req, res) => {
 /**
  * GET /api/comments/:postId/paginated
  * List comments with pagination (Infinite Scroll support)
- * 🔥 RENAMED from 'list' to 'listPaginated'
  */
 exports.listPaginated = async (req, res) => {
   try {
@@ -105,17 +115,12 @@ exports.remove = async (req, res) => {
     const comment = await Comment.findById(req.params.commentId);
     if (!comment) return res.status(404).json({ message: "Not found" });
 
-    // Check ownership or admin role
     if (String(comment.user) !== String(req.user._id) && req.user.role !== "admin")
       return res.status(403).json({ message: "Forbidden" });
 
-    // 1. Delete Comment
     await comment.deleteOne();
-
-    // 2. Remove Reference from Post
     await Post.findByIdAndUpdate(comment.post, { $pull: { comments: comment._id } });
 
-    // 3. Emit Deletion Event
     try {
       const io = req.app.get("io") || global.io;
       if (io) io.to(`post:${comment.post}`).emit("comment:deleted", { commentId: comment._id });
@@ -140,7 +145,6 @@ exports.toggleLike = async (req, res) => {
     const comment = await Comment.findById(commentId);
     if (!comment) return res.status(404).json({ message: "Not found" });
 
-    // Atomic Toggle Logic
     const isLiked = comment.likes.includes(uid);
     const update = isLiked 
       ? { $pull: { likes: uid } } 
@@ -148,7 +152,6 @@ exports.toggleLike = async (req, res) => {
 
     const updatedComment = await Comment.findByIdAndUpdate(commentId, update, { new: true });
 
-    // Emit Updated Like Count
     try {
       const io = req.app.get("io") || global.io;
       if (io) {

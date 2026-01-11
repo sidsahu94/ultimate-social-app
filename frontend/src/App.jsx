@@ -1,7 +1,12 @@
+// frontend/src/App.jsx
 import React, { Suspense, lazy, useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { logout } from "./redux/slices/authSlice";
+
+// Contexts & Hooks
+import { useSocket } from './contexts/SocketContext';
+import { useToast } from './components/ui/ToastProvider';
 
 // Components
 import MainLayout from "./components/layouts/MainLayout";
@@ -24,6 +29,7 @@ const Explore = lazy(() => import("./pages/explore/Explore"));
 const SwipeExplore = lazy(() => import("./pages/discovery/SwipeExplore"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const SavedPage = lazy(() => import("./pages/saved/Saved"));
+const TagFeed = lazy(() => import("./pages/explore/TagFeed")); // 🔥 NEW
 
 // Content & Profile
 const ProfilePage = lazy(() => import("./pages/profile/ProfilePage"));
@@ -40,6 +46,7 @@ const LoginPage = lazy(() => import("./pages/auth/Login"));
 const RegisterPage = lazy(() => import("./pages/auth/Register"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
+const VerifyAccount = lazy(() => import("./pages/auth/VerifyAccount"));
 
 // Apps Ecosystem
 const EventsPage = lazy(() => import("./pages/events/EventsPage"));
@@ -60,6 +67,11 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const CreatorPayouts = lazy(() => import("./pages/admin/CreatorPayouts"));
 const ModerationDashboard = lazy(() => import("./pages/admin/ModerationDashboard"));
 
+// Integration Apps
+const NewsPage = lazy(() => import("./pages/apps/NewsPage"));
+const MarketPage = lazy(() => import("./pages/apps/MarketPage"));
+const Onboarding = lazy(() => import("./pages/intro/Onboarding"));
+
 // Loading Spinner
 function LoadingShell() {
   return (
@@ -72,32 +84,32 @@ function LoadingShell() {
   );
 }
 
+// Root Guard
+const RootRoute = () => {
+  const { user } = useSelector(s => s.auth);
+  const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+
+  if (!hasSeenOnboarding) return <Navigate to="/welcome" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Feed />;
+};
+
 export default function App() {
   const dispatch = useDispatch();
   const [viewPostId, setViewPostId] = useState(null);
   const [commentPostId, setCommentPostId] = useState(null);
-  
-  // Create Modal State
   const [openCreate, setOpenCreate] = useState(false);
-  const [createContent, setCreateContent] = useState(null); // For Drafts/Reposts
-
+  const [createContent, setCreateContent] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // 1. Offline Detection
+  // 🔥 NEW: Hooks for Global Events
+  const { socket } = useSocket();
+  const { add: addToast } = useToast();
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // 2. Global Event Listeners
-  useEffect(() => {
-    // Logout Handler (from API interceptor)
+    
     const handleLogoutEvent = () => {
         dispatch(logout());
         if (window.location.pathname !== '/login') {
@@ -105,23 +117,24 @@ export default function App() {
         }
     };
 
-    // Modal Handlers
     const onOpenView = (e) => { if (e?.detail) setViewPostId(e.detail); };
     const onOpenComments = (e) => { if (e?.detail) setCommentPostId(e.detail); };
-    
-    // Open Create (handles new post OR draft/repost)
     const onOpenCreate = (e) => { 
         if (e.detail) setCreateContent(e.detail); 
         else setCreateContent(null);
         setOpenCreate(true); 
     };
 
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     window.addEventListener('auth:logout', handleLogoutEvent);
     window.addEventListener("openViewPost", onOpenView);
     window.addEventListener("openComments", onOpenComments);
     window.addEventListener("openCreatePost", onOpenCreate);
 
     return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       window.removeEventListener('auth:logout', handleLogoutEvent);
       window.removeEventListener("openViewPost", onOpenView);
       window.removeEventListener("openComments", onOpenComments);
@@ -129,17 +142,33 @@ export default function App() {
     };
   }, [dispatch]);
 
+  // 🔥 NEW: Global Notification Listener (Toasts)
+  useEffect(() => {
+    if (!socket) return;
+
+    const onNotification = (data) => {
+        // Don't show toast for chat messages (ChatBox handles sound/badge)
+        if (data.type === 'message') return;
+
+        addToast(data.message, { 
+            type: 'info', 
+            timeout: 4000 
+        });
+    };
+
+    socket.on('notification', onNotification);
+    return () => socket.off('notification', onNotification);
+  }, [socket, addToast]);
+
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       
-      {/* Offline Banner */}
       {!isOnline && (
          <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-xs font-bold text-center py-1 shadow-md">
            You are offline. Check your internet connection.
          </div>
       )}
 
-      {/* Aurora Background */}
       <div className="aurora-bg">
         <div className="aurora-blob blob-1"></div>
         <div className="aurora-blob blob-2"></div>
@@ -149,25 +178,36 @@ export default function App() {
       <Suspense fallback={<LoadingShell />}>
         <ErrorBoundary>
             <Routes>
+            
+            <Route path="/welcome" element={<Onboarding />} />
+
+            {/* Auth */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-account" element={<VerifyAccount />} />
+
             {/* --- Main App Layout --- */}
             <Route element={<MainLayout />}>
-                {/* Public Feeds */}
-                <Route path="/" element={<Feed />} />
+                
+                <Route path="/" element={<RootRoute />} />
+                
                 <Route path="/explore" element={<Explore />} />
                 <Route path="/reels" element={<ReelsPage />} />
+                <Route path="/tags/:tag" element={<TagFeed />} /> {/* 🔥 NEW TAG ROUTE */}
                 
-                {/* Protected User Routes */}
+                {/* Protected */}
                 <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                 <Route path="/chat/:id" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                 <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
                 <Route path="/saved" element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
                 <Route path="/drafts" element={<ProtectedRoute><DraftsPage /></ProtectedRoute>} />
                 
-                {/* Dynamic Content */}
                 <Route path="/profile/:id" element={<ProfilePage />} />
                 <Route path="/post/:id" element={<PostPage />} />
                 
-                {/* Apps & Features */}
+                {/* Features */}
                 <Route path="/shop" element={<Marketplace />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
@@ -176,12 +216,14 @@ export default function App() {
                 <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                 <Route path="/report" element={<ProtectedRoute><SafetyPage /></ProtectedRoute>} />
                 
-                {/* Utilities */}
+                <Route path="/apps/news" element={<ProtectedRoute><NewsPage /></ProtectedRoute>} />
+                <Route path="/apps/markets" element={<ProtectedRoute><MarketPage /></ProtectedRoute>} />
+
                 <Route path="/feature-hub" element={<FeatureHub />} />
                 <Route path="/discovery/follow-suggestions" element={<FollowSuggestions />} />
                 <Route path="/scheduled-posts" element={<ProtectedRoute><ScheduledPosts /></ProtectedRoute>} />
                 
-                {/* Admin Routes (Guarded) */}
+                {/* Admin */}
                 <Route element={<AdminRoute />}>
                     <Route path="/admin/dashboard" element={<AdminDashboard />} />
                     <Route path="/admin/payouts" element={<CreatorPayouts />} />
@@ -189,36 +231,18 @@ export default function App() {
                 </Route>
             </Route>
 
-            {/* --- Full Screen Pages --- */}
             <Route path="/discover" element={<SwipeExplore />} />
-            
-            {/* Auth */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-
-            {/* Video Call (Protected) */}
-            <Route 
-                path="/chat/call/:roomId" 
-                element={
-                    <ProtectedRoute>
-                        <CallRoom />
-                    </ProtectedRoute>
-                } 
-            />
-
-            {/* 404 Fallback */}
+            <Route path="/chat/call/:roomId" element={<ProtectedRoute><CallRoom /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
             </Routes>
         </ErrorBoundary>
       </Suspense>
 
-      {/* --- Global Modals --- */}
+      {/* Modals */}
       <CreatePostModal 
         isOpen={openCreate} 
         onClose={() => setOpenCreate(false)} 
-        initialData={createContent} // Pass Draft/Repost content
+        initialData={createContent} 
         onPosted={() => { setOpenCreate(false); setCreateContent(null); }} 
       />
       <CommentsModal postId={commentPostId} isOpen={!!commentPostId} onClose={() => setCommentPostId(null)} />

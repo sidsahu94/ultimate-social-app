@@ -1,3 +1,4 @@
+// backend/controllers/followSuggestController.js
 const User = require('../models/User');
 
 exports.suggest = async (req,res)=>{

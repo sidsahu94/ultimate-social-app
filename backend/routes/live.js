@@ -1,3 +1,4 @@
+// backend/routes/live.js
 const router = require('express').Router();
 const { protect } = require('../middleware/authMiddleware');
 const live = require('../controllers/liveController');

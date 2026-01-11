@@ -77,3 +77,16 @@ exports.updateReport = async (req, res) => {
     res.status(500).json({ message: 'Error processing report action' });
   }
 };
+
+// 🔥 NEW: Get My Reports
+exports.getMyReports = async (req, res) => {
+  try {
+    const reports = await Report.find({ reporter: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate('targetUser', 'name')
+      .populate('targetPost', 'content'); // Just a snippet
+    res.json(reports);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};

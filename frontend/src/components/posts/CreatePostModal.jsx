@@ -7,6 +7,9 @@ import { useToast } from '../ui/ToastProvider';
 import { generateCaption } from '../../utils/aiGenerator';
 import { compressImage } from '../../utils/compressor'; 
 
+// 🔥 Import Safety Check
+import { checkImageSafety } from '../../utils/contentSafety';
+
 const FILTERS = [
   { name: 'Normal', val: '' },
   { name: 'Vintage', val: 'sepia(0.5) contrast(1.2)' },
@@ -43,7 +46,6 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     if (initialData) {
         setText(initialData.content || '');
         if (initialData.isDraft) setDraftId(initialData._id); // Track draft ID
-        // If it was a poll/reel, you'd load that logic here too, but for now we focus on text/media
     } else if (!isOpen) {
         // Reset on close
         setText(''); 
@@ -55,6 +57,57 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
         setDraftId(null);
     }
   }, [isOpen, initialData]);
+
+  // 🔥 NEW: Handle File Selection with NSFW Check
+  const handleFileSelect = async (e, type) => {
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length === 0) return;
+
+    // Only check images for NSFW (Video checking is resource intensive client-side)
+    if (type === 'image') {
+        setLoading(true); // Show loading state while checking
+        try {
+            const file = selectedFiles[0]; // Check the first file
+            
+            // Create an invisible image element to check
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.crossOrigin = 'anonymous';
+
+            // Wrap onload in a promise to await the result
+            const isUnsafe = await new Promise((resolve) => {
+                img.onload = async () => {
+                    try {
+                        const result = await checkImageSafety(img);
+                        resolve(result);
+                    } catch (error) {
+                        console.error("NSFW Check Error", error);
+                        resolve(false); // Default to safe if model fails
+                    }
+                };
+                img.onerror = () => resolve(false);
+            });
+
+            if (isUnsafe) {
+                add("Image blocked: Contains inappropriate content.", { type: 'error' });
+                e.target.value = ""; // Clear input
+                setFiles([]);
+            } else {
+                setFiles(selectedFiles);
+            }
+        } catch (err) {
+            console.error("File processing error", err);
+            // Fallback: Allow file if check fails entirely? Or block? 
+            // Here we allow it to avoid UX blocking on bugs
+            setFiles(selectedFiles); 
+        } finally {
+            setLoading(false);
+        }
+    } else {
+        // For Videos, just set the files (Logic for backend video moderation would go here)
+        setFiles(selectedFiles);
+    }
+  };
 
   // Handle Hashtag Detection
   const handleTextChange = async (e) => {
@@ -113,17 +166,13 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
       else {
          // Standard Post
          fd.append('content', text);
-         fd.append('isDraft', isSaveDraft); // 🔥 Flag for draft
+         fd.append('isDraft', isSaveDraft); 
          
          for (const f of files) {
              const processed = await compressImage(f);
              fd.append('media', processed);
          }
 
-         // Note: If editing a draft, your backend logic (Phase 3/4) might need a PUT /posts/:id endpoint.
-         // For now, this creates a NEW entry. If `draftId` exists, you could optionally DELETE the old one 
-         // or if your backend supports updating drafts, switch logic here.
-         // Below assumes creating a new version or new post.
          await API.post('/posts', fd);
       }
 
@@ -261,16 +310,33 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
 
               {/* Tools Bar */}
               <div className="flex justify-between items-center border p-3 rounded-xl border-gray-200 dark:border-gray-700 mt-2">
-                <span className="text-sm font-medium text-gray-500">Add to your post</span>
+                <span className="text-sm font-medium text-gray-500">
+                    {loading ? 'Checking...' : 'Add to your post'}
+                </span>
                 <div className="flex gap-3 text-xl">
-                  <label className="cursor-pointer text-green-500 hover:bg-green-50 p-2 rounded-full transition">
+                  {/* Image Upload Input */}
+                  <label className={`cursor-pointer text-green-500 hover:bg-green-50 p-2 rounded-full transition ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
                     <FaImage />
-                    <input type="file" accept="image/*" className="hidden" multiple={activeTab!=='reel'} onChange={e => setFiles(Array.from(e.target.files))} />
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        multiple={activeTab!=='reel'} 
+                        onChange={e => handleFileSelect(e, 'image')} // 🔥 Updated Handler
+                    />
                   </label>
-                  <label className="cursor-pointer text-pink-500 hover:bg-pink-50 p-2 rounded-full transition">
+                  
+                  {/* Video Upload Input */}
+                  <label className={`cursor-pointer text-pink-500 hover:bg-pink-50 p-2 rounded-full transition ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
                     <FaVideo />
-                    <input type="file" accept="video/*" className="hidden" onChange={e => setFiles([e.target.files[0]])} />
+                    <input 
+                        type="file" 
+                        accept="video/*" 
+                        className="hidden" 
+                        onChange={e => handleFileSelect(e, 'video')} // 🔥 Updated Handler
+                    />
                   </label>
+                  
                   <button className="text-orange-500 hover:bg-orange-50 p-2 rounded-full transition"><FaPoll /></button>
                   <button className="text-yellow-500 hover:bg-yellow-50 p-2 rounded-full transition"><FaSmile /></button>
                 </div>
@@ -283,7 +349,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
             {activeTab === 'post' && (
                 <button 
                     disabled={loading || !text}
-                    onClick={() => handleSubmit(true)} // Pass true for draft
+                    onClick={() => handleSubmit(true)} 
                     className="flex-1 py-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                 >
                     Save Draft
@@ -296,7 +362,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
                 onClick={() => handleSubmit(false)}
                 className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50 transition shadow-lg shadow-indigo-500/30"
             >
-                {loading ? 'Posting...' : 'Post'}
+                {loading ? 'Processing...' : 'Post'}
             </button>
           </div>
         </div>

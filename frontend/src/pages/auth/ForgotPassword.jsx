@@ -1,3 +1,4 @@
+// frontend/src/pages/auth/ForgotPassword.jsx
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { Link, useNavigate } from 'react-router-dom';

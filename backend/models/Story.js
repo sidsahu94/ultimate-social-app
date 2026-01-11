@@ -5,9 +5,12 @@ const StorySchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref:'User', required:true },
   media: { type:String, required:true },
   type: { type:String, enum:['image','video'], default:'image' },
+  
+  // 🔥 UPDATED: Privacy setting
+  privacy: { type: String, enum: ['public', 'close_friends'], default: 'public' },
+  
   viewers: [{ type: mongoose.Schema.Types.ObjectId, ref:'User' }],
   
-  // 🔥 FIX: Removed "index: true" here to avoid duplicate index warning
   // The index is created at the bottom with expireAfterSeconds
   expiresAt: { type:Date, required:true } 
 }, { timestamps:true });

@@ -1,7 +1,8 @@
+// frontend/src/pages/wallet/WalletPage.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 import socket from '../../services/socket';
-import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaCopy, FaPaperPlane, FaSearch, FaLock } from 'react-icons/fa';
+import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaCopy, FaPaperPlane, FaSearch, FaLock, FaKey } from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { useToast } from '../../components/ui/ToastProvider';
 import UserAvatar from '../../components/ui/UserAvatar';
@@ -24,9 +25,12 @@ export default function WalletPage() {
   const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // 🔥 Security State
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [password, setPassword] = useState('');
+  // 🔥 Security State (PIN System)
+  const [hasPin, setHasPin] = useState(false); // Does user have a PIN set?
+  const [showConfirm, setShowConfirm] = useState(false); // Confirm Transfer Modal
+  const [showPinSetup, setShowPinSetup] = useState(false); // Setup PIN Modal
+  const [pinInput, setPinInput] = useState(''); // PIN entry field
+  const [newPin, setNewPin] = useState(''); // PIN creation field
   
   const { add: addToast } = useToast();
 
@@ -34,11 +38,14 @@ export default function WalletPage() {
     try {
       const walletRes = await API.get('/wallet/me');
       const appsRes = await API.get('/apps/wallet'); 
+      const pinRes = await API.get('/wallet/pin/status'); // Check if PIN exists
       
       setData({
         ...walletRes.data,
         transactions: appsRes.data?.transactions || []
       });
+      setHasPin(pinRes.data.hasPin);
+
     } catch (e) {
       console.warn("Wallet data partial load");
     } finally {
@@ -85,27 +92,53 @@ export default function WalletPage() {
     setShowDropdown(false);
   };
 
-  // 🔥 1. Open Confirm Modal
+  // 🔥 1. Initialize Transfer
   const initTransfer = () => {
     if (!recipientId || amount <= 0) return addToast("Invalid details", { type: 'error' });
-    setShowConfirm(true);
+    
+    if (!hasPin) {
+        setShowPinSetup(true); // Force PIN setup first
+        addToast("Please set a Wallet PIN to continue", { type: "info" });
+        return;
+    }
+    
+    setShowConfirm(true); // Open Enter PIN modal
   };
 
-  // 🔥 2. Perform Secure Transfer
+  // 🔥 2. Handle PIN Setup
+  const handleSetPin = async () => {
+      if (newPin.length !== 6 || isNaN(newPin)) {
+          return addToast("PIN must be exactly 6 digits", { type: "error" });
+      }
+      try {
+          await API.post('/wallet/pin', { pin: newPin });
+          setHasPin(true);
+          setShowPinSetup(false);
+          setNewPin('');
+          addToast("PIN set successfully! You can now transfer.", { type: "success" });
+          setShowConfirm(true); // Automatically open transfer modal
+      } catch (e) {
+          addToast("Failed to set PIN", { type: "error" });
+      }
+  };
+
+  // 🔥 3. Perform Secure Transfer with PIN
   const confirmTransfer = async () => {
-    if (!password) return addToast("Password required", { type: 'error' });
+    if (!pinInput || pinInput.length !== 6) return addToast("Enter your 6-digit PIN", { type: 'error' });
+    
     try {
-      await API.post('/wallet/tip', { to: recipientId, amount, password });
+      // Sending PIN instead of password
+      await API.post('/wallet/tip', { to: recipientId, amount, pin: pinInput });
       addToast(`Sent ${amount} coins!`, { type: 'success' });
       
       // Reset inputs
       setRecipientId('');
       setQuery(''); 
       setAmount(10);
-      setPassword('');
+      setPinInput('');
       setShowConfirm(false);
     } catch (e) {
-      addToast(e.userMessage || "Transfer failed (Check password)", { type: 'error' });
+      addToast(e.userMessage || "Transfer failed (Incorrect PIN?)", { type: 'error' });
     }
   };
 
@@ -221,7 +254,6 @@ export default function WalletPage() {
                         onChange={e => setAmount(Number(e.target.value))}
                     />
                 </div>
-                {/* 🔥 Button opens Modal */}
                 <button onClick={initTransfer} className="btn-primary rounded-xl px-6 font-bold">Send</button>
             </div>
         </div>
@@ -266,7 +298,32 @@ export default function WalletPage() {
         </div>
       </div>
 
-      {/* 🔥 Security Modal */}
+      {/* 🔥 MODAL: Set PIN (Only shows if no PIN set) */}
+      {showPinSetup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-sm shadow-2xl border dark:border-gray-700 text-center">
+                <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center mb-4">
+                    <FaKey size={20} />
+                </div>
+                <h3 className="font-bold text-xl mb-2 text-gray-900 dark:text-white">Create Wallet PIN</h3>
+                <p className="text-sm text-gray-500 mb-6">Set a 6-digit PIN to secure your transactions.</p>
+                
+                <input 
+                    type="password" 
+                    maxLength={6}
+                    value={newPin} 
+                    onChange={e => setNewPin(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="000000"
+                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-blue-500 outline-none text-center text-2xl tracking-[0.5em] font-mono"
+                    autoFocus
+                />
+                
+                <button onClick={handleSetPin} className="btn-primary w-full py-3 rounded-xl font-bold">Set PIN</button>
+            </div>
+        </div>
+      )}
+
+      {/* 🔥 MODAL: Confirm Transfer (Verify PIN) */}
       {showConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-sm shadow-2xl border dark:border-gray-700">
@@ -275,23 +332,23 @@ export default function WalletPage() {
                         <FaLock size={24} />
                     </div>
                 </div>
-                <h3 className="font-bold text-xl mb-2 text-center">Confirm Transfer</h3>
+                <h3 className="font-bold text-xl mb-2 text-center text-gray-900 dark:text-white">Confirm Transfer</h3>
                 <p className="text-sm text-gray-500 mb-6 text-center">
-                    You are about to send <b>{amount} coins</b> to <b>{query}</b>. 
-                    Please confirm your password to proceed.
+                    Sending <b>{amount} coins</b> to <b>{query}</b>. <br/>Enter your Wallet PIN.
                 </p>
                 
                 <input 
                     type="password" 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-indigo-500 outline-none"
+                    maxLength={6}
+                    value={pinInput} 
+                    onChange={e => setPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="------"
+                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-indigo-500 outline-none text-center text-2xl tracking-[0.5em] font-mono"
                     autoFocus
                 />
                 
                 <div className="flex gap-3">
-                    <button onClick={() => setShowConfirm(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition">Cancel</button>
+                    <button onClick={() => { setShowConfirm(false); setPinInput(''); }} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition">Cancel</button>
                     <button onClick={confirmTransfer} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/30">Confirm</button>
                 </div>
             </div>

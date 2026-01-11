@@ -1,4 +1,6 @@
+// frontend/src/hooks/useKeyboardShortcuts.js
 import { useEffect } from 'react';
+
 
 export default function useKeyboardShortcuts() {
   useEffect(() => {

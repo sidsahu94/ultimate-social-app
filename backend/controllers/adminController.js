@@ -1,3 +1,4 @@
+// backend/controllers/adminController.js
 const User = require('../models/User');
 const Post = require('../models/Post');
 const Report = require('../models/Report'); // Ensure Report model exists
@@ -137,23 +138,17 @@ exports.handleReport = async (req, res) => {
   }
 };
 
-// --- 5. CLEANUP ---
-// Re-using the robust delete logic from usersController is recommended, 
-// but here is a direct admin version if needed.
 exports.deleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Soft delete is preferred, but admin might want HARD delete
-    await User.findByIdAndDelete(userId);
+    // 🔥 FIX: Use Soft Delete instead of hard delete
+    await User.findByIdAndUpdate(userId, { 
+        isDeleted: true, 
+        email: `deleted_${userId}_${Date.now()}@deleted.com`, // Free up email
+        refreshToken: null 
+    });
     
-    // Cleanup related data (Minimal)
-    await Post.deleteMany({ user: userId });
-    await Comment.deleteMany({ user: userId });
-
-    res.json({ message: 'User permanently deleted' });
+    res.json({ message: 'User deactivated (Soft Delete)' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

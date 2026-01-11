@@ -1,3 +1,4 @@
+// frontend/src/pages/live/LiveWatch.jsx
 import React,{useEffect,useRef,useState} from 'react';
 import { useParams } from 'react-router-dom';
 import API from '../../services/api';

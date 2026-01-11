@@ -1,3 +1,4 @@
+// frontend/src/components/auth/GoogleLoginButton.jsx
 import React from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { FaGoogle } from 'react-icons/fa';
@@ -17,15 +18,13 @@ export default function GoogleLoginButton() {
             token: tokenResponse.access_token 
         });
         
-        // 🔥 NEW: Extract refreshToken
+        // Extract refreshToken if your backend provides it
         const { token, refreshToken, user } = res.data;
         
-        // Save to local storage
         localStorage.setItem('token', token);
-        if (refreshToken) localStorage.setItem('refreshToken', refreshToken); // 🔥 Store it
+        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('meId', user._id);
         
-        // Update Redux
         dispatch(setUser(user));
         
         addToast(`Welcome back, ${user.name}!`, { type: 'success' });
@@ -48,10 +47,10 @@ export default function GoogleLoginButton() {
     <button
       type="button" 
       onClick={() => login()}
-      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all group"
+      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-[20px] bg-[#E0E5EC] dark:bg-[#1A1B1E] shadow-neu-flat dark:shadow-neu-dark-flat hover:shadow-neu-pressed dark:hover:shadow-neu-dark-pressed text-slate-700 dark:text-slate-200 transition-all active:scale-95 border border-white/40 dark:border-white/5 group"
     >
-      <FaGoogle className="text-red-500 group-hover:scale-110 transition-transform" />
-      <span className="font-semibold text-gray-700 dark:text-gray-200">Continue with Google</span>
+      <FaGoogle className="text-red-500 group-hover:scale-110 transition-transform drop-shadow-md" />
+      <span className="font-bold text-sm">Continue with Google</span>
     </button>
   );
 }

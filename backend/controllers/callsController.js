@@ -1,36 +1,26 @@
 // backend/controllers/callsController.js
+const ActiveCall = require('../models/ActiveCall');
 
-// ⚠️ NOTE: In a production environment with multiple server instances (clustering),
-// in-memory storage (Map) will not work. You should replace this with Redis.
-// For a single-instance deployment, this Map + Cleanup logic is sufficient.
-
-const calls = new Map();
-
-// 🔥 CLEANUP: Run every hour to remove stale rooms older than 24 hours
-setInterval(() => {
-  const now = Date.now();
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  
-  for (const [roomId, data] of calls.entries()) {
-    if (now - data.createdAt > ONE_DAY) {
-      calls.delete(roomId);
-    }
-  }
-}, 60 * 60 * 1000); // 1 Hour Interval
+// ⚠️ Note: Ensure your ActiveCall model has a TTL index on 'createdAt' 
+// to automatically clean up stale calls after 24 hours.
 
 exports.createRoom = async (req, res) => {
   try {
-    // Generate a unique room ID (simple random string)
+    // Generate a unique room ID
     const roomId = (Math.random() * 1e9 | 0).toString(36) + Date.now().toString(36);
     
-    calls.set(roomId, {
-      peers: [],
-      createdAt: Date.now() // Track creation time for cleanup
+    // 🔥 FIX: Persist room to DB instead of memory Map
+    // This supports multi-server deployment (clustering)
+    await ActiveCall.create({
+        roomId,
+        host: req.user._id,
+        participants: [req.user._id]
     });
 
     res.json({ roomId });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Create Room Error:", err);
+    res.status(500).json({ message: 'Error creating room' });
   }
 };
 
@@ -38,20 +28,26 @@ exports.joinRoom = async (req, res) => {
   try {
     const { roomId } = req.params;
     
-    if (!calls.has(roomId)) {
+    // 🔥 FIX: Check DB for room existence
+    const call = await ActiveCall.findOne({ roomId });
+    
+    if (!call) {
       return res.status(404).json({ message: 'Room not found or expired' });
     }
 
-    const room = calls.get(roomId);
-    const userId = req.user._id.toString();
+    // Add user to participants if not present
+    // Converting ObjectIds to strings for comparison is safer
+    const userIdStr = req.user._id.toString();
+    const participantsStr = call.participants.map(p => p.toString());
 
-    // Prevent duplicates in peer list
-    if (!room.peers.includes(userId)) {
-      room.peers.push(userId);
+    if (!participantsStr.includes(userIdStr)) {
+        call.participants.push(req.user._id);
+        await call.save();
     }
 
     res.json({ joined: true, roomId });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Join Room Error:", err);
+    res.status(500).json({ message: 'Error joining room' });
   }
 };

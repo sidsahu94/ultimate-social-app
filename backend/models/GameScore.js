@@ -1,3 +1,4 @@
+// backend/models/GameScore.js
 const mongoose = require('mongoose');
 
 const GameScoreSchema = new mongoose.Schema({

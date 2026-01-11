@@ -1,3 +1,4 @@
+// backend/scripts/ensure_indexes.js
 const mongoose = require('mongoose');
 require('dotenv').config();
 const User = require('../models/User');
