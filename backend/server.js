@@ -15,21 +15,22 @@ const helmet = require('helmet');
 const xss = require('xss-clean');
 const mongoSanitize = require('express-mongo-sanitize');
 
-// --- Redis Adapter Imports ---
-const { createAdapter } = require("@socket.io/redis-adapter");
-const { createClient } = require("redis");
-
 const { generalLimiter } = require('./middleware/rateLimit'); 
 const errorHandler = require('./middleware/errorHandler');    
 const AppError = require('./utils/AppError');
 const User = require('./models/User');
 const runJanitor = require('./utils/janitor');
 
+// --- Scalability Imports ---
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
+
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxy is required for secure cookies and rate limiting behind Render's load balancer
 app.set('trust proxy', 1);
 
 // -------------------- 1. DATABASE CONNECTION (Resilient) --------------------
@@ -50,6 +51,20 @@ mongoose.connection.on('disconnected', () => {
 });
 
 // -------------------- 2. SECURITY & MIDDLEWARE --------------------
+// Allow cross-origin resource sharing
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
+      'http://localhost:5173', 
+      'http://127.0.0.1:5173',
+      'https://ultimate-social-app.onrender.com' // 🔥 Explicit production URL
+    ];
+
+app.use(cors({ 
+  origin: allowedOrigins, 
+  credentials: true 
+}));
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: false 
@@ -67,11 +82,7 @@ app.use('/api', generalLimiter);
 app.use(express.json({ limit: '50kb' })); 
 app.use(cookieParser());
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
-
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Janitor Cleanup (Run every 24h)
@@ -110,6 +121,8 @@ try { app.use('/api/follow-suggest', require('./routes/followSuggest')); } catch
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '..', 'frontend', 'dist');
   app.use(express.static(clientBuildPath));
+  
+  // Handle SPA routing: serve index.html for any unknown route
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
       return next(); 
@@ -143,8 +156,8 @@ const io = socketio(server, {
 app.set('io', io);
 global.io = io;
 
-// 🔥 REDIS ADAPTER SETUP
-// Only run this if a REDIS_URL is provided in .env
+// 🔥 REDIS ADAPTER SETUP (Scalability)
+// Only attempts connection if REDIS_URL is provided
 if (process.env.REDIS_URL) {
   (async () => {
     const pubClient = createClient({ url: process.env.REDIS_URL });

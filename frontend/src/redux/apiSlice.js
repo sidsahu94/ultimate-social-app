@@ -1,8 +1,10 @@
 // frontend/src/redux/apiSlice.js
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-// pick base url from env (falls back to localhost)
-const baseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
+// 🔥 FIX: Use relative path '/api' in production
+const baseUrl = import.meta.env.PROD 
+  ? '/api' 
+  : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
 
 export const apiSlice = createApi({
   reducerPath: 'api',
@@ -15,35 +17,35 @@ export const apiSlice = createApi({
       } catch (e) {}
       return headers;
     },
+    // Standard fetch wrapper
     fetchFn: async (input, init) => {
-      // default fetch is fine; you can customize if needed
       return fetch(input, init);
     }
   }),
   tagTypes: ['Posts', 'Users', 'Me', 'Notifications'],
   endpoints: (build) => ({
-    // Feed (paginated simplified)
+    // Feed
     getFeed: build.query({
       query: ({ page = 0, limit = 20 } = {}) => `/posts/feed?page=${page}&limit=${limit}`,
       providesTags: (result) =>
         result ? [...result.map(({ _id }) => ({ type: 'Posts', id: _id })), { type: 'Posts', id: 'LIST' }] : [{ type: 'Posts', id: 'LIST' }],
-      keepUnusedDataFor: 60 // keep cached for 60s
+      keepUnusedDataFor: 60 
     }),
 
-    // Posts by user
+    // Posts by User
     getPostsByUser: build.query({
       query: (userId) => `/posts/user/${userId}`,
       providesTags: (result) =>
         result ? result.map(p => ({ type: 'Posts', id: p._id })) : [],
     }),
 
-    // Single post
+    // Single Post
     getPost: build.query({
       query: (id) => `/posts/${id}`,
       providesTags: (result, err, id) => [{ type: 'Posts', id }],
     }),
 
-    // Me
+    // Current User
     getMe: build.query({
       query: () => '/users/me',
       providesTags: [{ type: 'Me', id: 'ME' }],
@@ -56,22 +58,20 @@ export const apiSlice = createApi({
       keepUnusedDataFor: 30,
     }),
 
-    // mark notifications read (mutation example)
+    // Mark Notifications Read
     markAllNotificationsRead: build.mutation({
       query: () => ({ url: '/notifications/mark-read', method: 'PUT' }),
       invalidatesTags: [{ type: 'Notifications', id: 'LIST' }],
     }),
 
-    // example like post mutation
+    // Like Post
     likePost: build.mutation({
       query: (postId) => ({ url: `/posts/like/${postId}`, method: 'PUT' }),
       invalidatesTags: (result, error, postId) => [{ type: 'Posts', id: postId }, { type: 'Posts', id: 'LIST' }],
     }),
-
   })
 });
 
-// hooks for components to use
 export const {
   useGetFeedQuery,
   useGetPostsByUserQuery,

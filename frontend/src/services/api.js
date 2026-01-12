@@ -1,13 +1,19 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
-// Create Instance
+// 🔥 FIX: Automatically detect environment
+// In Production (Render), use relative path '/api'.
+// In Development (Local), use 'http://localhost:5000/api'.
+const API_URL = import.meta.env.PROD 
+  ? '/api' 
+  : 'http://localhost:5000/api';
+
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api', // Change this to your production URL if deployed
+  baseURL: API_URL,
   headers: { 
     'Content-Type': 'application/json' 
   },
-  withCredentials: true // Important for cross-site cookies if used, good practice generally
+  withCredentials: true // Important for cookies/sessions
 });
 
 // --- REQUEST INTERCEPTOR ---
@@ -32,7 +38,7 @@ API.interceptors.response.use(
 
     // Check if error is 401 (Unauthorized) and we haven't tried refreshing yet
     if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Mark as retried to prevent infinite loops
+      originalRequest._retry = true; // Prevent infinite loops
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
@@ -41,16 +47,16 @@ API.interceptors.response.use(
             throw new Error("No refresh token available");
         }
 
-        // Call backend to get a new access token
-        const { data } = await axios.post('http://localhost:5000/api/auth/refresh', { 
+        // 🔥 FIX: Use the dynamic API_URL for the refresh call too
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, { 
             refreshToken 
         });
 
         // Save new token
-        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('token', data.token || data.accessToken);
         
         // Update the header of the failed request with the new token
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${data.token || data.accessToken}`;
         
         // Retry the original request
         return API(originalRequest);
@@ -63,7 +69,7 @@ API.interceptors.response.use(
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('meId');
         
-        // Dispatch a custom event so App.jsx can handle the UI redirect safely
+        // Dispatch event for UI handling
         window.dispatchEvent(new Event('auth:logout'));
         
         return Promise.reject(refreshError);
