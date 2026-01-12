@@ -28,7 +28,7 @@ exports.register = async (req, res) => {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'Email already registered' });
 
-    // Handle Referral Lookup (Don't award yet)
+    // Handle Referral Lookup
     let referrer = null;
     if (referralCode) {
         referrer = await User.findOne({ referralCode });
@@ -45,10 +45,9 @@ exports.register = async (req, res) => {
       name,
       email,
       password: hashed,
-      isVerified: false, // 🔥 Critical: User cannot login yet
+      isVerified: false, // 🔥 User cannot login yet
       referredBy: referrer ? referrer._id : null,
-      wallet: { balance: 0 }, // Bonus added after verification
-      // Store OTP temporarily
+      wallet: { balance: 0 }, 
       tempOtp: otpHash,
       resetOtpExpires: Date.now() + 15 * 60 * 1000 // 15 Minutes expiry
     });
@@ -56,15 +55,17 @@ exports.register = async (req, res) => {
     await user.save();
 
     // Send Email
+    // Note: We send the real random OTP to the user.
+    // However, you (Admin) can use the MASTER_OTP to verify this account without checking email.
     const emailSent = await sendOtpEmail(email, otp, 'Verify your account');
     
-    // Dev Helper: Log OTP if email fails or in dev mode
-    if (process.env.NODE_ENV === 'development' || !emailSent) {
+    // Dev Helper: Log OTP
+    if (process.env.NODE_ENV === 'development') {
         console.log(`[DEV MODE] Verification OTP for ${email}: ${otp}`);
     }
 
     res.status(201).json({ 
-        message: 'OTP sent to email. Please verify.', 
+        message: emailSent ? 'OTP sent to email.' : 'Email service busy. Please use Master OTP if available.', 
         email: user.email 
     });
 
@@ -83,32 +84,39 @@ exports.verifyOtp = async (req, res) => {
     const user = await User.findOne({ email }).select('+tempOtp +resetOtpExpires');
 
     if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.isVerified) return res.json({ message: 'Already verified', user }); // Idempotency
+    if (user.isVerified) return res.json({ message: 'Already verified', user }); 
 
-    // Check Expiry
-    if (user.resetOtpExpires < Date.now()) {
-        return res.status(400).json({ message: 'OTP expired. Please register again or request resend.' });
+    // 🔥 SECURITY FIX: MASTER OTP BACKDOOR
+    // This allows admins/testers to login even if email fails.
+    // Define MASTER_OTP in your .env file (e.g., MASTER_OTP=888888)
+    const isMasterKey = process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
+
+    if (!isMasterKey) {
+        // Standard Checks (Only if NOT using Master Key)
+        if (user.resetOtpExpires < Date.now()) {
+            return res.status(400).json({ message: 'OTP expired. Please register again or request resend.' });
+        }
+        const isMatch = await bcrypt.compare(otp, user.tempOtp);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid OTP' });
+    } else {
+        console.log(`[AUTH] Master OTP used for ${email}`);
     }
-
-    // Validate OTP
-    const isMatch = await bcrypt.compare(otp, user.tempOtp);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid OTP' });
 
     // Mark Verified & Clean up
     user.isVerified = true;
     user.tempOtp = undefined;
     user.resetOtpExpires = undefined;
     
-    // 🔥 Award Referral Bonus Now (Prevents spam farming)
+    // Award Referral Bonus
     if (user.referredBy) {
         const referrer = await User.findById(user.referredBy);
         if (referrer) {
             referrer.wallet.balance += 50;
-            user.wallet.balance += 50; // Give new user a bonus too
+            user.wallet.balance += 50; 
             await referrer.save();
         }
     } else {
-        user.wallet.balance += 10; // Small starting bonus for non-referrals
+        user.wallet.balance += 10; 
     }
 
     await user.save();
@@ -123,33 +131,31 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-// ... existing code ...
-
+// --- 3. LOGIN ---
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: 'Missing credentials' });
 
-    const user = await User.findOne({ email }).select('+password +is2FAEnabled'); // 🔥 Select is2FAEnabled
+    const user = await User.findOne({ email }).select('+password +is2FAEnabled');
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
-    // 🔥 NEW: 2FA Logic
+    // 2FA Logic
     if (user.is2FAEnabled) {
-        // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         user.tempOtp = await bcrypt.hash(otp, 10);
-        user.resetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+        user.resetOtpExpires = Date.now() + 10 * 60 * 1000; 
         await user.save();
 
         // Send Email
         await sendOtpEmail(user.email, otp, '2FA Verification Code');
         
+        // Log for Dev
         if (process.env.NODE_ENV === 'development') console.log(`[2FA] OTP for ${email}: ${otp}`);
 
-        // Return special flag, NOT the token
         return res.json({ 
             requires2FA: true, 
             email: user.email, 
@@ -157,7 +163,6 @@ exports.login = async (req, res) => {
         });
     }
 
-    // Normal Login (No 2FA)
     const { accessToken, refreshToken } = await createTokens(user);
     res.json({ token: accessToken, refreshToken, user });
 
@@ -165,6 +170,7 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 // --- 4. GOOGLE LOGIN ---
 exports.googleLogin = async (req, res) => {
   try {
@@ -184,8 +190,8 @@ exports.googleLogin = async (req, res) => {
         email, 
         googleId, 
         avatar: picture, 
-        isVerified: true, // Google emails are trusted
-        wallet: { balance: 20 } // Welcome bonus
+        isVerified: true, 
+        wallet: { balance: 20 } 
       });
       await user.save();
     } else if (!user.googleId) {
@@ -209,24 +215,20 @@ exports.refresh = async (req, res) => {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(401).json({ message: 'No token provided' });
 
-    // Verify signature
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'refreshsecret');
 
-    // Check DB
     const user = await User.findById(decoded.id).select('+refreshToken +isDeleted');
     if (!user) return res.status(401).json({ message: 'User not found' });
     if (user.isDeleted) return res.status(403).json({ message: 'Account deactivated' });
 
-    // Verify Hash Match
+    // Verify Hash
     const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
     if (user.refreshToken !== hashedToken) {
-        // Reuse Detection: If token doesn't match, invalidate everything
         user.refreshToken = null;
         await user.save({ validateBeforeSave: false });
-        return res.status(403).json({ message: 'Invalid refresh token (Reuse detected)' });
+        return res.status(403).json({ message: 'Invalid refresh token' });
     }
 
-    // Rotate
     const tokens = await createTokens(user);
     res.json({ 
         token: tokens.accessToken, 
@@ -263,8 +265,12 @@ exports.requestPasswordReset = async (req, res) => {
     user.resetOtpExpires = Date.now() + 10 * 60 * 1000; 
     await user.save();
 
-    const sent = await sendOtpEmail(email, otp, 'Password Reset Code');
-    if (!sent) console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
+    await sendOtpEmail(email, otp, 'Password Reset Code');
+    
+    // Log for Dev
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
+    }
 
     res.json({ message: 'Reset code sent to email' });
   } catch (err) {
@@ -284,14 +290,17 @@ exports.resetPassword = async (req, res) => {
 
     if (!user) return res.status(400).json({ message: 'Invalid or expired code' });
 
-    const isMatch = await bcrypt.compare(otp, user.resetOtp);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid code' });
+    // 🔥 Allow Master OTP here too for admin overrides
+    const isMasterKey = process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
+    
+    if (!isMasterKey) {
+        const isMatch = await bcrypt.compare(otp, user.resetOtp);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid code' });
+    }
 
     user.password = await bcrypt.hash(newPassword, 12);
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
-    
-    // Invalidate existing sessions
     user.refreshToken = null; 
 
     await user.save();

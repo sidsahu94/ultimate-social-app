@@ -1,7 +1,7 @@
 // frontend/src/pages/auth/VerifyAccount.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../components/ui/ToastProvider';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../redux/slices/authSlice';
@@ -10,17 +10,29 @@ import { motion } from 'framer-motion';
 
 export default function VerifyAccount() {
   const { state } = useLocation();
-  const [otp, setOtp] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams(); // 🔥 Hook for URL params
   const { add } = useToast();
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const email = state?.email;
+  // Prioritize URL params (Magic Link) over navigation state
+  const email = searchParams.get('email') || state?.email;
+  const urlCode = searchParams.get('code');
   const isLogin = state?.isLogin; // Flag to differentiate flow text
 
+  const [otp, setOtp] = useState(urlCode || '');
+  const [loading, setLoading] = useState(false);
+
+  // 🔥 AUTO-FILL LOGIC
+  // If code exists in URL (Magic Link), pre-fill the input
+  useEffect(() => {
+    if (urlCode && urlCode.length === 6) {
+        setOtp(urlCode);
+    }
+  }, [urlCode]);
+
   const handleVerify = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (otp.length !== 6) return add("Please enter a 6-digit code", { type: "info" });
     
     setLoading(true);
