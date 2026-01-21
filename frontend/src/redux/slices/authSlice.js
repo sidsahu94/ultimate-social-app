@@ -2,20 +2,22 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../services/api";
 
+// --- THUNKS ---
+
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
   async (credentials, thunkAPI) => {
     try {
       const res = await API.post("/auth/login", credentials);
       
-      // Extract data
-      const token = res.data.token;
-      const refreshToken = res.data.refreshToken; // 🔥 NEW: Get refresh token
-      const user = res.data.user; 
+      // 🔥 FIX: Handle both Unified ({ success: true, data: {...} }) and Legacy formats
+      const payload = res.data.data || res.data;
       
-      // Store in LocalStorage
+      const { token, refreshToken, user } = payload;
+      
+      // Store credentials securely
       if (token) localStorage.setItem("token", token);
-      if (refreshToken) localStorage.setItem("refreshToken", refreshToken); // 🔥 NEW: Store it
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
       if (user && user._id) localStorage.setItem("meId", user._id);
       
       return user;
@@ -28,19 +30,30 @@ export const loginUser = createAsyncThunk(
 
 export const fetchMe = createAsyncThunk("auth/fetchMe", async (_, thunkAPI) => {
   try {
+    const token = localStorage.getItem('token');
+    // Don't even try if no token exists
+    if (!token) return null;
+
     const res = await API.get("/users/me");
-    const user = res.data;
-    if (user && user._id) localStorage.setItem("meId", user._id);
-    return user;
+    return res.data.data || res.data;
   } catch (err) {
-    // Clean up tokens on failure
+    // Silent fail - user just isn't logged in or token is bad
     localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken"); // 🔥 Clean up here too
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("meId");
-    const msg = err?.response?.data?.message || "Failed to fetch user";
-    return thunkAPI.rejectWithValue(msg);
+    return null; 
   }
 });
+
+// Used for optimistic UI updates (e.g. Profile Edit, Wallet Balance update)
+export const updateAuthUser = createAsyncThunk(
+    "auth/updateUser", 
+    async (userData, thunkAPI) => {
+        return userData; // Passes data directly to the reducer
+    }
+);
+
+// --- SLICE ---
 
 const authSlice = createSlice({
   name: "auth",
@@ -48,38 +61,76 @@ const authSlice = createSlice({
     user: null,
     loading: false, 
     error: null,
+    // Start checking auth only if a token exists in storage
     checkingAuth: !!localStorage.getItem("token"), 
   },
   reducers: {
     logout: (state) => {
       state.user = null;
       state.error = null;
+      // 🔥 Full Cleanup
       localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken"); // 🔥 NEW: Clear refresh token
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("meId");
       state.checkingAuth = false;
     },
-    clearError: (state) => { state.error = null; },
-    setUser: (state, action) => { state.user = action.payload; state.checkingAuth = false; },
-    
-    updateAuthUser: (state, action) => {
-      if (state.user) {
-        state.user = { ...state.user, ...action.payload };
-      }
-    }
+    clearError: (state) => { 
+        state.error = null; 
+    },
+    setUser: (state, action) => { 
+        state.user = action.payload; 
+        state.checkingAuth = false; 
+    },
   },
   extraReducers: (builder) => {
     builder
-      // --- Login
-      .addCase(loginUser.pending, (s) => { s.loading = true; s.error = null; })
-      .addCase(loginUser.fulfilled, (s, a) => { s.loading = false; s.user = a.payload; s.checkingAuth = false; s.error = null; })
-      .addCase(loginUser.rejected, (s, a) => { s.loading = false; s.user = null; s.error = a.payload; s.checkingAuth = false; })
-      // --- Fetch Me
-      .addCase(fetchMe.pending, (s) => { s.checkingAuth = true; })
-      .addCase(fetchMe.fulfilled, (s, a) => { s.user = a.payload; s.checkingAuth = false; s.error = null; })
-      .addCase(fetchMe.rejected, (s, a) => { s.user = null; s.checkingAuth = false; s.error = a.payload; });
+      // --- Login User ---
+      .addCase(loginUser.pending, (state) => { 
+          state.loading = true; 
+          state.error = null; 
+      })
+      .addCase(loginUser.fulfilled, (state, action) => { 
+          state.loading = false; 
+          state.user = action.payload; 
+          state.checkingAuth = false; 
+          state.error = null; 
+      })
+      .addCase(loginUser.rejected, (state, action) => { 
+          state.loading = false; 
+          state.user = null;
+          state.error = action.payload; 
+          state.checkingAuth = false; 
+      })
+      
+      // --- Fetch Me (Session Check) ---
+      .addCase(fetchMe.pending, (state) => { 
+          state.checkingAuth = true; 
+      })
+      .addCase(fetchMe.fulfilled, (state, action) => { 
+          state.user = action.payload || null; 
+          state.checkingAuth = false; 
+          state.error = null;
+      })
+      .addCase(fetchMe.rejected, (state, action) => { 
+          // If fetch fails, we assume logged out
+          state.user = null; 
+          state.checkingAuth = false; 
+          // Note: We deliberately don't set 'state.error' here to avoid 
+          // showing an error message just because a guest visited the site.
+          localStorage.removeItem("token");
+          localStorage.removeItem("refreshToken");
+          localStorage.removeItem("meId");
+      })
+
+      // --- Manual Update ---
+      .addCase(updateAuthUser.fulfilled, (state, action) => {
+          if (state.user) {
+              // Merge new data into existing user object
+              state.user = { ...state.user, ...action.payload };
+          }
+      });
   }
 });
 
-export const { logout, clearError, setUser, updateAuthUser } = authSlice.actions;
+export const { logout, clearError, setUser } = authSlice.actions;
 export default authSlice.reducer;

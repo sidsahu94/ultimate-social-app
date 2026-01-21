@@ -1,23 +1,18 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
-// 🔥 FIX: Automatically detect environment
-// In Production (Render), use relative path '/api'.
-// In Development (Local), use 'http://localhost:5000/api'.
+// Environment Detection
 const API_URL = import.meta.env.PROD 
   ? '/api' 
-  : 'http://localhost:5000/api';
+  : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
 
 const API = axios.create({
-  baseURL: API_URL,
-  headers: { 
-    'Content-Type': 'application/json' 
-  },
-  withCredentials: true // Important for cookies/sessions
+  baseURL: API_URL, 
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true 
 });
 
 // --- REQUEST INTERCEPTOR ---
-// Automatically adds the JWT token to the Authorization header
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -30,49 +25,93 @@ API.interceptors.request.use(
 );
 
 // --- RESPONSE INTERCEPTOR ---
-// Handles 401 errors (Token Expiry) by trying to refresh the token
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Check if error is 401 (Unauthorized) and we haven't tried refreshing yet
+    // 🔥 NEW: Global 5xx Error Handling
+    if (error.response?.status >= 500) {
+        // Dispatch custom event for App.jsx to pick up
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('api:error', { 
+                detail: "Server error. Please try again later." 
+            }));
+        }
+    }
+
+    // Prevent infinite loops on auth routes
+    if (originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/refresh')) {
+        return Promise.reject(error);
+    }
+
+    // Handle 401 Unauthorized (Token Refresh)
     if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Prevent infinite loops
+      
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          return API(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        
-        if (!refreshToken) {
-            throw new Error("No refresh token available");
-        }
+        if (!refreshToken) throw new Error("No refresh token");
 
-        // 🔥 FIX: Use the dynamic API_URL for the refresh call too
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { 
-            refreshToken 
-        });
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const payload = data.data || data; 
 
-        // Save new token
-        localStorage.setItem('token', data.token || data.accessToken);
+        if (!payload.token) throw new Error("Invalid refresh response");
+
+        localStorage.setItem('token', payload.token);
+        if (payload.refreshToken) localStorage.setItem('refreshToken', payload.refreshToken);
         
-        // Update the header of the failed request with the new token
-        originalRequest.headers.Authorization = `Bearer ${data.token || data.accessToken}`;
+        API.defaults.headers.common['Authorization'] = 'Bearer ' + payload.token;
+        originalRequest.headers['Authorization'] = 'Bearer ' + payload.token;
         
-        // Retry the original request
+        processQueue(null, payload.token);
         return API(originalRequest);
 
       } catch (refreshError) {
-        console.error("Token refresh failed:", refreshError);
+        processQueue(refreshError, null);
         
-        // If refresh fails, the session is truly dead. Clean up and redirect.
+        // Critical Cleanup
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('meId');
         
-        // Dispatch event for UI handling
         window.dispatchEvent(new Event('auth:logout'));
         
+        const publicPaths = ['/login', '/register', '/welcome', '/verify-account'];
+        if (!publicPaths.includes(window.location.pathname)) {
+            window.location.href = '/login';
+        }
+        
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     

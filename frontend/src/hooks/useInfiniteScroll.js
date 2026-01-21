@@ -1,23 +1,25 @@
 // frontend/src/hooks/useInfiniteScroll.js
 import { useEffect, useRef } from 'react';
 
-export default function useInfiniteScroll(callback, deps = []) {
-  const ref = useRef();
+export default function useInfiniteScroll(callback) {
+  const observer = useRef();
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const ref = (node) => {
+    if (!node) return;
+    
+    // 1. Disconnect existing observer to avoid duplicates
+    if (observer.current) observer.current.disconnect();
 
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) callback();
-      });
+    // 2. Create new observer with FRESH callback closure
+    observer.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        callback();
+      }
     }, { rootMargin: '200px' });
 
-    obs.observe(el);
-    return () => obs.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+    // 3. Observe
+    observer.current.observe(node);
+  };
 
   return ref;
 }

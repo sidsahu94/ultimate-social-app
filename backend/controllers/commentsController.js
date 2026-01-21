@@ -16,33 +16,33 @@ exports.create = async (req, res) => {
     const post = await Post.findById(req.params.postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // 🔥 NEW SECURITY CHECK: Block Loophole Fix
-    // 1. Check if the Post Owner has blocked the Commenter
+    // Security Check: Blocked User
     const postOwner = await User.findById(post.user).select('blockedUsers');
     if (postOwner.blockedUsers && postOwner.blockedUsers.includes(req.user._id)) {
         return res.status(403).json({ message: "You are unable to comment on this post." });
     }
 
-    // 2. Check if the Commenter has blocked the Post Owner (Optional, prevents interaction)
     const me = await User.findById(req.user._id).select('blockedUsers');
     if (me.blockedUsers && me.blockedUsers.includes(post.user)) {
         return res.status(403).json({ message: "You have blocked this user." });
     }
 
-    // --- Proceed to Create Comment ---
+    // Create Comment
     const comment = await Comment.create({
       post: post._id,
       user: req.user._id,
       text: text.trim(),
     });
 
-    // Atomic Push to Post Array
-    await Post.findByIdAndUpdate(post._id, { $push: { comments: comment._id } });
+    // 🔥 FIX: Atomic Update & Score Increment
+    // Add comment to array AND increment trending score by 2 (Comments worth more than likes)
+    await Post.findByIdAndUpdate(post._id, { 
+        $push: { comments: comment._id },
+        $inc: { score: 2 } 
+    });
 
-    // Populate User Details for Frontend
     await comment.populate("user", "name avatar");
 
-    // Emit Real-time Event
     try {
       const io = req.app.get("io") || global.io;
       if (io) {
@@ -52,7 +52,7 @@ exports.create = async (req, res) => {
       console.warn("Socket emit failed", e?.message);
     }
 
-    // Send Notification (if not commenting on own post)
+    // Notify Author (if not self)
     if (String(post.user) !== String(req.user._id)) {
       await createNotification(req, {
         toUser: post.user,
@@ -80,14 +80,12 @@ exports.listAll = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(comments);
   } catch (e) {
-    console.error("list comments err", e);
     res.status(500).json({ message: "Error fetching comments" });
   }
 };
 
 /**
  * GET /api/comments/:postId/paginated
- * List comments with pagination (Infinite Scroll support)
  */
 exports.listPaginated = async (req, res) => {
   try {
@@ -108,7 +106,6 @@ exports.listPaginated = async (req, res) => {
 
 /**
  * DELETE /api/comments/:commentId
- * Only comment owner or admin can delete.
  */
 exports.remove = async (req, res) => {
   try {
@@ -119,7 +116,12 @@ exports.remove = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
 
     await comment.deleteOne();
-    await Post.findByIdAndUpdate(comment.post, { $pull: { comments: comment._id } });
+    
+    // Decrement score on delete and remove from array
+    await Post.findByIdAndUpdate(comment.post, { 
+        $pull: { comments: comment._id },
+        $inc: { score: -2 }
+    });
 
     try {
       const io = req.app.get("io") || global.io;
@@ -128,14 +130,12 @@ exports.remove = async (req, res) => {
 
     res.json({ message: "Deleted" });
   } catch (e) {
-    console.error("remove comment err", e);
     res.status(500).json({ message: "Error deleting comment" });
   }
 };
 
 /**
  * POST /api/comments/like/:commentId
- * Toggle like on a comment.
  */
 exports.toggleLike = async (req, res) => {
   try {
@@ -164,7 +164,6 @@ exports.toggleLike = async (req, res) => {
 
     res.json({ liked: !isLiked, likesCount: updatedComment.likes.length });
   } catch (e) {
-    console.error("toggleLike err", e);
     res.status(500).json({ message: "Error toggling like" });
   }
 };

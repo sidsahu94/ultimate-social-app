@@ -1,7 +1,7 @@
 // frontend/src/pages/safety/SafetyPage.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
-import { FaShieldAlt, FaBan, FaCheckCircle, FaUserShield } from 'react-icons/fa';
+import { FaShieldAlt, FaBan, FaCheckCircle, FaUserShield, FaClock } from 'react-icons/fa';
 import { useToast } from '../../components/ui/ToastProvider';
 import Spinner from '../../components/common/Spinner';
 import UserAvatar from '../../components/ui/UserAvatar';
@@ -9,27 +9,37 @@ import UserAvatar from '../../components/ui/UserAvatar';
 export default function SafetyPage() {
   const [activeTab, setActiveTab] = useState('reports');
   const [blockedList, setBlockedList] = useState([]);
-  const [myReports, setMyReports] = useState([]); // You can wire this too if you haven't (api/report)
+  const [myReports, setMyReports] = useState([]); 
   const [loading, setLoading] = useState(false);
   const { add } = useToast();
 
   useEffect(() => {
     if (activeTab === 'blocked') loadBlocked();
-    // if (activeTab === 'reports') loadReports(); // Implement if needed
+    if (activeTab === 'reports') loadReports(); 
   }, [activeTab]);
 
   const loadBlocked = async () => {
     setLoading(true);
     try {
         const res = await API.get('/users/blocked');
-        setBlockedList(res.data);
+        setBlockedList(res.data.data || res.data || []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  // 🔥 ADDED: Load Reports
+  const loadReports = async () => {
+    setLoading(true);
+    try {
+        const res = await API.get('/report/mine');
+        setMyReports(res.data || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
   const handleUnblock = async (userId) => {
       try {
-          await API.post(`/users/${userId}/block`); // Toggle block (unblock)
+          await API.post(`/users/${userId}/block`);
           setBlockedList(prev => prev.filter(u => u._id !== userId));
           add("User unblocked", { type: 'success' });
       } catch (e) {
@@ -50,15 +60,48 @@ export default function SafetyPage() {
         <button onClick={() => setActiveTab('blocked')} className={`pb-2 px-4 font-medium transition ${activeTab==='blocked' ? 'border-b-2 border-red-500 text-red-500' : 'text-gray-500'}`}>Blocked Users</button>
       </div>
 
-      {activeTab === 'reports' ? (
-        <div className="text-center py-10 text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-            <FaUserShield className="text-4xl mb-2 mx-auto opacity-30"/>
-            <p>No active reports found.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {loading ? <div className="text-center py-10"><Spinner /></div> : (
-              blockedList.length === 0 ? (
+      {loading ? <div className="text-center py-10"><Spinner /></div> : (
+        <>
+        {/* --- REPORTS TAB --- */}
+        {activeTab === 'reports' && (
+            <div className="space-y-4">
+                {myReports.length === 0 ? (
+                    <div className="text-center py-10 text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                        <FaUserShield className="text-4xl mb-2 mx-auto opacity-30"/>
+                        <p>No active reports found.</p>
+                    </div>
+                ) : (
+                    myReports.map(rep => (
+                        <div key={rep._id} className="card p-4 flex justify-between items-start bg-white dark:bg-gray-800 border-l-4 border-red-500">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-bold text-gray-800 dark:text-white capitalize">{rep.reason}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${rep.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                        {rep.status}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    Reported: {rep.targetUser?.name || 'Content'}
+                                </p>
+                                <div className="flex items-center gap-1 text-xs text-gray-400">
+                                    <FaClock size={10} /> {new Date(rep.createdAt).toLocaleDateString()}
+                                </div>
+                            </div>
+                            {rep.action && rep.action !== 'none' && (
+                                <div className="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg text-xs font-medium">
+                                    Action taken: <span className="font-bold">{rep.action}</span>
+                                </div>
+                            )}
+                        </div>
+                    ))
+                )}
+            </div>
+        )}
+
+        {/* --- BLOCKED TAB --- */}
+        {activeTab === 'blocked' && (
+            <div className="space-y-4">
+              {blockedList.length === 0 ? (
                   <div className="text-center py-10 text-gray-500">You haven't blocked anyone yet.</div>
               ) : (
                 blockedList.map(u => (
@@ -75,9 +118,10 @@ export default function SafetyPage() {
                     </button>
                     </div>
                 ))
-              )
-          )}
-        </div>
+              )}
+            </div>
+        )}
+        </>
       )}
     </div>
   );

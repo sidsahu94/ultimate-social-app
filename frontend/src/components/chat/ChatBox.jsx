@@ -16,8 +16,8 @@ import Lightbox from "../ui/Lightbox";
 import ForwardModal from "./ForwardModal";
 import PinnedMessage from "./PinnedMessage";
 import { useToast } from "../ui/ToastProvider";
-// 🔥 FIX: Import Encryption Utility
 import { encryptMessage } from '../../utils/security';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatBox({ chatId, onBack }) {
   const { add: addToast } = useToast();
@@ -52,6 +52,7 @@ export default function ChatBox({ chatId, onBack }) {
   // UI
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showNewMsgBtn, setShowNewMsgBtn] = useState(false); // 🔥 NEW STATE
 
   // Refs
   const scrollRef = useRef();
@@ -70,6 +71,7 @@ export default function ChatBox({ chatId, onBack }) {
     setText("");
     setShowSearch(false);
     setSearchResults([]);
+    setShowNewMsgBtn(false);
 
     const loadData = async () => {
       try {
@@ -80,7 +82,7 @@ export default function ChatBox({ chatId, onBack }) {
         const other = data.participants.find(p => p._id !== myId) || data.participants[0];
         setOtherUser(other);
 
-        API.post(`/chat/extras/${chatId}/read`).catch(() => {});
+        API.post(`/chat/${chatId}/read`).catch(() => {});
       } catch (err) {
         console.error("Failed to load chat", err);
         if (onBack) onBack(); 
@@ -140,11 +142,15 @@ export default function ChatBox({ chatId, onBack }) {
         setIsTyping(false);
 
         const el = containerRef.current;
-        if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+        // Check if user is near bottom
+        const isNearBottom = el && el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+
+        if (isNearBottom) {
             setTimeout(scrollToBottom, 100);
-            API.post(`/chat/extras/${chatId}/read`).catch(() => {});
+            API.post(`/chat/${chatId}/read`).catch(() => {});
         } else {
-            setShowScrollBtn(true);
+            // User is reading old messages, don't auto-scroll, SHOW BUTTON
+            setShowNewMsgBtn(true);
         }
       }
     };
@@ -156,7 +162,6 @@ export default function ChatBox({ chatId, onBack }) {
                     ? { 
                         ...m, 
                         content: payload.newContent || m.content, 
-                        // 🔥 FIX: Handle Poll Updates via Socket
                         pollOptions: payload.pollOptions || m.pollOptions,
                         editedAt: payload.editedAt || m.editedAt
                       } 
@@ -189,7 +194,10 @@ export default function ChatBox({ chatId, onBack }) {
   }, [chatId, myId]);
 
   // --- 4. ACTIONS & UTILS ---
-  const scrollToBottom = () => scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = () => {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+      setShowNewMsgBtn(false); // Hide button on scroll down
+  };
 
   useEffect(() => {
     if (!loading && messages.length > 0) scrollToBottom();
@@ -197,7 +205,15 @@ export default function ChatBox({ chatId, onBack }) {
 
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
+    
+    // Show standard "Scroll Down" arrow if far up
     setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 300);
+    
+    // Auto-hide "New Message" badge if user manually scrolls to bottom
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+        setShowNewMsgBtn(false);
+    }
+    
     if (scrollTop === 0 && !loadingMore && messages.length >= 20) loadOlderMessages();
   };
 
@@ -284,7 +300,6 @@ export default function ChatBox({ chatId, onBack }) {
             setIsUploading(false); setUploadProgress(0);
         }
 
-        // 🔥 FIX: Encrypt content before sending
         const payload = { 
             content: encryptMessage(text), 
             media: mediaUrl,
@@ -399,7 +414,23 @@ export default function ChatBox({ chatId, onBack }) {
         <div ref={scrollRef} />
       </div>
 
-      {showScrollBtn && (
+      {/* 🔥 NEW MESSAGE BUTTON */}
+      <AnimatePresence>
+        {showNewMsgBtn && (
+           <motion.button 
+             initial={{ y: 20, opacity: 0 }}
+             animate={{ y: 0, opacity: 1 }}
+             exit={{ y: 20, opacity: 0 }}
+             onClick={scrollToBottom} 
+             className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg border border-white/20 z-40 flex items-center gap-2 text-sm font-bold"
+           >
+             <FaArrowDown /> New Message
+           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Standard Scroll Btn (only shows if scrolled up but no new msg) */}
+      {showScrollBtn && !showNewMsgBtn && (
         <button onClick={scrollToBottom} className="absolute bottom-20 right-6 bg-white dark:bg-gray-800 text-indigo-600 p-3 rounded-full shadow-lg border dark:border-gray-700 z-40 animate-bounce">
             <FaArrowDown />
         </button>

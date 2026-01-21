@@ -1,77 +1,91 @@
+// backend/controllers/walletController.js
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-// Get current wallet status
+// Helper for consistent error responses
+const fail = (res, message, status = 400) => res.status(status).json({ success: false, message });
+
+// --- 1. GET MY WALLET ---
 exports.me = async (req, res) => {
   try {
-    const me = await User.findById(req.user._id).select('wallet lastAirdrop referralCode');
+    const me = await User.findById(req.user._id)
+      .select('wallet lastAirdrop referralCode walletPin')
+      .lean();
+      
     res.json({
         ...me.wallet,
         lastAirdrop: me.lastAirdrop,
-        referralCode: me.referralCode
+        referralCode: me.referralCode,
+        hasPin: !!me.walletPin 
     });
   } catch (e) {
-    res.status(500).json({ message: 'Server error' });
+    console.error("Wallet Fetch Error:", e);
+    res.status(500).json({ message: 'Server error fetching wallet' });
   }
 };
 
-// 🔥 NEW: Set or Update Wallet PIN
+// --- 2. SET WALLET PIN ---
 exports.setPin = async (req, res) => {
   try {
-    const { pin } = req.body;
-    
-    // Validation: Must be exactly 6 digits
+    const { pin, oldPin } = req.body; // Expect oldPin
+    const user = await User.findById(req.user._id).select('+walletPin');
+
     if (!pin || pin.length !== 6 || isNaN(pin)) {
-      return res.status(400).json({ message: 'PIN must be exactly 6 digits' });
+      return fail(res, 'PIN must be exactly 6 digits');
+    }
+
+    // 🔥 FIX: Verify old PIN if it exists to prevent unauthorized overwrite
+    if (user.walletPin) {
+        if (!oldPin) return fail(res, 'Please enter your current PIN to change it.', 403);
+        
+        const isMatch = await bcrypt.compare(oldPin, user.walletPin);
+        if (!isMatch) return fail(res, 'Current PIN is incorrect.', 401);
     }
 
     const hashed = await bcrypt.hash(pin, 10);
+    user.walletPin = hashed;
+    await user.save();
     
-    // Update user
-    await User.findByIdAndUpdate(req.user._id, { walletPin: hashed });
-
-    res.json({ message: 'Wallet PIN updated successfully' });
+    res.json({ success: true, message: 'Wallet PIN updated successfully' });
   } catch (e) {
-    console.error("Set PIN Error:", e);
     res.status(500).json({ message: 'Error setting PIN' });
   }
 };
 
-// 🔥 NEW: Check if user has a PIN set (for UI toggle)
+// --- 3. CHECK PIN STATUS ---
 exports.checkPinStatus = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('walletPin');
+    const user = await User.findById(req.user._id).select('walletPin').lean();
     res.json({ hasPin: !!user.walletPin });
   } catch (e) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Daily Airdrop (Bonus)
+// --- 4. DAILY AIRDROP ---
 exports.airdrop = async (req, res) => {
   try {
     const me = await User.findById(req.user._id);
     const now = new Date();
     
-    // Check 24h Cooldown
     if (me.lastAirdrop) {
         const diff = now - new Date(me.lastAirdrop);
         const hours = diff / (1000 * 60 * 60);
         if (hours < 24) {
             const timeLeft = Math.ceil(24 - hours);
-            return res.status(400).json({ message: `Come back in ${timeLeft} hours!` });
+            return fail(res, `Come back in ${timeLeft} hours!`);
         }
     }
 
     const AMOUNT = 200;
-    me.wallet.balance += AMOUNT;
-    me.lastAirdrop = now;
-    await me.save();
+    await User.findByIdAndUpdate(req.user._id, {
+        $inc: { "wallet.balance": AMOUNT },
+        $set: { lastAirdrop: now }
+    });
 
-    // Log Transaction
-    await Transaction.create({
+    Transaction.create({
         user: me._id,
         type: 'credit',
         amount: AMOUNT,
@@ -80,107 +94,110 @@ exports.airdrop = async (req, res) => {
 
     const io = req.app.get('io') || global.io;
     if (io) {
-        io.to(String(me._id)).emit('wallet:update', { balance: me.wallet.balance });
+        io.to(String(me._id)).emit('wallet:update', { balance: me.wallet.balance + AMOUNT });
     }
 
-    res.json({ 
-        balance: me.wallet.balance, 
-        message: `Received ${AMOUNT} coins!`,
-        lastAirdrop: now 
-    });
+    res.json({ success: true, message: `Received ${AMOUNT} coins!`, balance: me.wallet.balance + AMOUNT });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error processing airdrop' });
   }
 };
 
-// Send Coins (Tip) - Updated with PIN Security
+// --- 5. SECURE TRANSFER (TIP) ---
 exports.tip = async (req, res) => {
   let session = null;
   try {
-    const { to, amount, pin } = req.body;
-    const numAmount = Number(amount);
+    const { to, amount, pin, idempotencyKey } = req.body; 
+    const numAmount = Math.abs(Number(amount));
 
-    if (numAmount <= 0) return res.status(400).json({ message: 'Invalid amount' });
+    if (!numAmount || numAmount < 1) return fail(res, 'Invalid amount (min 1 coin)');
 
-    // 1. Fetch Sender with PIN field
-    const me = await User.findById(req.user._id).select('+walletPin');
+    // 1. Idempotency Check (Fast Fail)
+    if (idempotencyKey) {
+        const existingTx = await Transaction.findOne({ idempotencyKey });
+        if (existingTx) {
+            return res.json({ success: true, message: 'Transaction already processed (Cached)', cached: true });
+        }
+    }
+
+    // 2. Fetch Sender & Verify PIN
+    const sender = await User.findById(req.user._id).select('+walletPin wallet');
+    if (!sender.walletPin) return fail(res, 'Please set a Wallet PIN first in Settings', 403);
+    const isPinValid = await bcrypt.compare(pin, sender.walletPin);
+    if (!isPinValid) return fail(res, 'Incorrect PIN', 401);
     
-    // 2. Validate Balance
-    if (me.wallet.balance < numAmount) {
-        return res.status(400).json({ message: 'Insufficient balance' });
-    }
+    if (sender.wallet.balance < numAmount) return fail(res, 'Insufficient balance');
 
-    // 3. 🔥 SECURITY CHECK: Wallet PIN
-    if (!me.walletPin) {
-        return res.status(403).json({ message: 'Please set a Wallet PIN first in Security Settings.' });
-    }
-    if (!pin) {
-        return res.status(400).json({ message: 'PIN required' });
-    }
-    
-    const isMatch = await bcrypt.compare(pin, me.walletPin);
-    if (!isMatch) {
-        return res.status(401).json({ message: 'Incorrect PIN' });
-    }
+    // 3. Resolve Recipient
+    const recipient = await User.findById(to);
+    if (!recipient) return fail(res, 'User not found', 404);
+    if (sender._id.equals(recipient._id)) return fail(res, 'Cannot tip yourself');
 
-    // 4. Find Recipient
-    let recipient;
-    if (mongoose.Types.ObjectId.isValid(to)) {
-      recipient = await User.findById(to);
-    } 
-    if (!recipient) {
-      recipient = await User.findOne({ $or: [{ name: to }, { email: to }] });
-    }
+    // 4. START ACID SESSION
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!recipient) return res.status(404).json({ message: 'User not found' });
-    if (recipient._id.equals(me._id)) return res.status(400).json({ message: 'Cannot tip yourself' });
+    // A. Deduct from Sender
+    const updatedSender = await User.findOneAndUpdate(
+        { _id: sender._id, "wallet.balance": { $gte: numAmount } },
+        { $inc: { "wallet.balance": -numAmount, "wallet.totalSent": numAmount } },
+        { session, new: true }
+    );
 
-    // 5. Execute Transaction (Atomic if possible, here using standard save)
-    me.wallet.balance -= numAmount;
-    me.wallet.totalSent += numAmount;
-    
-    recipient.wallet.balance += numAmount;
-    recipient.wallet.totalReceived += numAmount;
+    if (!updatedSender) throw new Error("Balance check failed during atomic update");
 
-    await me.save();
-    await recipient.save();
+    // B. Add to Recipient
+    await User.findByIdAndUpdate(
+        recipient._id,
+        { $inc: { "wallet.balance": numAmount, "wallet.totalReceived": numAmount } },
+        { session }
+    );
 
-    // 6. Log Transactions
-    await Transaction.create({ 
-        user: me._id, 
-        type: 'debit', 
-        amount: numAmount, 
-        description: `Tip to ${recipient.name}` 
-    });
-    
-    await Transaction.create({ 
-        user: recipient._id, 
-        type: 'credit', 
-        amount: numAmount, 
-        description: `Tip from ${me.name}` 
-    });
+    // C. Log Transactions
+    const txs = [
+        { 
+            user: sender._id, 
+            type: 'debit', 
+            amount: numAmount, 
+            description: `Tip to ${recipient.name}`,
+            idempotencyKey 
+        },
+        { 
+            user: recipient._id, 
+            type: 'credit', 
+            amount: numAmount, 
+            description: `Tip from ${sender.name}` 
+        }
+    ];
+    await Transaction.insertMany(txs, { session });
 
-    // 7. Real-time Updates
+    // D. Commit
+    await session.commitTransaction();
+    session.endSession();
+
+    // 5. Real-time Updates
     const io = req.app.get('io') || global.io;
     if (io) {
-        // Update Sender Balance
-        io.to(String(me._id)).emit('wallet:update', { balance: me.wallet.balance });
-        
-        // Update Recipient Balance
-        io.to(String(recipient._id)).emit('wallet:update', { balance: recipient.wallet.balance });
-        
-        // Notify Recipient
+        io.to(String(sender._id)).emit('wallet:update', { balance: updatedSender.wallet.balance });
+        io.to(String(recipient._id)).emit('wallet:update', { balance: recipient.wallet.balance + numAmount });
         io.to(String(recipient._id)).emit('notification', {
             type: 'wallet',
-            message: `You received ${numAmount} coins from ${me.name}!`
+            message: `You received ${numAmount} coins from ${sender.name}!`
         });
     }
 
-    res.json({ ok: true, message: `Sent ${numAmount} to ${recipient.name}` });
+    res.json({ success: true, message: `Sent ${numAmount} to ${recipient.name}` });
 
   } catch (err) {
-    console.error("Tip Error:", err);
-    res.status(500).json({ message: 'Transaction failed' });
+    if (session) {
+        await session.abortTransaction();
+        session.endSession();
+    }
+    // Duplicate key error code 11000 means idempotency worked (race condition caught by DB)
+    if (err.code === 11000) {
+        return res.json({ success: true, message: 'Transaction processed successfully' });
+    }
+    console.error("Tip Transaction Failed:", err);
+    res.status(500).json({ success: false, message: "Transaction failed" });
   }
 };

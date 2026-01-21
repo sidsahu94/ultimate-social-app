@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 exports.generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 300, // per IP
-  message: { message: 'Too many requests, try again later' },
+  message: { success: false, message: 'Too many requests, try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -14,7 +14,7 @@ exports.generalLimiter = rateLimit({
 exports.authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 20, 
-  message: { message: 'Too many login/register attempts, please slow down' },
+  message: { success: false, message: 'Too many login attempts, please slow down' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -22,17 +22,22 @@ exports.authLimiter = rateLimit({
 // Chat limiter - Spam protection
 exports.chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 60, // 1 message per second average
-  message: { message: 'You are sending messages too fast' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  max: 60, 
+  message: { success: false, message: 'You are sending messages too fast' },
 });
 
 // Game / Reward limiter - Abuse protection
 exports.gameLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 min
   max: 100, 
-  message: { message: 'Too many game submissions' },
+  message: { success: false, message: 'Too many game submissions' },
+});
+
+// 🔥 NEW: Financial Limiter (Stricter for Wallet/Payouts)
+exports.financialLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // Max 10 financial actions per hour per IP
+  message: { success: false, message: 'Financial transaction limit reached. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });

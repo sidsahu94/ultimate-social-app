@@ -11,8 +11,7 @@ const createNotification = require('./notify');
 const processMentions = async (text, req, postId) => {
     if (!text || typeof text !== 'string' || !text.includes('@')) return;
 
-    // Regex to find @names
-    // Matches @ followed by word characters (letters, numbers, underscores)
+    // Regex to find @names (supports letters, numbers, underscores)
     const mentionRegex = /@(\w+)/g;
     const matches = text.match(mentionRegex);
 
@@ -23,16 +22,13 @@ const processMentions = async (text, req, postId) => {
 
     if (uniqueHandles.length === 0) return;
 
-    // Find users by name 
-    // NOTE: This assumes 'name' matches the handle. 
-    // In a production system with usernames, you'd query { username: { $in: uniqueHandles } }
-    // Using Regex here allows case-insensitive partial matching if needed, but precise match is safer for notifs.
+    // 🔥 FIX: Find users by unique 'username' handle instead of 'name'
     const users = await User.find({ 
-        name: { $in: uniqueHandles },
-        isDeleted: { $ne: true } // Don't notify deleted users
+        username: { $in: uniqueHandles },
+        isDeleted: { $ne: true } 
     }).select('_id');
 
-    // Send notifications to each found user
+    // Send notifications
     for (const user of users) {
         // Don't notify self
         if (req.user && String(user._id) === String(req.user._id)) continue;

@@ -11,6 +11,9 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
+  // 🔥 FIX: Add filter state for reports
+  const [reportFilter, setReportFilter] = useState('open'); // 'open' | 'resolved'
+  
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const { add } = useToast();
@@ -18,8 +21,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadStats();
     if (activeTab === 'users') loadUsers();
-    if (activeTab === 'reports') loadReports();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'reports') loadReports();
+  }, [activeTab, reportFilter]); // Reload when filter changes
 
   const loadStats = () => API.get('/admin/stats').then(r => setStats(r.data)).catch(() => {});
   
@@ -38,7 +44,8 @@ export default function AdminDashboard() {
   const loadReports = async () => {
     setLoading(true);
     try { 
-        const r = await API.get('/admin/reports'); 
+        // 🔥 FIX: Pass status param to API
+        const r = await API.get(`/admin/reports?status=${reportFilter}`); 
         setReports(r.data); 
     } catch(e) {
         add('Failed to load reports', { type: 'error' });
@@ -52,7 +59,7 @@ export default function AdminDashboard() {
     try {
         await API.put(`/admin/users/${userId}/ban`);
         add("User status updated", { type: 'success' });
-        // Refresh local state to reflect change immediately
+        // Refresh local state
         setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: u.role === 'banned' ? 'user' : 'banned' } : u));
     } catch(e) { 
         add("Action failed", { type: 'error' }); 
@@ -62,17 +69,18 @@ export default function AdminDashboard() {
   const resolveReport = async (reportId, action) => {
     try {
         await API.put(`/admin/reports/${reportId}`, { action });
-        add(`Report resolved: ${action}`, { type: 'success' });
-        // Remove resolved report from list
-        setReports(prev => prev.filter(r => r._id !== reportId));
-        // Refresh stats
+        add(`Report processed: ${action}`, { type: 'success' });
+        
+        // If viewing open reports, remove resolved one from list
+        if (reportFilter === 'open') {
+            setReports(prev => prev.filter(r => r._id !== reportId));
+        }
         loadStats();
     } catch(e) { 
         add("Failed to resolve", { type: 'error' }); 
     }
   };
 
-  // Filter users based on search
   const filteredUsers = users.filter(u => 
     u.name?.toLowerCase().includes(search.toLowerCase()) || 
     u.email?.toLowerCase().includes(search.toLowerCase())
@@ -99,7 +107,7 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* TAB CONTENT: OVERVIEW */}
+      {/* OVERVIEW */}
       {activeTab === 'overview' && stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
             <div className="card p-6 border-l-4 border-blue-500 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
@@ -117,20 +125,18 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* TAB CONTENT: USERS */}
+      {/* USERS TAB */}
       {activeTab === 'users' && (
         <div className="card bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden animate-fade-in">
-            {/* Search Bar */}
             <div className="p-4 border-b dark:border-gray-700 flex items-center gap-2 bg-gray-50 dark:bg-gray-900/50">
                 <FaSearch className="text-gray-400" />
                 <input 
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Search users by name or email..."
-                    className="bg-transparent outline-none w-full text-sm"
+                    placeholder="Search users..."
+                    className="bg-transparent outline-none w-full text-sm dark:text-white"
                 />
             </div>
-
             {loading ? <div className="p-10 flex justify-center"><Spinner /></div> : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -139,44 +145,28 @@ export default function AdminDashboard() {
                                 <th className="p-4">User</th>
                                 <th className="p-4">Role</th>
                                 <th className="p-4">Status</th>
-                                <th className="p-4">Joined</th>
                                 <th className="p-4 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
                             {filteredUsers.map(u => (
                                 <tr key={u._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
-                                            <UserAvatar src={u.avatar} name={u.name} className="w-8 h-8" />
-                                            <div>
-                                                <div className="font-bold text-gray-900 dark:text-white">{u.name}</div>
-                                                <div className="text-xs text-gray-500">{u.email}</div>
-                                            </div>
+                                    <td className="p-4 flex items-center gap-3">
+                                        <UserAvatar src={u.avatar} name={u.name} className="w-8 h-8" />
+                                        <div>
+                                            <div className="font-bold dark:text-white">{u.name}</div>
+                                            <div className="text-xs text-gray-500">{u.email}</div>
                                         </div>
                                     </td>
+                                    <td className="p-4">{u.role}</td>
                                     <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                                            {u.role}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        {u.role === 'banned' ? (
-                                            <span className="text-red-500 font-bold text-xs flex items-center gap-1"><FaBan /> Banned</span>
-                                        ) : (
-                                            <span className="text-green-500 font-bold text-xs flex items-center gap-1"><FaCheck /> Active</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-gray-500 text-xs">
-                                        {new Date(u.createdAt).toLocaleDateString()}
+                                        {u.role === 'banned' 
+                                            ? <span className="text-red-500 font-bold flex items-center gap-1"><FaBan /> Banned</span> 
+                                            : <span className="text-green-500 font-bold flex items-center gap-1"><FaCheck /> Active</span>}
                                     </td>
                                     <td className="p-4 text-right">
                                         {u.role !== 'admin' && (
-                                            <button 
-                                                onClick={() => handleBan(u._id)} 
-                                                className={`p-2 rounded-lg transition ${u.role === 'banned' ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}
-                                                title={u.role === 'banned' ? "Unban User" : "Ban User"}
-                                            >
+                                            <button onClick={() => handleBan(u._id)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                                                 {u.role === 'banned' ? <FaCheck /> : <FaBan />}
                                             </button>
                                         )}
@@ -185,30 +175,44 @@ export default function AdminDashboard() {
                             ))}
                         </tbody>
                     </table>
-                    {filteredUsers.length === 0 && <div className="p-8 text-center text-gray-500">No users found.</div>}
                 </div>
             )}
         </div>
       )}
 
-      {/* TAB CONTENT: REPORTS */}
+      {/* REPORTS TAB */}
       {activeTab === 'reports' && (
         <div className="space-y-4 animate-fade-in">
+            {/* 🔥 FIX: Filter Toggle Buttons */}
+            <div className="flex gap-2 mb-4">
+                <button 
+                    onClick={() => setReportFilter('open')} 
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${reportFilter === 'open' ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+                >
+                    Open
+                </button>
+                <button 
+                    onClick={() => setReportFilter('resolved')} 
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${reportFilter === 'resolved' ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+                >
+                    Resolved / History
+                </button>
+            </div>
+
             {loading && <div className="p-10 flex justify-center"><Spinner /></div>}
             
             {!loading && reports.length === 0 && (
                 <div className="card p-10 text-center flex flex-col items-center justify-center text-gray-500 bg-white dark:bg-gray-800">
                     <FaCheck className="text-4xl text-green-500 mb-3" />
-                    <p className="font-bold">All clean!</p>
-                    <p className="text-sm">No open reports found.</p>
+                    <p>No reports found in this category.</p>
                 </div>
             )}
 
             {reports.map(r => (
-                <div key={r._id} className="card p-5 bg-white dark:bg-gray-800 border-l-4 border-red-500 shadow-sm rounded-r-xl flex flex-col md:flex-row justify-between gap-6">
+                <div key={r._id} className={`card p-5 bg-white dark:bg-gray-800 border-l-4 shadow-sm rounded-r-xl flex flex-col md:flex-row justify-between gap-6 ${r.status === 'open' ? 'border-red-500' : 'border-green-500 opacity-80'}`}>
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide">{r.reason}</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${r.status === 'open' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{r.reason}</span>
                             <span className="text-gray-400 text-xs">• {new Date(r.createdAt).toLocaleString()}</span>
                         </div>
                         
@@ -216,47 +220,36 @@ export default function AdminDashboard() {
                             Reported by <span className="font-bold text-gray-800 dark:text-gray-200">{r.reporter?.name || 'Unknown'}</span>
                         </p>
                         
+                        {r.status !== 'open' && r.handledBy && (
+                             <p className="text-xs text-green-600 mb-2 font-bold">Resolved by: {r.handledBy.name}</p>
+                        )}
+
                         <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-100 dark:border-gray-700">
                             {r.targetPost ? (
-                                <div>
-                                    <div className="text-xs text-gray-400 mb-1 uppercase font-bold">Post Content:</div>
-                                    "{r.targetPost.content || 'Media Content'}"
-                                </div>
+                                <div><div className="text-xs text-gray-400 mb-1 uppercase font-bold">Post Content:</div> "{r.targetPost.content || 'Media'}"</div>
                             ) : (
-                                <div>
-                                    <div className="text-xs text-gray-400 mb-1 uppercase font-bold">Target User:</div>
-                                    {r.targetUser?.name} ({r.targetUser?.email})
-                                </div>
+                                <div><div className="text-xs text-gray-400 mb-1 uppercase font-bold">Target User:</div> {r.targetUser?.name} ({r.targetUser?.email})</div>
                             )}
                         </div>
                     </div>
 
-                    <div className="flex flex-row md:flex-col gap-2 justify-center shrink-0">
-                        <button 
-                            onClick={() => resolveReport(r._id, 'dismiss')} 
-                            className="px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-bold text-gray-600 dark:text-gray-300 transition"
-                        >
-                            Dismiss
-                        </button>
-                        
-                        {r.targetPost && (
-                            <button 
-                                onClick={() => resolveReport(r._id, 'delete_post')} 
-                                className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition"
-                            >
-                                <FaTrash /> Delete Post
-                            </button>
-                        )}
-                        
-                        {r.targetUser && (
-                            <button 
-                                onClick={() => resolveReport(r._id, 'ban_user')} 
-                                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-md"
-                            >
-                                <FaBan /> Ban User
-                            </button>
-                        )}
-                    </div>
+                    {r.status === 'open' && (
+                        <div className="flex flex-row md:flex-col gap-2 justify-center shrink-0">
+                            <button onClick={() => resolveReport(r._id, 'dismiss')} className="px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-bold text-gray-600 dark:text-gray-300 transition">Dismiss</button>
+                            
+                            {r.targetPost && (
+                                <button onClick={() => resolveReport(r._id, 'delete_post')} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition">
+                                    <FaTrash /> Delete Post
+                                </button>
+                            )}
+                            
+                            {r.targetUser && (
+                                <button onClick={() => resolveReport(r._id, 'ban_user')} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-md">
+                                    <FaBan /> Ban User
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             ))}
         </div>

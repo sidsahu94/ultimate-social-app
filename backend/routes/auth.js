@@ -15,6 +15,6 @@ router.post('/request-reset', authLimiter, authController.requestPasswordReset);
 router.post('/reset-password', authLimiter, authController.resetPassword);
 
 // Protected Routes
-router.post('/logout', protect, authController.logout); // 🔥 NEW
+router.post('/logout', protect, authController.logout); // 🔥 NEW: Ensures secure logout
 
 module.exports = router;

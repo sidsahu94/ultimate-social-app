@@ -108,9 +108,14 @@ exports.deleteStory = async (req, res) => {
     const story = await Story.findById(req.params.id);
     if (!story) return res.status(404).json({ message: 'Story not found' });
 
-    // Check ownership
     if (String(story.user) !== String(req.user._id)) {
         return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    // 🔥 FIX: Delete from Cloudinary
+    if (story.media) {
+         const { deleteFile } = require('../utils/cloudinary');
+         await deleteFile(story.media);
     }
 
     await Story.findByIdAndDelete(req.params.id);

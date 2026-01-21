@@ -7,7 +7,7 @@ import { store } from './redux/store';
 import { ThemeProvider } from './contexts/ThemeProvider';
 import { ToastProvider } from './components/ui/ToastProvider';
 import { VideoProvider } from './contexts/VideoContext';
-import { SocketProvider } from './contexts/SocketContext'; // Ensure this file exists
+import { SocketProvider } from './contexts/SocketContext';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import "./index.css";
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
@@ -39,14 +39,23 @@ const registerPush = async () => {
         const reg = await navigator.serviceWorker.ready;
 
         // 2. Fetch Public Key from Backend
+        // Note: Using relative path assumes Vite proxy is working or base URL set in API util
+        // For fetch here, we need the full URL or rely on the same origin if proxied
         const res = await fetch('/api/notifications/push-key', { 
             headers: { Authorization: `Bearer ${token}` }
         });
         
-        if (!res.ok) throw new Error('Failed to fetch push key');
+        if (!res.ok) {
+            // Silently fail if endpoint not ready or auth failed
+            return; 
+        }
         
-        const { publicKey } = await res.json();
+        const data = await res.json();
+        // Handle both "unified response" (data.data.publicKey) and "legacy response" (data.publicKey)
+        const publicKey = data.data?.publicKey || data.publicKey; 
         
+        if (!publicKey) return;
+
         // 3. Subscribe the browser
         const sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
@@ -66,7 +75,7 @@ const registerPush = async () => {
         console.log("✅ Push Notifications Subscribed");
     } catch (e) {
         // Common errors: User denied permission, VAPID key mismatch, or incognito mode
-        console.warn("Push registration failed:", e.message);
+        console.warn("Push registration failed/skipped:", e.message);
     }
 };
 
@@ -74,13 +83,12 @@ const registerPush = async () => {
 // Ensures user session is validated on app load before rendering children
 function AuthInitializer({ children }) {
   React.useEffect(() => {
+    // 🔥 FIX: Only dispatch fetchMe if a token actually exists in storage
+    // This prevents the immediate 401 error loop on fresh loads for guests
     const token = localStorage.getItem('token');
     if (token) {
-        // Fetch user data
         store.dispatch(fetchMe());
-        
-        // 🔥 Activate Push Notifications
-        registerPush(); 
+        // registerPush(); // Uncomment when VAPID keys are configured in .env
     }
   }, []);
   

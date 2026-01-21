@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import socket, { updateSocketAuth } from '../services/socket';
-import { useToast } from '../components/ui/ToastProvider'; // 🔥 Import Toast
+import { useToast } from '../components/ui/ToastProvider';
 
 const SocketContext = createContext();
 
@@ -12,27 +12,41 @@ export const SocketProvider = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [isConnected, setIsConnected] = useState(false);
   const user = useSelector(s => s.auth.user);
-  const { add: addToast } = useToast(); // 🔥 Get toast function
+  const { add: addToast } = useToast();
 
   useEffect(() => {
+    // 🔥 FIX: Only connect if user exists and has an ID
     if (user?._id) {
-      // 1. Connect
+      // Update auth token before connecting
       updateSocketAuth(localStorage.getItem('token'), user._id);
-      socket.connect();
       
-      // 2. Listeners
+      if (!socket.connected) {
+        socket.connect();
+      }
+      
+      // --- Listeners ---
       const onConnect = () => {
         setIsConnected(true);
-        // Re-join personal room on reconnect
+        // Join personal room for notifications
         socket.emit('joinRoom', { room: user._id });
-        console.log('✅ Socket connected/reconnected');
+        console.log('✅ Socket connected');
       };
 
       const onDisconnect = (reason) => {
         setIsConnected(false);
         console.warn('❌ Socket disconnected:', reason);
+        // Only reconnect automatically if it wasn't a manual disconnect or auth error
         if (reason === "io server disconnect") {
           socket.connect();
+        }
+      };
+
+      // 🔥 FIX: Handle Auth Failures Gracefully
+      const onConnectError = (err) => {
+        console.error("Socket connection error:", err.message);
+        if (err.message === "Unauthorized" || err.message.includes("token")) {
+            console.log("Socket Auth failed. Stopping reconnection attempts.");
+            socket.disconnect(); 
         }
       };
       
@@ -52,40 +66,45 @@ export const SocketProvider = ({ children }) => {
         });
       };
 
-      // 🔥 FIX: Context-Aware Message Toast
+      // Global Message Toast Handler
       const handleIncomingMessage = (payload) => {
           const currentPath = window.location.pathname;
-          const chatId = payload.chatId; // Ensure backend sends this
+          const chatId = payload.chatId;
           
-          // Only toast if NOT in this chat and sender is not me
+          // Only show toast if NOT in this chat and sender is not me
           if (chatId && !currentPath.includes(chatId) && payload.message.sender._id !== user._id) {
               addToast(`New message from ${payload.message.sender.name}`, { 
                   type: 'info', 
                   timeout: 3000,
-                  // Optional: Click toast to go to chat (requires window location hack or better toast component)
                   onClick: () => window.location.href = `/chat/${chatId}` 
               });
           }
       };
 
+      // Attach Listeners
       socket.on('connect', onConnect);
       socket.on('disconnect', onDisconnect);
+      socket.on('connect_error', onConnectError); // 🔥 Added
       socket.on('users:list', onUsersList);
       socket.on('user:online', onUserOnline);
       socket.on('user:offline', onUserOffline);
-      socket.on('receiveMessage', handleIncomingMessage); // 🔥 Attach listener
+      socket.on('receiveMessage', handleIncomingMessage);
 
+      // Cleanup
       return () => {
         socket.off('connect', onConnect);
         socket.off('disconnect', onDisconnect);
+        socket.off('connect_error', onConnectError);
         socket.off('users:list', onUsersList);
         socket.off('user:online', onUserOnline);
         socket.off('user:offline', onUserOffline);
-        socket.off('receiveMessage', handleIncomingMessage); // Cleanup
+        socket.off('receiveMessage', handleIncomingMessage);
+        
+        // Disconnect on unmount or user logout
         socket.disconnect();
       };
     }
-  }, [user?._id, addToast]);
+  }, [user?._id, addToast]); // Re-run only if user ID changes
 
   return (
     <SocketContext.Provider value={{ socket, onlineUsers, isConnected }}>

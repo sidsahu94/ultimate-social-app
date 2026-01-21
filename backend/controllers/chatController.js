@@ -2,7 +2,8 @@
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const User = require('../models/User');
-const createNotification = require('../utils/notify'); 
+const createNotification = require('../utils/notify');
+const mongoose = require('mongoose');
 
 // --- Helper: Check Block Status ---
 const checkBlocked = async (userId, targetIds) => {
@@ -23,9 +24,9 @@ exports.createChat = async (req, res) => {
         // Ensure unique participants and include self
         const memberIds = [...new Set([...participants, req.user._id.toString()])];
 
-        if (memberIds.length < 2) return res.status(400).json({message: "Need at least 2 members"});
+        if (memberIds.length < 2) return res.status(400).json({ message: "Need at least 2 members" });
 
-        // 🔥 Security: Check Block Status
+        // Security: Check Block Status
         const otherMembers = memberIds.filter(id => id !== req.user._id.toString());
         if (await checkBlocked(req.user._id, otherMembers)) {
             return res.status(403).json({ message: "You cannot chat with this user (Blocked)." });
@@ -47,7 +48,8 @@ exports.createChat = async (req, res) => {
             participants: memberIds, 
             name: isGroup ? name : '', 
             isGroup,
-            admins: isGroup ? [req.user._id] : [] 
+            admins: isGroup ? [req.user._id] : [],
+            unread: {} // Initialize unread map
         });
         
         const populated = await Chat.findById(chat._id)
@@ -60,7 +62,6 @@ exports.createChat = async (req, res) => {
                 if(id !== req.user._id.toString()) {
                     io.to(id).emit('chat:created', populated);
                     
-                    // 🔥 Feature: Group Add Notification
                     if (isGroup) {
                         await createNotification(req, {
                             toUser: id,
@@ -76,7 +77,7 @@ exports.createChat = async (req, res) => {
         res.status(201).json(populated);
     } catch(e) { 
         console.error(e);
-        res.status(500).json({message:'Error creating chat'}); 
+        res.status(500).json({ message:'Error creating chat' }); 
     }
 };
 
@@ -87,7 +88,7 @@ exports.getChats = async (req, res) => {
       .populate('participants', 'name avatar isVerified userStatus')
       .populate({
         path: 'lastMessage',
-        select: 'content sender createdAt isForwarded media audio',
+        select: 'content sender createdAt isForwarded media audio type',
         populate: { path: 'sender', select: 'name' }
       })
       .sort({ updatedAt: -1 });
@@ -116,27 +117,18 @@ exports.getChatById = async (req, res) => {
         return res.status(403).json({ message: 'Not allowed' });
     }
 
-    // Fetch Messages from separate collection
+    // Fetch Messages
     const messages = await Message.find({ chat: chatId })
       .sort({ createdAt: -1 })
       .limit(50)
       .populate('sender', 'name avatar')
       .populate({
           path: 'replyTo',
-          select: 'content sender',
+          select: 'content sender isEncrypted',
           populate: { path: 'sender', select: 'name' }
       });
 
     chat.messages = messages.reverse(); 
-
-    // Reset Unread Count
-    const uid = req.user._id.toString();
-    if (chat.unread && chat.unread[uid] > 0) {
-        await Chat.updateOne(
-            { _id: chatId },
-            { $set: { [`unread.${uid}`]: 0 } }
-        );
-    }
 
     res.json(chat);
   } catch (err) {
@@ -149,13 +141,13 @@ exports.getChatById = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
-    const { content = '', media = null, replyTo = null, isForwarded = false } = req.body;
+    const { content = '', media = null, audio = null, replyTo = null, isForwarded = false, isEncrypted = false } = req.body;
     const senderId = req.user._id.toString();
 
     const chat = await Chat.findById(chatId);
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
 
-    // 🔥 Security: Check if blocked (1:1 only)
+    // Check if blocked (1:1 only)
     if (!chat.isGroup) {
         const otherId = chat.participants.find(p => p.toString() !== senderId);
         if (otherId) {
@@ -177,31 +169,37 @@ exports.sendMessage = async (req, res) => {
       sender: req.user._id,
       content,
       media,
+      audio,
       replyTo,
-      isForwarded
+      isForwarded,
+      isEncrypted
     });
 
-    // Update Chat Metadata
-    const updateFields = { 
-        lastMessage: message._id,
-        updatedAt: Date.now() 
+    // Update Chat Metadata (Last Message & Timestamp)
+    // Atomic update for Unread Count to prevent Race Conditions
+    const updateOps = {
+        $set: { 
+            lastMessage: message._id,
+            updatedAt: Date.now()
+        },
+        $inc: {}
     };
-    
-    // Update Unread
+
+    // Increment unread for all other participants
     chat.participants.forEach(p => {
-        if (p.toString() !== senderId) {
-            const current = (chat.unread && chat.unread.get(p.toString())) || 0;
-            updateFields[`unread.${p}`] = current + 1;
+        const pid = p.toString();
+        if (pid !== senderId) {
+            updateOps.$inc[`unread.${pid}`] = 1;
         }
     });
 
-    await Chat.findByIdAndUpdate(chatId, { $set: updateFields });
+    await Chat.findByIdAndUpdate(chatId, updateOps);
 
     const populatedMsg = await Message.findById(message._id)
       .populate('sender', 'name avatar')
       .populate({
           path: 'replyTo',
-          select: 'content sender',
+          select: 'content sender isEncrypted',
           populate: { path: 'sender', select: 'name' }
       });
 
@@ -209,6 +207,7 @@ exports.sendMessage = async (req, res) => {
     const io = req.app.get('io');
     if (io) {
         chat.participants.forEach(p => {
+            // Send to user's personal room
             io.to(p.toString()).emit('receiveMessage', { 
                 chatId, 
                 message: populatedMsg 
@@ -223,7 +222,46 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// --- 5. PAGINATION ---
+// --- 5. MARK READ (Blue Ticks) ---
+exports.markRead = async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.user._id.toString();
+
+        // 1. Reset unread count in Chat Model
+        await Chat.updateOne(
+            { _id: chatId },
+            { $set: { [`unread.${userId}`]: 0 } }
+        );
+        
+        // 2. 🔥 FIX: Update Messages 'readBy' array for Blue Ticks
+        await Message.updateMany(
+            { chat: chatId, readBy: { $ne: userId } },
+            { $addToSet: { readBy: userId } }
+        );
+        
+        // 3. Emit Real-time Event
+        const io = req.app.get('io');
+        if (io) {
+            // Clear notification badge for the reader
+            io.to(userId).emit('chat:read', { chatId }); 
+            
+            // Notify others in the chat room that this user has read messages
+            io.to(chatId).emit('message:read', { 
+                chatId, 
+                userId, 
+                readAt: new Date() 
+            });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("MarkRead Error:", err);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// --- 6. PAGINATION ---
 exports.getMessages = async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -242,7 +280,7 @@ exports.getMessages = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(20)
       .populate('sender', 'name avatar')
-      .populate('replyTo', 'content sender');
+      .populate('replyTo', 'content sender isEncrypted');
 
     res.json(messages.reverse()); 
   } catch (err) {
@@ -250,7 +288,8 @@ exports.getMessages = async (req, res) => {
   }
 };
 
-// --- 6. GROUP ADMIN ACTIONS (Kick/Promote) ---
+// --- 7. UTILITIES & GROUP MANAGEMENT ---
+
 exports.updateGroupMember = async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -259,27 +298,15 @@ exports.updateGroupMember = async (req, res) => {
     const chat = await Chat.findById(chatId);
     if (!chat) return res.status(404).json({ message: 'Chat not found' });
 
-    // Check Admin Privileges
-    if (!chat.admins.includes(req.user._id)) {
-        return res.status(403).json({ message: 'Admin privileges required' });
-    }
+    if (!chat.admins.includes(req.user._id)) return res.status(403).json({ message: 'Admin privileges required' });
 
     if (action === 'kick') {
         chat.participants = chat.participants.filter(p => p.toString() !== userId);
         chat.admins = chat.admins.filter(a => a.toString() !== userId);
-        // System message
         await Message.create({ chat: chatId, sender: req.user._id, content: `removed a member.`, isSystem: true });
     } 
     else if (action === 'promote') {
-        if (!chat.admins.includes(userId)) {
-            chat.admins.push(userId);
-            await createNotification(req, {
-                toUser: userId,
-                type: 'system',
-                message: `You were promoted to Admin in "${chat.name}"`,
-                data: { link: `/chat/${chat._id}` }
-            });
-        }
+        if (!chat.admins.includes(userId)) chat.admins.push(userId);
     }
     else if (action === 'demote') {
         chat.admins = chat.admins.filter(a => a.toString() !== userId);
@@ -287,7 +314,6 @@ exports.updateGroupMember = async (req, res) => {
 
     await chat.save();
     
-    // Notify room
     const io = req.app.get('io');
     if(io) io.to(chatId).emit('chat:updated', chat); 
 
@@ -297,7 +323,29 @@ exports.updateGroupMember = async (req, res) => {
   }
 };
 
-// --- 7. LEAVE CHAT (With Admin Rotation) ---
+exports.updateGroupDetails = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { name, avatar } = req.body;
+    
+    const chat = await Chat.findById(chatId);
+    if (!chat) return res.status(404).json({ message: 'Chat not found' });
+    if (!chat.admins.includes(req.user._id)) return res.status(403).json({ message: 'Admin required' });
+
+    if (name) chat.name = name;
+    if (avatar) chat.avatar = avatar; 
+
+    await chat.save();
+    
+    const io = req.app.get('io');
+    if(io) io.to(chatId).emit('chat:updated', chat);
+
+    res.json(chat);
+  } catch (err) {
+    res.status(500).json({ message: 'Update failed' });
+  }
+};
+
 exports.leaveChat = async (req, res) => { 
     const userId = req.user._id.toString();
     const chat = await Chat.findById(req.params.id);
@@ -312,7 +360,7 @@ exports.leaveChat = async (req, res) => {
       return res.json({ message: 'Chat deleted (empty)' });
     }
 
-    // Admin Rotation
+    // Admin Rotation if needed
     if (chat.isGroup) {
         chat.admins = (chat.admins || []).filter(a => String(a) !== userId);
         if (chat.admins.length === 0 && newParticipants.length > 0) {
@@ -321,13 +369,20 @@ exports.leaveChat = async (req, res) => {
     }
 
     chat.participants = newParticipants;
-    await Message.create({ chat: chat._id, sender: req.user._id, content: `${req.user.name} left.`, isSystem: true });
+    // Create system message
+    const sysMsg = await Message.create({ 
+        chat: chat._id, 
+        sender: req.user._id, 
+        content: `${req.user.name} left.`, 
+        type: 'system' 
+    });
+
+    chat.lastMessage = sysMsg._id;
     await chat.save();
     
     res.json({ message: 'Left group' });
 };
 
-// --- UTILITIES ---
 exports.deleteChat = async (req, res) => { 
     await Message.deleteMany({ chat: req.params.chatId });
     await Chat.findByIdAndDelete(req.params.chatId);
@@ -336,14 +391,30 @@ exports.deleteChat = async (req, res) => {
 
 exports.editMessage = async (req, res) => { 
     await Message.findByIdAndUpdate(req.params.messageId, { content: req.body.newContent, editedAt: Date.now() });
+    
+    // Emit update event
+    const io = req.app.get('io');
+    if(io) io.emit('message:updated', { 
+        chatId: req.params.chatId, 
+        messageId: req.params.messageId, 
+        newContent: req.body.newContent 
+    });
+
     res.json({message:'Updated'});
 };
 
 exports.togglePinMessage = async (req, res) => { 
     const chat = await Chat.findById(req.params.chatId);
-    if(chat.pinnedMessages.includes(req.params.messageId)) chat.pinnedMessages.pull(req.params.messageId);
-    else chat.pinnedMessages.push(req.params.messageId);
+    if(chat.pinnedMessages.includes(req.params.messageId)) {
+        chat.pinnedMessages.pull(req.params.messageId);
+    } else {
+        chat.pinnedMessages.push(req.params.messageId);
+    }
     await chat.save();
+    
+    const io = req.app.get('io');
+    if(io) io.to(req.params.chatId).emit('chat:pinned', { pinnedMessages: chat.pinnedMessages });
+
     res.json({pinnedMessages: chat.pinnedMessages});
 };
 
@@ -355,7 +426,8 @@ exports.searchChat = async (req, res) => {
 exports.getUnreadCount = async (req, res) => { 
     const userId = req.user._id.toString();
     const chats = await Chat.find({ participants: userId });
-    const count = chats.reduce((acc, c) => acc + (c.unread?.get(userId) || 0), 0);
+    // Safe access to unread map
+    const count = chats.reduce((acc, c) => acc + (c.unread && c.unread.get(userId) || 0), 0);
     res.json({ count });
 };
 
@@ -366,30 +438,20 @@ exports.unsendMessage = async (req, res) => {
 
 exports.reactMessage = async (req, res) => { res.json({}); }; 
 
-exports.markRead = async (req, res) => { 
-    const { chatId } = req.params;
-    const userId = req.user._id.toString();
-    await Chat.updateOne({ _id: chatId }, { $set: { [`unread.${userId}`]: 0 } });
-    
-    const io = req.app.get('io');
-    if (io) io.to(chatId).emit('message:read', { chatId, userId, readAt: new Date() });
-
-    res.json({ success: true });
-};
-// 🔥 NEW: Vote on Poll
+// Vote on Poll
 exports.votePoll = async (req, res) => {
     try {
         const { messageId } = req.params;
         const { optionIndex } = req.body;
         const userId = req.user._id;
 
-        // 1. Remove previous vote by this user on this poll (Atomic)
+        // 1. Remove previous vote by this user on this poll
         await Message.updateOne(
             { _id: messageId },
             { $pull: { "pollOptions.$[].votes": userId } }
         );
 
-        // 2. Add new vote (Atomic)
+        // 2. Add new vote
         const msg = await Message.findOneAndUpdate(
             { _id: messageId },
             { $addToSet: { [`pollOptions.${optionIndex}.votes`]: userId } },
@@ -404,7 +466,7 @@ exports.votePoll = async (req, res) => {
             io.to(String(msg.chat)).emit('message:updated', {
                 chatId: msg.chat,
                 messageId: msg._id,
-                pollOptions: msg.pollOptions // Send updated options
+                pollOptions: msg.pollOptions 
             });
         }
 
@@ -414,38 +476,3 @@ exports.votePoll = async (req, res) => {
         res.status(500).json({ message: 'Vote failed' });
     }
 };
-// 🔥 NEW: Update Group Details (Name/Avatar)
-exports.updateGroupDetails = async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const { name } = req.body;
-    let avatar = null;
-    
-    // Check if file uploaded
-    // (Assuming you use the same middleware/cloudinary logic as other uploads)
-    if (req.body.avatarUrl) avatar = req.body.avatarUrl; // If sent as string from separate upload
-
-    const chat = await Chat.findById(chatId);
-    if (!chat) return res.status(404).json({ message: 'Chat not found' });
-
-    // Admin Check
-    if (!chat.admins.includes(req.user._id)) {
-        return res.status(403).json({ message: 'Admin privileges required' });
-    }
-
-    if (name) chat.name = name;
-    if (avatar) chat.avatar = avatar; // Ensure Chat model has 'avatar' field! 
-
-    await chat.save();
-    
-    // Notify room
-    const io = req.app.get('io');
-    if(io) io.to(chatId).emit('chat:updated', chat);
-
-    res.json(chat);
-  } catch (err) {
-    res.status(500).json({ message: 'Update failed' });
-  }
-};
-
-exports.updateGroupDetails = exports.updateGroupDetails;

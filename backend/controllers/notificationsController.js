@@ -96,3 +96,15 @@ exports.sendPushToUser = async (userId, payload) => {
         console.error("Push Error (Expired sub?):", err.statusCode);
     }
 };
+exports.subscribe = async (req, res) => {
+    try {
+        const sub = req.body;
+        // Add to array, avoiding exact duplicates
+        await User.findByIdAndUpdate(req.user.id, { 
+            $addToSet: { pushSubscription: sub } 
+        });
+        res.status(201).json({ message: 'Push Subscribed' });
+    } catch (err) {
+        res.status(500).json({ message: 'Subscription failed' });
+    }
+};

@@ -16,6 +16,6 @@ const StorySchema = new mongoose.Schema({
 }, { timestamps:true });
 
 // This creates the TTL (Time To Live) index
-StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); 
+// StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); 
 
 module.exports = mongoose.model('Story', StorySchema);

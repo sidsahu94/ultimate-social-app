@@ -66,7 +66,10 @@ export default function ChatPage() {
 
   // --- Typing Logic ---
   useEffect(() => {
-    const handleTyping = ({ chatId }) => {
+    const handleTyping = ({ chatId, userId }) => {
+        // 🔥 FIX: Ignore own typing events
+        if (userId === myId) return;
+
         setTypingMap(prev => ({ ...prev, [chatId]: true }));
         if (typingTimeouts.current[chatId]) clearTimeout(typingTimeouts.current[chatId]);
         // Auto-clear typing status after 3s
@@ -84,7 +87,7 @@ export default function ChatPage() {
         socket.off('typing', handleTyping);
         Object.values(typingTimeouts.current).forEach(clearTimeout);
     };
-  }, []);
+  }, [myId]);
 
   const activeChat = paramChatId 
     ? conversations.find(c => c._id === paramChatId) || { _id: paramChatId, temp: true } 
@@ -162,7 +165,6 @@ export default function ChatPage() {
                     .filter(c => getOther(c).name.toLowerCase().includes(chatSearch.toLowerCase()))
                     .map(c => {
                         const other = getOther(c);
-                        // Safe Map access
                         const isUnread = c.unread && c.unread[myId] > 0;
                         const isActive = paramChatId === c._id;
 

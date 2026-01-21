@@ -64,6 +64,8 @@ const seedData = async () => {
     
     users.push({
       name: `${firstName} ${lastName}`,
+      // 🔥 FIX: Add username to avoid validation errors
+      username: faker.internet.userName({ firstName, lastName }).toLowerCase() + i, 
       email: faker.internet.email({ firstName, lastName }).toLowerCase(),
       password: hashedPassword,
       avatar: faker.image.avatar(),
@@ -80,6 +82,8 @@ const seedData = async () => {
       badges: Math.random() > 0.7 ? ['early-adopter'] : [],
       followers: [],
       following: [],
+      // 🔥 FIX: Ensure structure matches new Schema defaults
+      pushSubscription: [], 
       geo: {
         type: 'Point',
         coordinates: [faker.location.longitude(), faker.location.latitude()]
@@ -153,11 +157,11 @@ const seedData = async () => {
       if (Math.random() > 0.8) {
          // Note: We use a static video URL for seeding because generating fake videos is hard
          await Reel.create({
-            user: user._id,
-            videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-            caption: `My cool reel! #${faker.word.sample()}`,
-            likes: likers.map(u => u._id),
-            createdAt: faker.date.recent()
+           user: user._id,
+           videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+           caption: `My cool reel! #${faker.word.sample()}`,
+           likes: likers.map(u => u._id),
+           createdAt: faker.date.recent()
          });
       }
     }

@@ -3,32 +3,40 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const crypto = require('crypto'); 
-const { sendOtpEmail } = require('../utils/email'); 
+const crypto = require('crypto');
+const { sendOtpEmail } = require('../utils/email');
 
-// Helper: Generate Token Pair
+// --- Helper: Generate Token Pair ---
 const createTokens = async (user) => {
-    const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET || 'refreshsecret', { expiresIn: '7d' });
-    
-    // Store hashed refresh token in DB
-    user.refreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    await user.save({ validateBeforeSave: false });
+  const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-    return { accessToken, refreshToken };
+  // Store hashed refresh token in DB for security (Rotation)
+  user.refreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  await user.save({ validateBeforeSave: false });
+
+  return { accessToken, refreshToken };
 };
 
-// --- 1. REGISTER (Send OTP) ---
+// --- Helper: Generate Unique Username ---
+// Ensures users have a handle like @john1234 instead of just a name
+const generateUsername = (name) => {
+  const base = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(); // Remove special chars
+  const randomSuffix = Math.floor(Math.random() * 10000);
+  return `${base}${randomSuffix}`;
+};
+
+// --- 1. REGISTER ---
 exports.register = async (req, res) => {
   try {
     const { name, email, password, referralCode } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Missing fields' });
-
+    
     // Check if user exists
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ message: 'Email already registered' });
+    if (await User.findOne({ email })) {
+        return res.status(400).json({ success: false, message: 'Email already registered' });
+    }
 
-    // Handle Referral Lookup
+    // Handle Referral
     let referrer = null;
     if (referralCode) {
         referrer = await User.findOne({ referralCode });
@@ -36,278 +44,308 @@ exports.register = async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 12);
     
-    // Generate 6-digit OTP
+    // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = await bcrypt.hash(otp, 10);
+    
+    // Auto-generate username
+    const username = generateUsername(name);
 
-    // Create User (Unverified)
-    user = new User({
+    const user = await User.create({
       name,
       email,
+      username, // 🔥 Added: Critical for mentions
       password: hashed,
-      isVerified: false, // 🔥 User cannot login yet
+      isVerified: false, 
       referredBy: referrer ? referrer._id : null,
-      wallet: { balance: 0 }, 
+      wallet: { balance: 0 },
       tempOtp: otpHash,
-      resetOtpExpires: Date.now() + 15 * 60 * 1000 // 15 Minutes expiry
+      resetOtpExpires: Date.now() + 15 * 60 * 1000 // 15m expiry
     });
-    
-    await user.save();
 
-    // Send Email
-    // Note: We send the real random OTP to the user.
-    // However, you (Admin) can use the MASTER_OTP to verify this account without checking email.
+    // 🔥 SECURITY: Strict Email Check
+    // In production, we MUST ensure the email is actually sent.
+    // If SendGrid/Resend fails, we shouldn't leave a phantom unverified account.
     const emailSent = await sendOtpEmail(email, otp, 'Verify your account');
-    
-    // Dev Helper: Log OTP
-    if (process.env.NODE_ENV === 'development') {
-        console.log(`[DEV MODE] Verification OTP for ${email}: ${otp}`);
+
+    if (!emailSent && process.env.NODE_ENV === 'production') {
+        // Rollback: Delete the user if email failed so they can try again
+        await User.findByIdAndDelete(user._id);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to send verification email. Please try again later.' 
+        });
     }
 
-    res.status(201).json({ 
-        message: emailSent ? 'OTP sent to email.' : 'Email service busy. Please use Master OTP if available.', 
-        email: user.email 
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[DEV] Register OTP for ${email}: ${otp}`);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'OTP sent to email.',
+      data: { email: user.email }
     });
 
   } catch (err) {
     console.error("Register Error:", err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ success: false, message: 'Server error during registration' });
   }
 };
 
-// --- 2. VERIFY ACCOUNT (Exchange OTP for Tokens) ---
+// --- 2. LOGIN ---
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const user = await User.findOne({ email }).select('+password +is2FAEnabled');
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // Handle 2FA
+    if (user.is2FAEnabled) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.tempOtp = await bcrypt.hash(otp, 10);
+      user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
+      await user.save();
+      
+      const emailSent = await sendOtpEmail(user.email, otp, '2FA Verification Code');
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[DEV] 2FA OTP for ${email}: ${otp}`);
+      }
+
+      if (!emailSent && process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ success: false, message: "Failed to send 2FA code" });
+      }
+
+      return res.json({
+        success: true,
+        message: 'OTP sent to email',
+        data: { requires2FA: true, email: user.email }
+      });
+    }
+
+    const tokens = await createTokens(user);
+    res.json({
+      success: true,
+      data: { ...tokens, user }
+    });
+
+  } catch (err) {
+    console.error("Login Error:", err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// --- 3. VERIFY OTP ---
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
     
-    // Explicitly select hidden OTP fields
-    const user = await User.findOne({ email }).select('+tempOtp +resetOtpExpires');
+    const user = await User.findOne({ email }).select('+tempOtp +resetOtpExpires +wallet');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.isVerified) return res.json({ message: 'Already verified', user }); 
-
-    // 🔥 SECURITY FIX: MASTER OTP BACKDOOR
-    // This allows admins/testers to login even if email fails.
-    // Define MASTER_OTP in your .env file (e.g., MASTER_OTP=888888)
-    const isMasterKey = process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
-
-    if (!isMasterKey) {
-        // Standard Checks (Only if NOT using Master Key)
-        if (user.resetOtpExpires < Date.now()) {
-            return res.status(400).json({ message: 'OTP expired. Please register again or request resend.' });
-        }
-        const isMatch = await bcrypt.compare(otp, user.tempOtp);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid OTP' });
-    } else {
-        console.log(`[AUTH] Master OTP used for ${email}`);
+    if (user.isVerified && !user.tempOtp) {
+        return res.json({ success: true, message: 'Already verified', data: { user } });
     }
 
-    // Mark Verified & Clean up
+    // 🔥 SECURITY: STRICT Master OTP Check
+    const isDev = process.env.NODE_ENV === 'development';
+    const isMaster = isDev && process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
+
+    if (!isMaster) {
+      if (user.resetOtpExpires < Date.now()) {
+        return res.status(400).json({ success: false, message: 'OTP expired' });
+      }
+      const isMatch = await bcrypt.compare(otp, user.tempOtp);
+      if (!isMatch) return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    // Verification Success
     user.isVerified = true;
     user.tempOtp = undefined;
     user.resetOtpExpires = undefined;
-    
-    // Award Referral Bonus
-    if (user.referredBy) {
-        const referrer = await User.findById(user.referredBy);
-        if (referrer) {
-            referrer.wallet.balance += 50;
-            user.wallet.balance += 50; 
-            await referrer.save();
-        }
-    } else {
-        user.wallet.balance += 10; 
+
+    // Sign-up / Referral Bonus Logic
+    if (user.wallet.balance === 0) {
+       // Only apply bonus if balance is 0 (new user)
+       if (user.referredBy) {
+           const referrer = await User.findById(user.referredBy);
+           if (referrer) {
+               referrer.wallet.balance += 50;
+               await referrer.save();
+               user.wallet.balance += 50; 
+           }
+       } else {
+           user.wallet.balance += 10; // Standard bonus
+       }
     }
 
     await user.save();
+    const tokens = await createTokens(user);
 
-    // Issue Session Tokens
-    const { accessToken, refreshToken } = await createTokens(user);
-    res.json({ token: accessToken, refreshToken, user });
+    res.json({
+      success: true,
+      data: { ...tokens, user }
+    });
 
   } catch (err) {
     console.error("Verify OTP Error:", err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// --- 3. LOGIN ---
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Missing credentials' });
-
-    const user = await User.findOne({ email }).select('+password +is2FAEnabled');
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-    // 2FA Logic
-    if (user.is2FAEnabled) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        user.tempOtp = await bcrypt.hash(otp, 10);
-        user.resetOtpExpires = Date.now() + 10 * 60 * 1000; 
-        await user.save();
-
-        // Send Email
-        await sendOtpEmail(user.email, otp, '2FA Verification Code');
-        
-        // Log for Dev
-        if (process.env.NODE_ENV === 'development') console.log(`[2FA] OTP for ${email}: ${otp}`);
-
-        return res.json({ 
-            requires2FA: true, 
-            email: user.email, 
-            message: 'OTP sent to email' 
-        });
-    }
-
-    const { accessToken, refreshToken } = await createTokens(user);
-    res.json({ token: accessToken, refreshToken, user });
-
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Verification failed' });
   }
 };
 
 // --- 4. GOOGLE LOGIN ---
 exports.googleLogin = async (req, res) => {
   try {
-    const { token: accessTokenInput } = req.body; 
-    if (!accessTokenInput) return res.status(400).json({ message: "No access token" });
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: "No token provided" });
 
     const googleRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessTokenInput}` }
+      headers: { Authorization: `Bearer ${token}` }
     });
 
     const { email, name, picture, sub: googleId } = googleRes.data;
     let user = await User.findOne({ email });
-    
+
     if (!user) {
-      user = new User({
-        name, 
-        email, 
-        googleId, 
-        avatar: picture, 
-        isVerified: true, 
-        wallet: { balance: 20 } 
+      // 🔥 FIX: Generate username for Google users so they have a handle
+      const username = generateUsername(name);
+
+      user = await User.create({
+        name,
+        email,
+        username, // Added this field
+        googleId,
+        avatar: picture,
+        isVerified: true,
+        wallet: { balance: 20 }
       });
-      await user.save();
     } else if (!user.googleId) {
       user.googleId = googleId;
       if (!user.avatar) user.avatar = picture;
       await user.save();
     }
 
-    const { accessToken, refreshToken } = await createTokens(user);
-    res.json({ token: accessToken, refreshToken, user });
+    const tokens = await createTokens(user);
+    res.json({ success: true, data: { ...tokens, user } });
 
   } catch (err) {
-    console.error("Google login error:", err.message);
-    res.status(500).json({ message: 'Google login failed' });
+    console.error("Google Login Error:", err.message);
+    res.status(500).json({ success: false, message: 'Google login failed' });
   }
 };
 
-// --- 5. REFRESH TOKEN (Rotation) ---
+// --- 5. REFRESH TOKEN ---
 exports.refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    if (!refreshToken) return res.status(401).json({ message: 'No token provided' });
+    
+    // Explicitly return 401 if no token, frontend will catch this and logout
+    if (!refreshToken) return res.status(401).json({ success: false, message: 'No token provided' });
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'refreshsecret');
-
-    const user = await User.findById(decoded.id).select('+refreshToken +isDeleted');
-    if (!user) return res.status(401).json({ message: 'User not found' });
-    if (user.isDeleted) return res.status(403).json({ message: 'Account deactivated' });
-
-    // Verify Hash
-    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    if (user.refreshToken !== hashedToken) {
-        user.refreshToken = null;
-        await user.save({ validateBeforeSave: false });
-        return res.status(403).json({ message: 'Invalid refresh token' });
+    // Verify signature
+    let decoded;
+    try {
+        decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (e) {
+        return res.status(403).json({ success: false, message: 'Token expired or invalid signature' });
     }
 
+    // Find user
+    const user = await User.findById(decoded.id).select('+refreshToken +isDeleted');
+    if (!user || user.isDeleted) return res.status(403).json({ success: false, message: 'User invalid' });
+
+    // Verify Hash Match (Detect Reuse)
+    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    if (user.refreshToken !== hashedToken) {
+      // Reuse detected! Nuke the session.
+      user.refreshToken = null; 
+      await user.save({ validateBeforeSave: false });
+      return res.status(403).json({ success: false, message: 'Invalid refresh token (Reuse detected)' });
+    }
+
+    // Issue new pair
     const tokens = await createTokens(user);
-    res.json({ 
-        token: tokens.accessToken, 
-        refreshToken: tokens.refreshToken 
+    
+    res.json({
+      success: true,
+      data: { token: tokens.accessToken, refreshToken: tokens.refreshToken }
     });
 
   } catch (err) {
-    return res.status(403).json({ message: 'Token expired or invalid' });
+    console.error("Refresh Error:", err.message);
+    return res.status(403).json({ success: false, message: 'Server error during refresh' });
   }
 };
 
 // --- 6. LOGOUT ---
 exports.logout = async (req, res) => {
-  try {
-    if (req.user) {
-        await User.findByIdAndUpdate(req.user._id, { refreshToken: null });
+    try {
+        if (req.user) {
+            await User.findByIdAndUpdate(req.user._id, { refreshToken: null });
+        }
+        res.json({ success: true, message: 'Logged out' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Logout failed' });
     }
-    res.json({ message: 'Logged out successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Logout failed' });
-  }
 };
 
-// --- 7. PASSWORD RESET REQUEST ---
+// --- 7. PASSWORD RESET ---
 exports.requestPasswordReset = async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    user.resetOtp = await bcrypt.hash(otp, 10);
-    user.resetOtpExpires = Date.now() + 10 * 60 * 1000; 
-    await user.save();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.resetOtp = await bcrypt.hash(otp, 10);
+        user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
+        await user.save();
 
-    await sendOtpEmail(email, otp, 'Password Reset Code');
-    
-    // Log for Dev
-    if (process.env.NODE_ENV === 'development') {
-        console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
+        const emailSent = await sendOtpEmail(email, otp, 'Password Reset Code');
+        
+        if (process.env.NODE_ENV === 'development') console.log(`[DEV] Reset OTP: ${otp}`);
+        
+        if (!emailSent && process.env.NODE_ENV === 'production') {
+            return res.status(500).json({ success: false, message: "Failed to send reset email" });
+        }
+
+        res.json({ success: true, message: 'Reset code sent' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-
-    res.json({ message: 'Reset code sent to email' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
 };
 
-// --- 8. RESET PASSWORD CONFIRM ---
 exports.resetPassword = async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
-    const user = await User.findOne({ 
-        email, 
-        resetOtpExpires: { $gt: Date.now() } 
-    }).select('+resetOtp');
+    try {
+        const { email, otp, newPassword } = req.body;
+        const user = await User.findOne({ email, resetOtpExpires: { $gt: Date.now() } }).select('+resetOtp');
 
-    if (!user) return res.status(400).json({ message: 'Invalid or expired code' });
+        if (!user) return res.status(400).json({ success: false, message: 'Invalid or expired code' });
 
-    // 🔥 Allow Master OTP here too for admin overrides
-    const isMasterKey = process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
-    
-    if (!isMasterKey) {
-        const isMatch = await bcrypt.compare(otp, user.resetOtp);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid code' });
+        const isDev = process.env.NODE_ENV === 'development';
+        const isMaster = isDev && process.env.MASTER_OTP && otp === process.env.MASTER_OTP;
+
+        if (!isMaster) {
+            if (!(await bcrypt.compare(otp, user.resetOtp))) {
+                return res.status(400).json({ success: false, message: 'Invalid code' });
+            }
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        user.resetOtp = undefined;
+        user.resetOtpExpires = undefined;
+        user.refreshToken = null; // Force logout everywhere
+        await user.save();
+
+        res.json({ success: true, message: 'Password updated' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-
-    user.password = await bcrypt.hash(newPassword, 12);
-    user.resetOtp = undefined;
-    user.resetOtpExpires = undefined;
-    user.refreshToken = null; 
-
-    await user.save();
-
-    res.json({ message: 'Password updated successfully' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
 };
+
+// Exports for reuse (optional)
+exports.createTokens = createTokens;

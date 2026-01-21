@@ -1,3 +1,4 @@
+# Dockerfile
 # Stage 1: Build Frontend
 FROM node:18-alpine as client-build
 WORKDIR /app/frontend

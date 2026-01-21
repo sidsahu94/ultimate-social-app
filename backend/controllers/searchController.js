@@ -2,79 +2,73 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 
-/**
- * GLOBAL SEARCH CONTROLLER
- * - Searches across Users, Posts, and Hashtags
- * - Ranking logic for posts = likes + recency weight
- * - Supports free-text and hashtag-based queries
- */
+// --- Helper: Sanitize Regex Input to prevent ReDoS Attacks ---
+function escapeRegex(text) {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+}
+
 exports.global = async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    if (!q) return res.json({ users: [], posts: [], hashtags: [] });
+    
+    // Return empty structure if query is empty
+    if (!q) {
+        return res.json({ 
+            success: true, 
+            data: { users: [], posts: [], hashtags: [] } 
+        });
+    }
 
-    // 🔍 1️⃣ Search USERS by name or email (text index + regex fallback)
-    const users = await User.find({
-      $or: [
-        { $text: { $search: q } },
-        { name: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } }
-      ]
-    })
-      .select('name avatar followers badges')
-      .limit(25);
+    // 🔥 FIX: Sanitize the input before creating the RegExp
+    const safeQuery = escapeRegex(q);
+    const regex = new RegExp(safeQuery, 'i'); 
 
-    // 🔍 2️⃣ Search POSTS by content or hashtags (ranked)
-    const posts = await Post.aggregate([
-      {
-        $match: {
-          $or: [
-            { content: { $regex: q, $options: 'i' } },
-            { hashtags: q.startsWith('#') ? q.slice(1).toLowerCase() : q.toLowerCase() }
-          ]
-        }
-      },
-      {
-        $addFields: {
-          likesCount: { $size: { $ifNull: ['$likes', []] } },
-          recencyDays: {
-            $divide: [{ $subtract: [new Date(), '$createdAt'] }, 1000 * 60 * 60 * 24]
-          }
-        }
-      },
-      {
-        $addFields: {
-          // Score = likes + (recency weight inverse)
-          score: { $subtract: [{ $add: ['$likesCount', 5] }, '$recencyDays'] }
-        }
-      },
-      { $sort: { score: -1, createdAt: -1 } },
-      { $limit: 50 }
+    // Run queries in parallel for performance
+    const [users, posts] = await Promise.all([
+        // 1. Search Users (Name or Email/Handle)
+        User.find({
+            $or: [
+                { name: { $regex: regex } },
+                { email: { $regex: regex } } // Or username if you have it
+            ],
+            isDeleted: { $ne: true },
+            userStatus: { $ne: 'Banned' } // Exclude banned users if applicable
+        })
+        .select('name avatar isVerified bio followers')
+        .limit(10),
+
+        // 2. Search Posts (Content or Hashtags)
+        Post.find({
+            $or: [
+                { content: { $regex: regex } },
+                { hashtags: safeQuery.toLowerCase() } // Exact match for hashtags is often faster/better
+            ],
+            isArchived: { $ne: true },
+            isFlagged: { $ne: true },
+            isDraft: { $ne: true }
+        })
+        .populate('user', 'name avatar isVerified')
+        .sort({ createdAt: -1 }) // Newest first
+        .limit(10)
     ]);
 
-    // Populate user for posts
-    await Post.populate(posts, { path: 'user', select: 'name avatar' });
+    // 3. Extract Hashtags (Simple aggregation from posts or separate collection)
+    // This is a simplified extraction from the found posts
+    const hashtags = [...new Set(posts.flatMap(p => p.hashtags || []))]
+        .filter(tag => tag.includes(safeQuery.toLowerCase()))
+        .slice(0, 5);
 
-    // 🔍 3️⃣ Trending Hashtags in past 7 days
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const tagsAgg = await Post.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $unwind: '$hashtags' },
-      { $group: { _id: '$hashtags', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 20 }
-    ]);
-
-    // ✅ Return combined search result
     res.json({
-      query: q,
-      users,
-      posts,
-      hashtags: tagsAgg.map(t => t._id)
+        success: true,
+        data: {
+            users,
+            posts,
+            hashtags
+        }
     });
 
   } catch (err) {
-    console.error('Search error:', err);
-    res.status(500).json({ message: 'Search failed', error: err.message });
+    console.error("Global Search Error:", err);
+    res.status(500).json({ success: false, message: 'Search failed' });
   }
 };

@@ -1,5 +1,5 @@
 // frontend/src/pages/home/Feed.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../services/api";
 import socket from "../../services/socket";
@@ -8,13 +8,12 @@ import SkeletonPost from "../../components/ui/SkeletonPost";
 import { AnimatePresence, motion } from "framer-motion";
 import Stories from "../../components/stories/Stories";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
-import FAB from "../../components/common/FAB";
 import CreatePostModal from "../../components/posts/CreatePostModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { FaArrowUp } from "react-icons/fa";
-import useScrollRestoration from "../../hooks/useScrollRestoration"; // 🔥 Import Hook
+import useScrollRestoration from "../../hooks/useScrollRestoration"; 
 
-// Utility to deduplicate posts
+// Utility to deduplicate posts by ID
 const uniqueById = (arr) => {
   const seen = new Set();
   const out = [];
@@ -26,11 +25,11 @@ const uniqueById = (arr) => {
 };
 
 export default function Feed() {
-  // 🔥 FIX: Enable Scroll Restoration (Remembers position on back navigation)
+  // 🔥 Remembers scroll position on back navigation
   useScrollRestoration('feed_scroll_pos');
 
   const [posts, setPosts] = useState([]);
-  const [page, setPage] = useState(0);
+  const [cursor, setCursor] = useState(null); // 🔥 Changed from 'page' to 'cursor'
   const [loading, setLoading] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -41,39 +40,45 @@ export default function Feed() {
   const [startY, setStartY] = useState(0);
 
   const { add: addToast } = useToast();
+  const isFirstLoad = useRef(true);
 
   // --- DATA LOADING ---
   const load = useCallback(async (reset = false) => {
     if (loading) return;
-    const pageToLoad = reset ? 0 : page;
     setLoading(true);
     
     try {
-      const res = await API.get(`/posts/feed?page=${pageToLoad}&limit=6`);
-      const newPosts = Array.isArray(res?.data) ? res.data : [];
+      // Logic: If resetting, clear cursor. If scrolling, use last cursor.
+      const queryCursor = reset ? '' : (cursor ? `&cursor=${cursor}` : '');
+      const res = await API.get(`/posts/feed?limit=10${queryCursor}`);
+      
+      // Handle unified response format
+      const payload = res.data.data || res.data; 
+      const newPosts = Array.isArray(payload) ? payload : (payload.posts || []);
+      const nextCursor = payload.nextCursor || null;
 
       setPosts(prev => {
         if (reset) return uniqueById(newPosts);
         return uniqueById([...prev, ...newPosts]);
       });
 
-      if (newPosts.length < 6) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-        setPage(p => reset ? 1 : p + 1);
-      }
+      setCursor(nextCursor);
+      setHasMore(!!nextCursor);
 
     } catch (err) {
       console.error("Feed load error", err);
+      // Optional: addToast("Failed to load feed", { type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [page, loading]);
+  }, [cursor, loading]);
 
-  // Initial Load (Only if empty, otherwise ScrollRestoration handles it)
+  // Initial Load
   useEffect(() => { 
-      if(posts.length === 0) load(true); 
+      if(isFirstLoad.current) {
+          isFirstLoad.current = false;
+          if(posts.length === 0) load(true); 
+      }
   }, []);
 
   // --- REAL-TIME UPDATES ---
@@ -152,11 +157,11 @@ export default function Feed() {
 
   // Infinite Scroll Hook
   const loaderRef = useInfiniteScroll(() => {
-      if(hasMore) load();
+      if(hasMore && !loading) load(false);
   });
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-24 md:pb-6">
       <div className="max-w-3xl mx-auto"> 
         
         {/* Pull Refresh Indicator */}
@@ -217,14 +222,13 @@ export default function Feed() {
             </div>
         )}
 
-        {/* Create Button */}
-        <FAB onClick={() => setOpenCreate(true)} />
-        
+        {/* Modals */}
         <CreatePostModal 
             isOpen={openCreate} 
             onClose={() => setOpenCreate(false)} 
-            onPosted={(newPost) => {
-                // Socket listener handles update, but this ensures modal closes
+            onPosted={() => {
+                setOpenCreate(false);
+                load(true); // Refresh feed
             }} 
         />
 

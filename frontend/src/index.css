@@ -1,5 +1,4 @@
-/* url(index.css) */
-@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,54 +6,102 @@
 
 @layer base {
   body {
-    @apply font-sans antialiased transition-colors duration-500;
-    /* Ultra-Soft White to Light Gray Gradient */
-    @apply bg-[#E0E5EC] text-slate-800; 
+    @apply font-sans antialiased text-slate-900 dark:text-slate-100 bg-bg-light dark:bg-bg-dark transition-colors duration-500 overflow-x-hidden;
   }
-  .dark body {
-    /* Dark Deep Space Background */
-    @apply bg-[#1A1B1E] text-slate-200;
+  
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
   }
 }
 
 @layer components {
-  /* --- The Hybrid Card ---
-     Combines Neumorphism (Shape) + Glassmorphism (Surface) 
-  */
-  .neu-card {
-    @apply rounded-[32px] p-6 transition-all duration-300;
-    /* Light Mode: Soft Extrusion */
-    @apply bg-[#E0E5EC] shadow-neu-flat border border-white/40;
-  }
-  .dark .neu-card {
-    /* Dark Mode: Deep Shadow + Glassy Overlay */
-    @apply bg-[#1A1B1E] shadow-neu-dark-flat border border-white/5;
+  /* THE ULTIMATE GLASS CARD */
+  .cyber-card {
+    @apply relative bg-white/70 dark:bg-bg-card/60 backdrop-blur-xl border border-white/40 dark:border-white/5 rounded-[24px] shadow-lg dark:shadow-black/50 transition-all duration-300 overflow-hidden;
   }
 
-  /* --- The Neon Button --- */
-  .btn-neon {
-    @apply relative overflow-hidden rounded-[20px] px-6 py-3 font-bold text-white transition-all duration-300;
-    background: linear-gradient(135deg, #2979FF 0%, #7E57C2 100%);
-    box-shadow: 5px 5px 10px rgba(41, 121, 255, 0.3), -5px -5px 10px rgba(255, 255, 255, 0.5);
-  }
-  .btn-neon:active {
-    transform: scale(0.98);
-    @apply shadow-neu-pressed;
-  }
-  .btn-neon:hover {
-    @apply shadow-neon-blue brightness-110;
+  /* Hover effect for cards */
+  .cyber-card-hover {
+    @apply hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-1;
   }
 
-  /* --- Input Fields (Inset Style) --- */
+  /* Neon Button */
+  .btn-primary {
+    @apply relative overflow-hidden rounded-xl px-6 py-3 font-heading font-bold text-white transition-all duration-300;
+    background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+  }
+  
+  .btn-primary::before {
+    content: '';
+    @apply absolute inset-0 bg-white/20 translate-y-full transition-transform duration-300;
+  }
+  
+  .btn-primary:hover::before {
+    @apply translate-y-0;
+  }
+  
+  .btn-primary:hover {
+    @apply shadow-glow-md scale-[1.02];
+  }
+
+  /* Interactive Icon Wrapper */
+  .icon-btn {
+    @apply p-3 rounded-full transition-all duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 active:scale-95;
+  }
+  
+  /* Neon Input Fields */
   .neu-input {
-    @apply w-full rounded-[20px] px-5 py-4 outline-none transition-all;
-    @apply bg-[#E0E5EC] shadow-neu-pressed text-slate-700;
-    border: 1px solid transparent;
+    @apply w-full bg-[#E0E5EC] dark:bg-[#141517] rounded-xl px-4 py-3 outline-none text-slate-700 dark:text-slate-200 shadow-neu-inset-light dark:shadow-neu-inset-dark border border-transparent focus:border-primary/50 transition-all;
   }
-  .neu-input:focus {
-    @apply border-primary-glow shadow-neon-cyan; /* Neon Focus */
+
+  /* Glowing Button for Dark Mode */
+  .btn-neon {
+    @apply bg-transparent text-primary font-bold py-2 px-6 rounded-lg border-2 border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)] hover:bg-primary hover:text-white hover:shadow-[0_0_20px_rgba(59,130,246,0.8)] transition-all duration-300;
   }
-  .dark .neu-input {
-    @apply bg-[#1A1B1E] shadow-neu-dark-pressed text-slate-200;
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent-cyan;
+  }
+  
+  /* Animated Background Blobs */
+  .aurora-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  
+  .aurora-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    animation: blob-bounce 10s infinite ease-in-out;
+  }
+
+  .blob-1 { background: #3B82F6; width: 500px; height: 500px; top: -100px; left: -100px; animation-delay: 0s; }
+  .blob-2 { background: #8B5CF6; width: 400px; height: 400px; bottom: -50px; right: -50px; animation-delay: 2s; }
+  .blob-3 { background: #EC4899; width: 300px; height: 300px; top: 40%; left: 40%; animation-delay: 4s; }
+
+  @keyframes blob-bounce {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
   }
 }

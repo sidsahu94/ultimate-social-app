@@ -6,7 +6,7 @@ import { FaSearch, FaPlus, FaStore } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../components/ui/ToastProvider';
 import { useSelector, useDispatch } from 'react-redux';
-import { updateAuthUser } from '../../redux/slices/authSlice'; // 🔥 Import Redux action
+import { updateAuthUser } from '../../redux/slices/authSlice'; 
 
 const CATEGORIES = ['All', 'Digital', 'Services', 'Merch', 'NFTs', 'Mine'];
 
@@ -18,8 +18,6 @@ export default function Marketplace() {
   
   const { add } = useToast();
   const dispatch = useDispatch();
-  
-  // Get current user from Redux
   const { user } = useSelector(s => s.auth);
   const myId = user?._id;
 
@@ -28,8 +26,11 @@ export default function Marketplace() {
   const loadItems = async () => {
     try {
       const res = await API.get('/shop');
-      setItems(res.data);
-    } catch (e) { console.error(e); }
+      // 🔥 FIX: Handle unified response format
+      setItems(res.data.data || res.data || []);
+    } catch (e) { 
+      console.error(e); 
+    }
   };
 
   const handleCreate = async () => {
@@ -39,7 +40,9 @@ export default function Marketplace() {
       setShowCreate(false);
       loadItems();
       setNewItem({ title: '', price: '', desc: '' });
-    } catch (e) { add('Failed to create', { type: 'error' }); }
+    } catch (e) { 
+      add('Failed to create', { type: 'error' }); 
+    }
   };
 
   const handleDeleteItem = async (itemId) => {
@@ -53,18 +56,17 @@ export default function Marketplace() {
     }
   };
 
-  // 🔥 NEW: Real Purchase Logic
+  // 🔥 FIX: Real Purchase Logic with Redux Update
   const handleBuy = async (item) => {
     if (!user) return add("Please login to buy items", { type: 'error' });
     if (!confirm(`Buy "${item.title}" for ${item.price} coins?`)) return;
 
     try {
-      // 1. Call API to execute transaction
+      // 1. Execute Transaction
       await API.post(`/shop/${item._id}/buy`);
-      
       add(`Successfully purchased ${item.title}!`, { type: 'success' });
       
-      // 2. Update Local Item State (Decrease stock visually)
+      // 2. Update Local Item State (Decrease stock immediately in UI)
       setItems(prev => prev.map(i => {
           if (i._id === item._id) {
               return { ...i, stock: (i.stock || 1) - 1 };
@@ -72,28 +74,23 @@ export default function Marketplace() {
           return i;
       }));
 
-      // 3. Update Redux Wallet immediately so UI reflects new balance
+      // 3. Update Redux Wallet immediately so global UI reflects new balance
       const currentBalance = user.wallet?.balance || 0;
       dispatch(updateAuthUser({ 
-          wallet: { 
-              ...user.wallet, 
-              balance: currentBalance - item.price 
-          } 
+          wallet: { ...user.wallet, balance: currentBalance - item.price } 
       }));
 
     } catch (e) {
-      add(e.userMessage || 'Purchase failed (Insufficient funds?)', { type: 'error' });
+      add(e.response?.data?.message || 'Purchase failed', { type: 'error' });
     }
   };
 
-  // Filter Logic
   const filteredItems = filter === 'Mine' 
     ? items.filter(i => i.owner?._id === myId || i.createdBy === myId)
     : (filter === 'All' ? items : items.filter(i => i.category === filter));
 
   return (
     <div className="max-w-6xl mx-auto p-4 min-h-screen">
-      
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
@@ -139,7 +136,7 @@ export default function Marketplace() {
               <motion.div key={item._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <ProductCard 
                     item={item} 
-                    onBuy={() => handleBuy(item)} // 🔥 Use real handler
+                    onBuy={() => handleBuy(item)} 
                     onDelete={filter === 'Mine' || item.createdBy === myId ? () => handleDeleteItem(item._id) : null}
                 />
               </motion.div>
@@ -155,23 +152,23 @@ export default function Marketplace() {
               <h3 className="text-xl font-bold mb-4">List New Item</h3>
               <div className="space-y-3">
                 <input 
-                  className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600" 
-                  placeholder="Item Title"
-                  value={newItem.title}
-                  onChange={e => setNewItem({...newItem, title: e.target.value})}
+                    className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600" 
+                    placeholder="Item Title" 
+                    value={newItem.title} 
+                    onChange={e => setNewItem({...newItem, title: e.target.value})} 
                 />
                 <input 
-                  className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600" 
-                  placeholder="Price (Coins)"
-                  type="number"
-                  value={newItem.price}
-                  onChange={e => setNewItem({...newItem, price: e.target.value})}
+                    className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600" 
+                    placeholder="Price (Coins)" 
+                    type="number" 
+                    value={newItem.price} 
+                    onChange={e => setNewItem({...newItem, price: e.target.value})} 
                 />
                 <textarea 
-                  className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600 h-24" 
-                  placeholder="Description"
-                  value={newItem.desc}
-                  onChange={e => setNewItem({...newItem, desc: e.target.value})}
+                    className="w-full p-3 rounded-lg border dark:bg-gray-700 dark:border-gray-600 h-24" 
+                    placeholder="Description" 
+                    value={newItem.desc} 
+                    onChange={e => setNewItem({...newItem, desc: e.target.value})} 
                 />
                 <div className="flex justify-end gap-2 mt-4">
                   <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-500">Cancel</button>

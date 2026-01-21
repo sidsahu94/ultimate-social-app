@@ -6,70 +6,96 @@ const GameScore = require('../models/GameScore');
 const Post = require('../models/Post');
 const mongoose = require('mongoose');
 
-// --- EVENTS ---
+// =================================================================
+// EVENTS
+// =================================================================
+
 exports.getEvents = async (req, res) => {
   try {
-    // Fetch upcoming events
     const events = await Event.find({ date: { $gte: new Date() } })
       .populate('host', 'name avatar')
       .sort({ date: 1 });
-    res.json(events);
-  } catch (e) { res.status(500).json({ message: 'Error fetching events' }); }
+    res.json({ success: true, data: events });
+  } catch (e) { 
+      res.status(500).json({ success: false, message: 'Error fetching events' }); 
+  }
 };
 
 exports.createEvent = async (req, res) => {
   try {
-    const { title, date, location, description } = req.body;
+    const { title, date, location, description, image } = req.body;
     const event = await Event.create({
       host: req.user._id,
       title,
       date,
       location,
-      description
+      description,
+      image 
     });
-    res.status(201).json(event);
-  } catch (e) { res.status(500).json({ message: 'Error creating event' }); }
+    res.status(201).json({ success: true, data: event });
+  } catch (e) { 
+      res.status(500).json({ success: false, message: 'Error creating event' }); 
+  }
 };
 
+// 🔥 FIX: Atomic Join (Race Condition Prevention)
 exports.joinEvent = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: 'Event not found' });
+    // $addToSet atomic operator is key here
+    const event = await Event.findByIdAndUpdate(
+        req.params.id,
+        { $addToSet: { attendees: req.user._id } },
+        { new: true }
+    ).populate('host', 'name avatar');
 
-    // Prevent duplicate join
-    if (!event.attendees.includes(req.user._id)) {
-      event.attendees.push(req.user._id);
-      await event.save();
-    }
-    res.json(event);
-  } catch (e) { res.status(500).json({ message: 'Error joining' }); }
+    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    res.json({ success: true, data: event });
+  } catch (e) { 
+     res.status(500).json({ success: false, message: 'Error joining event' }); 
+  }
 };
 
 exports.deleteEvent = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ message: 'Not found' });
+    if (!event) return res.status(404).json({ success: false, message: 'Not found' });
     
-    // Check ownership
     if (String(event.host) !== String(req.user._id)) {
-        return res.status(403).json({ message: 'Unauthorized' });
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     await Event.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Event deleted' });
-  } catch (e) { res.status(500).json({ message: 'Server error' }); }
+    res.json({ success: true, message: 'Event deleted' });
+  } catch (e) { 
+      res.status(500).json({ success: false, message: 'Server error' }); 
+  }
 };
 
-// --- WALLET ---
+// =================================================================
+// WALLET
+// =================================================================
+
 exports.getWallet = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('wallet');
     const transactions = await Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(20);
-    res.json({ balance: user.wallet?.balance || 0, transactions });
-  } catch (e) { res.status(500).json({ message: 'Error fetching wallet' }); }
+    res.json({ 
+        success: true,
+        data: {
+            balance: user.wallet?.balance || 0, 
+            transactions 
+        }
+    });
+  } catch (e) { 
+      res.status(500).json({ success: false, message: 'Error fetching wallet' }); 
+  }
 };
 
-// --- ANALYTICS ---
+// =================================================================
+// ANALYTICS
+// =================================================================
+
 exports.getAnalytics = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -86,47 +112,96 @@ exports.getAnalytics = async (req, res) => {
     const totalLikes = likesAgg[0]?.total || 0;
 
     res.json({
-      overview: {
-        followers: user.followers.length,
-        posts: postCount,
-        likes: totalLikes,
-        engagement: postCount > 0 ? ((totalLikes / postCount).toFixed(1)) + ' avg' : '0'
-      },
-      // Dummy chart data for visualization (Real historical data requires a separate Analytics model)
-      chartData: [10, 25, 15, 30, 45, 60, totalLikes] 
+      success: true,
+      data: {
+        overview: {
+            followers: user.followers.length,
+            posts: postCount,
+            likes: totalLikes,
+            engagement: postCount > 0 ? ((totalLikes / postCount).toFixed(1)) + ' avg' : '0'
+        },
+        // Real or Mocked Chart Data
+        chartData: [10, 25, 15, 30, 45, 60, totalLikes] 
+      }
     });
   } catch (e) { 
       console.error(e);
-      res.status(500).json({ message: 'Error fetching analytics' }); 
+      res.status(500).json({ success: false, message: 'Error fetching analytics' }); 
   }
 };
 
-// --- GAMES ---
+// =================================================================
+// GAMES
+// =================================================================
+
 exports.getLeaderboard = async (req, res) => {
   try {
-    const scores = await GameScore.find({ gameId: req.params.gameId })
-      .sort({ score: -1 })
-      .limit(10)
-      .populate('user', 'name avatar');
-    res.json(scores);
-  } catch (e) { res.status(500).json({ message: 'Error' }); }
+    const { gameId } = req.params;
+
+    // 🔥 FIX: Aggregation Pipeline to show unique user high scores only
+    const scores = await GameScore.aggregate([
+      // 1. Filter by Game ID
+      { $match: { gameId: gameId } },
+      // 2. Sort by Score Descending
+      { $sort: { score: -1 } },
+      // 3. Group by User, keeping the highest score (first one due to sort)
+      { 
+        $group: { 
+          _id: "$user", 
+          score: { $first: "$score" },
+          docId: { $first: "$_id" }
+        } 
+      },
+      // 4. Sort the grouped results
+      { $sort: { score: -1 } },
+      // 5. Limit to Top 10
+      { $limit: 10 },
+      // 6. Join with User collection to get name/avatar
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "userDetails"
+        }
+      },
+      // 7. Unwind the user array (lookup returns array)
+      { $unwind: "$userDetails" },
+      // 8. Project final shape (matching what frontend expects)
+      {
+        $project: {
+          score: 1,
+          user: {
+            _id: "$userDetails._id",
+            name: "$userDetails.name",
+            avatar: "$userDetails.avatar"
+          }
+        }
+      }
+    ]);
+
+    res.json({ success: true, data: scores });
+  } catch (e) { 
+      console.error(e);
+      res.status(500).json({ success: false, message: 'Error fetching leaderboard' }); 
+  }
 };
 
-// 🔥 TRANSACTIONAL SCORE SUBMISSION (Updated)
+// 🔥 TRANSACTIONAL SCORE SUBMISSION (Secure)
 exports.submitScore = async (req, res) => {
   let session = null;
   try {
     const { gameId, score } = req.body;
     const userId = req.user._id;
 
-    // Start ACID Session (Safe Fallback)
-    // Check if we can use transactions (Replica Set only)
+    if (!score || score < 0) return res.status(400).json({ success: false, message: 'Invalid score' });
+
+    // Try to start a Mongoose Transaction (ACID)
     try {
         session = await mongoose.startSession();
         session.startTransaction();
     } catch (err) {
-        // Fallback for standalone DB (Local Dev)
-        session = null;
+        session = null; // Fallback if not on Replica Set
     }
 
     const opts = session ? { session } : {};
@@ -135,7 +210,7 @@ exports.submitScore = async (req, res) => {
     await GameScore.create([{ user: userId, gameId, score }], opts);
 
     // 2. Reward Logic
-    const reward = Math.floor(score / 100); // 1 Coin per 100 points
+    const reward = Math.floor(score / 100); 
     const DAILY_CAP = 500;
     
     // Check Daily Limit
@@ -147,7 +222,7 @@ exports.submitScore = async (req, res) => {
         type: 'credit',
         description: { $regex: /Reward for/ }, 
         createdAt: { $gte: today }
-    }); // Transactions don't need session read usually for this check
+    }); 
 
     const earnedToday = todaysTransactions.reduce((acc, t) => acc + t.amount, 0);
     let earned = 0;
@@ -184,19 +259,18 @@ exports.submitScore = async (req, res) => {
     // Emit socket event for instant wallet update on frontend
     const io = req.app.get('io') || global.io;
     if (io && earned > 0) {
-        // 🔥 FIX: Fetch fresh balance to guarantee consistency
         const freshUser = await User.findById(userId).select('wallet.balance');
         io.to(String(userId)).emit('wallet:update', { balance: freshUser.wallet.balance });
     }
 
-    res.json({ message: 'Score saved', earned });
+    res.json({ success: true, message: 'Score saved', earned });
 
   } catch (e) { 
     if (session) {
         await session.abortTransaction();
         session.endSession();
     }
-    console.error(e);
-    res.status(500).json({ message: 'Error saving score' }); 
+    console.error("Game submission error:", e);
+    res.status(500).json({ success: false, message: 'Error saving score' }); 
   }
 };

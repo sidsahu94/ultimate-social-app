@@ -1,15 +1,15 @@
 // frontend/src/pages/events/EventsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaCalendarPlus, FaMapMarkerAlt, FaUsers, FaClock, FaCalendarAlt, FaTrash } from 'react-icons/fa'; // 🔥 Added FaTrash
+import { FaCalendarPlus, FaMapMarkerAlt, FaUsers, FaClock, FaCalendarAlt, FaTrash } from 'react-icons/fa';
 import API from '../../services/api';
 import Spinner from '../../components/common/Spinner';
 import { useToast } from '../../components/ui/ToastProvider';
 import CreateEventModal from '../../components/events/CreateEventModal';
-import { useSelector } from 'react-redux'; // 🔥 Added useSelector
+import { useSelector } from 'react-redux';
 
 export default function EventsPage() {
-  const myId = useSelector(s => s.auth.user?._id); // 🔥 Get Current User ID
+  const myId = useSelector(s => s.auth.user?._id);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('upcoming');
@@ -24,10 +24,21 @@ export default function EventsPage() {
     try {
       setLoading(true);
       const res = await API.get('/apps/events');
-      setEvents(res.data || []);
+      
+      // 🔥 CRITICAL FIX: Handle both Array and Object response formats safely
+      // 1. If res.data is Array -> Use it (Legacy)
+      // 2. If res.data.data is Array -> Use it (Unified)
+      // 3. Fallback -> Empty Array
+      const eventData = Array.isArray(res.data) 
+        ? res.data 
+        : (Array.isArray(res.data?.data) ? res.data.data : []);
+
+      setEvents(eventData);
+
     } catch (e) {
       console.error("Events error", e);
       addToast("Failed to load events", { type: 'error' });
+      setEvents([]); // Ensure it's always an array even on error
     } finally {
       setLoading(false);
     }
@@ -43,7 +54,6 @@ export default function EventsPage() {
     }
   };
 
-  // 🔥 NEW: Delete Event Handler
   const handleDelete = async (id) => {
       if(!confirm("Are you sure you want to cancel this event?")) return;
       try {
@@ -54,6 +64,13 @@ export default function EventsPage() {
           addToast("Failed to delete event", { type: 'error' }); 
       }
   };
+
+  // Filter Logic
+  const filteredEvents = events.filter(evt => {
+      if (filter === 'upcoming') return new Date(evt.date) > new Date();
+      if (filter === 'my events') return evt.host?._id === myId || evt.attendees.includes(myId);
+      return true;
+  });
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -91,15 +108,14 @@ export default function EventsPage() {
       {/* Events Grid */}
       {loading ? (
         <div className="flex justify-center p-10"><Spinner /></div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div className="text-center p-10 text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <FaCalendarAlt className="mx-auto text-4xl mb-3 opacity-30" />
-            No upcoming events found. Be the first to create one!
+            No events found. Be the first to create one!
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((evt, i) => {
-            // 🔥 Check Ownership
+          {filteredEvents.map((evt, i) => {
             const isHost = String(evt.host?._id || evt.host) === String(myId);
 
             return (
@@ -122,9 +138,8 @@ export default function EventsPage() {
                     </div>
                 </div>
                 
-                <div className="p-5 flex-1 flex flex-col relative"> {/* Added relative for positioning */}
+                <div className="p-5 flex-1 flex flex-col relative">
                     
-                    {/* 🔥 Delete Button (Top Right of Content Area) */}
                     {isHost && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); handleDelete(evt._id); }}
@@ -135,7 +150,7 @@ export default function EventsPage() {
                         </button>
                     )}
 
-                    <h3 className="font-bold text-lg mb-2 line-clamp-1 pr-8">{evt.title}</h3>
+                    <h3 className="font-bold text-lg mb-2 line-clamp-1 pr-8 dark:text-white">{evt.title}</h3>
                     <div className="flex flex-col gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4 flex-1">
                     <div className="flex items-center gap-2">
                         <FaMapMarkerAlt className="text-indigo-500" /> {evt.location || 'Online'}

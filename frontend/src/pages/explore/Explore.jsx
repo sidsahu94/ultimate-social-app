@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import { Link } from "react-router-dom";
 import Spinner from "../../components/common/Spinner";
-import { FaHashtag, FaUserPlus, FaSearch, FaFire, FaHistory, FaTimes } from 'react-icons/fa'; // 🔥 Added Icons
+import { FaHashtag, FaUserPlus, FaSearch, FaFire, FaHistory, FaTimes } from 'react-icons/fa';
 import UserAvatar from "../../components/ui/UserAvatar";
 
 export default function Explore() {
@@ -11,28 +11,22 @@ export default function Explore() {
     const [results, setResults] = useState({ users: [], posts: [], hashtags: [] });
     const [suggestions, setSuggestions] = useState({ users: [], trendingHashtags: [] });
     const [loading, setLoading] = useState(false);
-    
-    // 🔥 NEW: Recent Search State
     const [recentSearches, setRecentSearches] = useState([]);
 
-    // Load Recents on Mount
+    // Load History
     useEffect(() => {
         const saved = localStorage.getItem('recent_searches');
-        if (saved) {
-            try { setRecentSearches(JSON.parse(saved)); } catch(e) {}
-        }
+        if (saved) { try { setRecentSearches(JSON.parse(saved)); } catch(e) {} }
     }, []);
 
-    // 🔥 NEW: Helper to Add to History
     const addToHistory = (term) => {
         if (!term || term.length < 2) return;
         const newSet = new Set([term, ...recentSearches]);
-        const newArr = Array.from(newSet).slice(0, 5); // Keep top 5
+        const newArr = Array.from(newSet).slice(0, 5);
         setRecentSearches(newArr);
         localStorage.setItem('recent_searches', JSON.stringify(newArr));
     };
 
-    // 🔥 NEW: Helper to Remove from History
     const removeFromHistory = (term, e) => {
         e.stopPropagation();
         const newArr = recentSearches.filter(s => s !== term);
@@ -40,12 +34,20 @@ export default function Explore() {
         localStorage.setItem('recent_searches', JSON.stringify(newArr));
     };
 
-    // Load Initial Suggestions
+    // Load Suggestions (Users & Trends)
     useEffect(() => {
         const fetchSuggestions = async () => {
             try {
+                // 🔥 FIX: Use correct endpoint that returns BOTH users and hashtags
                 const r = await API.get('/extra/suggestions');
-                setSuggestions(r.data || { users: [], trendingHashtags: [] });
+                
+                // Handle Unified Response structure
+                const payload = r.data.data || r.data || {};
+                
+                setSuggestions({ 
+                    users: Array.isArray(payload.users) ? payload.users : [],
+                    trendingHashtags: Array.isArray(payload.trendingHashtags) ? payload.trendingHashtags : []
+                });
             } catch (e) {
                 console.error("Failed to load suggestions", e);
             }
@@ -64,37 +66,38 @@ export default function Explore() {
             setLoading(true);
             try {
                 const r = await API.get(`/search/global?q=${encodeURIComponent(query)}`);
-                setResults(r.data || { users: [], posts: [], hashtags: [] });
+                // 🔥 FIX: Handle Unified Response
+                setResults(r.data.data || r.data || { users: [], posts: [], hashtags: [] });
                 
-                // 🔥 Add to history if results found
-                if (r.data?.users?.length > 0 || r.data?.posts?.length > 0) {
+                // Save to history if results found
+                const payload = r.data.data || r.data;
+                if (payload?.users?.length > 0 || payload?.posts?.length > 0) {
                     addToHistory(query);
                 }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
+            } catch (e) { 
+                console.error(e); 
+            } finally { 
+                setLoading(false); 
             }
         }, 500); 
-
         return () => clearTimeout(timer);
     }, [query]);
 
     return (
         <div className="max-w-4xl mx-auto p-4 min-h-screen pb-20">
-            {/* Search Bar */}
-            <div className="relative mb-8">
+             {/* Search Bar */}
+             <div className="relative mb-8">
                 <FaSearch className="absolute left-4 top-4 text-gray-400" />
                 <input 
                     value={query} 
                     onChange={e => setQuery(e.target.value)} 
                     placeholder="Search people, posts, tags..." 
-                    className="w-full pl-12 p-4 rounded-2xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 outline-none focus:ring-2 ring-indigo-500 transition"
+                    className="w-full pl-12 p-4 rounded-2xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 outline-none focus:ring-2 ring-indigo-500 transition dark:text-white"
                 />
             </div>
 
             {query ? (
-                // --- SEARCH RESULTS VIEW ---
+                /* --- SEARCH RESULTS VIEW --- */
                 <div className="space-y-6">
                     {loading && <div className="text-center"><Spinner /></div>}
                     
@@ -111,7 +114,7 @@ export default function Explore() {
                                     <UserAvatar src={u.avatar} name={u.name} className="w-10 h-10" />
                                     <div>
                                         <div className="font-bold text-sm dark:text-white">{u.name}</div>
-                                        <div className="text-xs text-gray-500">@{u.email.split('@')[0]}</div>
+                                        <div className="text-xs text-gray-500">@{u.email?.split('@')[0]}</div>
                                     </div>
                                 </Link>
                             ))}
@@ -137,10 +140,10 @@ export default function Explore() {
                     )}
                 </div>
             ) : (
-                // --- DEFAULT VIEW ---
+                /* --- DEFAULT DASHBOARD VIEW --- */
                 <div className="space-y-8 animate-fade-in">
                     
-                    {/* 🔥 NEW: Recent Searches */}
+                    {/* Recent Searches */}
                     {recentSearches.length > 0 && (
                         <div className="mb-6">
                             <h3 className="font-bold text-gray-500 text-xs uppercase mb-3 flex items-center gap-2">
@@ -151,7 +154,7 @@ export default function Explore() {
                                     <div 
                                         key={term} 
                                         onClick={() => setQuery(term)}
-                                        className="px-4 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2 group transition"
+                                        className="px-4 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2 group transition dark:text-gray-300"
                                     >
                                         {term}
                                         <span onClick={(e) => removeFromHistory(term, e)} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><FaTimes size={10} /></span>
@@ -173,7 +176,6 @@ export default function Explore() {
                     </div>
 
                     {/* Trending Hashtags */}
-                    {/* ... (Existing code) ... */}
                     <div>
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 dark:text-white">
                             <FaFire className="text-orange-500" /> Trending Now
@@ -190,33 +192,39 @@ export default function Explore() {
                                     </button>
                                 ))
                             ) : (
-                                <div className="text-gray-400 text-sm">No trends yet.</div>
+                                <div className="text-gray-400 text-sm">No trending tags yet.</div>
                             )}
                         </div>
                     </div>
 
-                    {/* People Suggestions */}
-                    {/* ... (Existing code) ... */}
+                    {/* Suggested People */}
                     <div>
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 dark:text-white">
                             <FaUserPlus className="text-green-500" /> Suggested for You
                         </h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {suggestions.users?.map(u => (
-                                <Link key={u._id} to={`/profile/${u._id}`} className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center gap-3 hover:-translate-y-1 transition text-center group">
-                                    <div className="relative">
-                                        <UserAvatar src={u.avatar} name={u.name} className="w-16 h-16" />
-                                        <div className="absolute -bottom-2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm opacity-0 group-hover:opacity-100 transition">
-                                            View
+                        {suggestions.users?.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                {suggestions.users.map(u => (
+                                    <Link key={u._id} to={`/profile/${u._id}`} className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center gap-3 hover:-translate-y-1 transition text-center group">
+                                        <div className="relative">
+                                            <UserAvatar src={u.avatar} name={u.name} className="w-16 h-16" />
+                                            <div className="absolute -bottom-2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm opacity-0 group-hover:opacity-100 transition">
+                                                View
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-sm dark:text-white truncate w-full">{u.name}</div>
-                                        <div className="text-xs text-gray-500">{u.followers?.length || 0} followers</div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
+                                        <div className="w-full">
+                                            <div className="font-bold text-sm dark:text-white truncate">{u.name}</div>
+                                            <div className="text-xs text-gray-500 truncate">
+                                                @{u.email ? u.email.split('@')[0] : 'user'}
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-1">{u.followers?.length || 0} followers</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-gray-400 text-sm">No suggestions available.</div>
+                        )}
                     </div>
                 </div>
             )}

@@ -4,39 +4,36 @@ import { useState, useEffect } from 'react';
 // 🔥 Global variable to capture event if it fires before React mounts
 let deferredPromptGlobal = null;
 
+// Only add listener once at the window level
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     // Prevent the mini-infobar from appearing on mobile
     e.preventDefault();
     // Stash the event so it can be triggered later.
     deferredPromptGlobal = e;
-    console.log("✅ PWA Install Event Captured Globally");
   });
 }
 
 export default function usePWAInstall() {
-  // Initialize state with the global variable if it already exists
   const [deferredPrompt, setDeferredPrompt] = useState(deferredPromptGlobal);
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Handler for the event
-    const handler = (e) => {
-      e.preventDefault();
-      deferredPromptGlobal = e;
-      setDeferredPrompt(e);
-      console.log("✅ PWA Install Event Captured in Hook");
-    };
-
-    // If we missed the event (it fired before this component mounted), update state now
+    // If the event captured globally is available and we haven't set state yet
     if (deferredPromptGlobal && !deferredPrompt) {
         setDeferredPrompt(deferredPromptGlobal);
     }
 
+    const handler = (e) => {
+      e.preventDefault();
+      deferredPromptGlobal = e;
+      setDeferredPrompt(e);
+    };
+
     window.addEventListener('beforeinstallprompt', handler);
 
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Check if already installed (standalone mode)
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
       setIsInstalled(true);
     }
 
@@ -54,13 +51,12 @@ export default function usePWAInstall() {
     
     // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
     
     if (outcome === 'accepted') {
       setIsInstalled(true);
     }
     
-    // We've used the prompt, and can't use it again, throw it away
+    // We've used the prompt, and can't use it again, clear it
     setDeferredPrompt(null);
     deferredPromptGlobal = null;
   };

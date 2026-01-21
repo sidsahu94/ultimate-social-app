@@ -18,8 +18,13 @@ export default function GoogleLoginButton() {
             token: tokenResponse.access_token 
         });
         
-        // Extract refreshToken if your backend provides it
-        const { token, refreshToken, user } = res.data;
+        // 🔥 FIX: Handle unified response format (res.data.data) or fallback
+        const payload = res.data.data || res.data;
+        const { token, refreshToken, user } = payload;
+        
+        if (!user || !user._id) {
+            throw new Error("Invalid user data received");
+        }
         
         localStorage.setItem('token', token);
         if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
@@ -29,6 +34,7 @@ export default function GoogleLoginButton() {
         
         addToast(`Welcome back, ${user.name}!`, { type: 'success' });
         
+        // Hard redirect to clear any stale state
         setTimeout(() => {
             window.location.href = '/'; 
         }, 500);

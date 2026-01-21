@@ -14,8 +14,17 @@ export default function SnakeGame({ onClose, onScoreSaved }) {
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  
   const { add } = useToast();
-  const gameLoop = useRef();
+  
+  // Refs to hold mutable data for the game loop without triggering re-renders
+  const savedCallback = useRef();
+  const dirRef = useRef([0, 1]); // Holds latest direction to prevent rapid key-press bugs
+
+  // Sync direction state to ref for the loop
+  useEffect(() => {
+    dirRef.current = dir;
+  }, [dir]);
 
   // Prevent background scrolling
   useEffect(() => {
@@ -23,63 +32,112 @@ export default function SnakeGame({ onClose, onScoreSaved }) {
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // Keyboard Controls
   useEffect(() => {
     const handleKey = (e) => {
       if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
-      changeDir(e.key);
+      
+      // Use current direction from state to prevent 180 turns
+      // We check against the current dir state to prevent reversing
+      switch(e.key) {
+        case 'ArrowUp': 
+          if(dir[0] !== 1) setDir([-1, 0]); 
+          break;
+        case 'ArrowDown': 
+          if(dir[0] !== -1) setDir([1, 0]); 
+          break;
+        case 'ArrowLeft': 
+          if(dir[1] !== 1) setDir([0, -1]); 
+          break;
+        case 'ArrowRight': 
+          if(dir[1] !== -1) setDir([0, 1]); 
+          break;
+        default: break;
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [dir]);
 
-  const changeDir = (key) => {
-      if (key === 'ArrowUp' && dir[0] !== 1) setDir([-1, 0]);
-      if (key === 'ArrowDown' && dir[0] !== -1) setDir([1, 0]);
-      if (key === 'ArrowLeft' && dir[1] !== 1) setDir([0, -1]);
-      if (key === 'ArrowRight' && dir[1] !== -1) setDir([0, 1]);
-  };
-
-  useEffect(() => {
-    if (!isPlaying || gameOver) return;
-    gameLoop.current = setInterval(moveSnake, SPEED);
-    return () => clearInterval(gameLoop.current);
-  });
-
+  // Core Game Logic
   const moveSnake = () => {
-    const newHead = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
+    const currentDir = dirRef.current;
+    const newHead = [snake[0][0] + currentDir[0], snake[0][1] + currentDir[1]];
 
-    if (newHead[0] < 0 || newHead[0] >= GRID_SIZE || newHead[1] < 0 || newHead[1] >= GRID_SIZE) return endGame();
-    if (snake.some(s => s[0] === newHead[0] && s[1] === newHead[1])) return endGame();
+    // Collision Detection (Walls)
+    if (newHead[0] < 0 || newHead[0] >= GRID_SIZE || newHead[1] < 0 || newHead[1] >= GRID_SIZE) {
+      return endGame();
+    }
+    
+    // Collision Detection (Self)
+    if (snake.some(s => s[0] === newHead[0] && s[1] === newHead[1])) {
+      return endGame();
+    }
 
     const newSnake = [newHead, ...snake];
+    
+    // Eat Food
     if (newHead[0] === food[0] && newHead[1] === food[1]) {
       setScore(s => s + 10);
-      setFood([Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)]);
+      generateFood(newSnake);
     } else {
-      newSnake.pop();
+      newSnake.pop(); // Remove tail
     }
+    
     setSnake(newSnake);
+  };
+
+  const generateFood = (currentSnake) => {
+    let newFood;
+    while (true) {
+      newFood = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)];
+      // Ensure food doesn't spawn on snake body
+      // eslint-disable-next-line no-loop-func
+      const isOnSnake = currentSnake.some(s => s[0] === newFood[0] && s[1] === newFood[1]);
+      if (!isOnSnake) break;
+    }
+    setFood(newFood);
   };
 
   const endGame = async () => {
     setGameOver(true);
     setIsPlaying(false);
-    clearInterval(gameLoop.current);
     try {
       await API.post('/apps/games/score', { gameId: 'snake', score });
       add(`Score: ${score} saved!`, { type: 'success' });
       if(onScoreSaved) onScoreSaved();
-    } catch(e) {}
+    } catch(e) {
+      // Silent fail on score save
+    }
   };
 
   const startGame = () => {
     setSnake([[5, 5]]);
     setFood([10, 10]);
     setDir([0, 1]);
+    dirRef.current = [0, 1];
     setScore(0);
     setGameOver(false);
     setIsPlaying(true);
   };
+
+  // --- GAME LOOP FIX ---
+  // 1. Save the latest callback to a ref. This allows the interval to always access fresh state.
+  useEffect(() => {
+    savedCallback.current = moveSnake;
+  });
+
+  // 2. Set up the interval only when playing state changes
+  useEffect(() => {
+    if (!isPlaying || gameOver) return;
+    
+    const tick = () => {
+      if (savedCallback.current) savedCallback.current();
+    };
+
+    const id = setInterval(tick, SPEED);
+    return () => clearInterval(id);
+  }, [isPlaying, gameOver]); // Dependency array is now stable!
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-4">
@@ -115,13 +173,13 @@ export default function SnakeGame({ onClose, onScoreSaved }) {
         {/* Mobile Controls */}
         <div className="mt-6 grid grid-cols-3 gap-2 max-w-[200px] mx-auto md:hidden">
             <div />
-            <button onPointerDown={() => changeDir('ArrowUp')} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowUp /></button>
+            <button onPointerDown={() => setDir([-1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowUp /></button>
             <div />
-            <button onPointerDown={() => changeDir('ArrowLeft')} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowLeft /></button>
+            <button onPointerDown={() => setDir([0, -1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowLeft /></button>
             <div className="flex items-center justify-center text-gray-500 text-xs font-bold">PAD</div>
-            <button onPointerDown={() => changeDir('ArrowRight')} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowRight /></button>
+            <button onPointerDown={() => setDir([0, 1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowRight /></button>
             <div />
-            <button onPointerDown={() => changeDir('ArrowDown')} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowDown /></button>
+            <button onPointerDown={() => setDir([1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowDown /></button>
             <div />
         </div>
 

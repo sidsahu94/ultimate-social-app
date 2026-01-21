@@ -12,7 +12,7 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
   const [location, setLocation] = useState(user?.location || '');
   
   const [avatar, setAvatar] = useState(null);
-  const [cover, setCover] = useState(null); // 🔥 NEW
+  const [cover, setCover] = useState(null); 
   
   const [loading, setLoading] = useState(false);
   const { add } = useToast();
@@ -29,12 +29,9 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
       fd.append('bio', bio);
       fd.append('location', location);
       if (avatar) fd.append('avatar', avatar);
-      if (cover) fd.append('coverImage', cover); // 🔥 NEW
-
-      // Note: Ensure your backend 'upload' middleware handles fields named 'avatar' and 'coverImage'
-      // OR update backend to accept 'media' generically and assign based on fieldname.
-      // If using the generic 'upload' route we built earlier, you might need two separate calls or update the user controller to handle req.files map.
-      // Assuming your usersController.updateProfile handles req.files:
+      
+      // 🔥 FIX: Backend expects 'coverPhoto', not 'coverImage'
+      if (cover) fd.append('coverPhoto', cover); 
 
       const res = await API.put(`/users/${user._id}`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -43,7 +40,7 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
       dispatch(updateAuthUser(res.data));
       add("Profile updated", { type: 'success' });
       onClose();
-      window.location.reload(); // Refresh to show new images
+      window.location.reload(); 
     } catch (err) {
       add("Update failed", { type: 'error' });
     } finally {
@@ -58,7 +55,7 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
         {/* 🔥 Cover Image Input */}
         <div className="h-32 bg-gray-200 dark:bg-gray-700 relative group">
             <img 
-                src={cover ? URL.createObjectURL(cover) : (user.coverImage || '/default-cover.jpg')} 
+                src={cover ? URL.createObjectURL(cover) : (user.coverPhoto || user.coverImage || '/default-cover.jpg')} 
                 className="w-full h-full object-cover opacity-80" 
             />
             <label className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 cursor-pointer transition">

@@ -1,43 +1,41 @@
 // frontend/src/utils/imageUtils.js
 
 /**
- * Optimizes Cloudinary URLs for performance.
+ * Optimizes Cloudinary URLs or handles local/relative paths.
  * @param {string} url - The original image URL
- * @param {string} variant - 'avatar' | 'feed' | 'story' | 'full'
+ * @param {string} variant - 'avatar' | 'feed' | 'story' | 'thumbnail'
  */
 export const getImageUrl = (url, variant = 'feed') => {
   if (!url) return '/default-avatar.png';
   
-  // If not Cloudinary, return as is (Local uploads or external links)
-  if (!url.includes('cloudinary.com')) {
-    // If it's a relative local path, prepend host
-    if (url.startsWith('/')) return `http://${window.location.hostname}:5000${url}`;
-    return url;
+  // 1. External URLs (Google, Unsplash, etc.) - Return as is
+  if (url.startsWith('http') && !url.includes('cloudinary.com')) {
+      return url;
   }
 
-  // Cloudinary Transformation Logic
-  // We inject the transformation string after "/upload/"
-  const parts = url.split('/upload/');
-  if (parts.length < 2) return url;
-
-  let params = 'q_auto,f_auto'; // Default: Auto quality & format (WebP/AVIF)
-
-  switch (variant) {
-    case 'avatar':
-      params += ',w_150,h_150,c_fill,g_face'; // Small, square, focused on face
-      break;
-    case 'feed':
-      params += ',w_800,c_limit'; // Max width 800px for feed
-      break;
-    case 'story':
-      params += ',w_1080,h_1920,c_fill'; // Full screen vertical
-      break;
-    case 'thumbnail':
-      params += ',w_300,h_300,c_fill'; // Grid view
-      break;
-    default:
-      break; // 'full' keeps original dimensions but optimizes size
+  // 2. Local/Relative URLs - Prepend Backend URL
+  // In development, this points to localhost:5000. In prod, it's relative.
+  if (url.startsWith('/')) {
+      const backendUrl = import.meta.env.PROD 
+        ? '' // In prod, we use relative paths (proxy handles it)
+        : 'http://localhost:5000';
+      return `${backendUrl}${url}`;
   }
 
-  return `${parts[0]}/upload/${params}/${parts[1]}`;
+  // 3. Cloudinary Transformation
+  if (url.includes('cloudinary.com')) {
+      const parts = url.split('/upload/');
+      if (parts.length < 2) return url;
+
+      let params = 'q_auto,f_auto'; 
+      switch (variant) {
+        case 'avatar': params += ',w_150,h_150,c_fill,g_face'; break;
+        case 'feed': params += ',w_800,c_limit'; break;
+        case 'story': params += ',w_1080,h_1920,c_fill'; break;
+        case 'thumbnail': params += ',w_300,h_300,c_fill'; break;
+      }
+      return `${parts[0]}/upload/${params}/${parts[1]}`;
+  }
+
+  return url;
 };

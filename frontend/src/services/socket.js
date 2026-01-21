@@ -4,7 +4,6 @@ import { io } from "socket.io-client";
 // Vite proxy handles forwarding to backend
 const BACKEND_WS = window.location.origin;
 
-// 🔥 FIX: Auth as a function ensures token is fresh on every reconnection attempt
 const socket = io(BACKEND_WS, {
   autoConnect: false,
   transports: ["websocket", "polling"],
@@ -20,9 +19,30 @@ const socket = io(BACKEND_WS, {
   reconnectionDelay: 1000
 });
 
-// Helper if you need to manually update (though the function above handles most cases)
+// Prevent infinite auth loops
+socket.on("connect_error", (err) => {
+  if (err.message === "Unauthorized" || err.message === "Authentication error" || err.message.includes("token")) {
+    console.warn("Socket authentication failed. Stopping reconnection loop.");
+    socket.disconnect();
+  }
+});
+
+// 🔥 NEW: Global Logout Listener to kill socket connection
+if (typeof window !== 'undefined') {
+    window.addEventListener('auth:logout', () => {
+        if (socket.connected) {
+            console.log("🔒 Logging out socket...");
+            socket.disconnect();
+        }
+    });
+}
+
+// Helper to manually update auth
 export const updateSocketAuth = (token, userId) => {
-	socket.auth = { token, userId };
+    socket.auth = { token, userId };
+    if (socket.disconnected) {
+        socket.connect();
+    }
 };
 
 export default socket;

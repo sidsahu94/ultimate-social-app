@@ -112,18 +112,23 @@ exports.viewReel = async (req, res) => {
   }
 };
 // 🔥 NEW: Delete Reel
+
 exports.deleteReel = async (req, res) => {
   try {
     const reel = await Reel.findById(req.params.id);
     if (!reel) return res.status(404).json({ message: 'Reel not found' });
 
-    // Check ownership or admin
+    // Check ownership
     if (String(reel.user) !== String(req.user._id) && req.user.role !== 'admin') {
         return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    // Optional: Delete video from Cloudinary here using utils/cloudinary deleteFile
-    // await deleteFile(reel.videoUrl);
+    // 🔥 FIX: Actually delete the file from Cloudinary
+    if (reel.videoUrl) {
+        // utils/cloudinary.js needs to export deleteFile for this to work
+        const { deleteFile } = require('../utils/cloudinary'); 
+        await deleteFile(reel.videoUrl);
+    }
 
     await Reel.findByIdAndDelete(req.params.id);
     res.json({ message: 'Reel deleted' });

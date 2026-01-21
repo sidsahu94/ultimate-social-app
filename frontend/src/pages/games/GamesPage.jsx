@@ -13,16 +13,25 @@ const GAMES = [
 ];
 
 export default function GamesPage() {
-  const [activeGame, setActiveGame] = useState(null); // Which leaderboard to show
+  const [activeGame, setActiveGame] = useState(null); 
   const [leaderboard, setLeaderboard] = useState([]);
-  const [playingGame, setPlayingGame] = useState(null); // 'snake', '2048', 'quiz'
+  const [playingGame, setPlayingGame] = useState(null); 
 
   const loadLeaderboard = async (gameId) => {
     setActiveGame(gameId);
+    setLeaderboard([]); // Clear prev
     try {
       const res = await API.get(`/apps/games/${gameId}/leaderboard`);
-      setLeaderboard(res.data);
-    } catch (e) { console.error(e); }
+      
+      // 🔥 FIX: Handle unified response format { success: true, data: [...] }
+      // This prevents the "map is not a function" error
+      const data = Array.isArray(res.data) ? res.data : (res.data.data || []);
+      
+      setLeaderboard(data);
+    } catch (e) { 
+        console.error("Leaderboard load failed", e); 
+        setLeaderboard([]);
+    }
   };
 
   return (
@@ -71,24 +80,9 @@ export default function GamesPage() {
       )}
 
       {/* Game Modals */}
-      {playingGame === 'snake' && (
-          <SnakeGame 
-            onClose={() => setPlayingGame(null)} 
-            onScoreSaved={() => loadLeaderboard('snake')} 
-          />
-      )}
-      {playingGame === '2048' && (
-          <Game2048 
-            onClose={() => setPlayingGame(null)} 
-            onScoreSaved={() => loadLeaderboard('2048')}
-          />
-      )}
-      {playingGame === 'quiz' && (
-          <TriviaGame 
-            onClose={() => setPlayingGame(null)} 
-            onScoreSaved={() => loadLeaderboard('quiz')}
-          />
-      )}
+      {playingGame === 'snake' && <SnakeGame onClose={() => setPlayingGame(null)} onScoreSaved={() => loadLeaderboard('snake')} />}
+      {playingGame === '2048' && <Game2048 onClose={() => setPlayingGame(null)} onScoreSaved={() => loadLeaderboard('2048')} />}
+      {playingGame === 'quiz' && <TriviaGame onClose={() => setPlayingGame(null)} onScoreSaved={() => loadLeaderboard('quiz')} />}
     </div>
   );
 }

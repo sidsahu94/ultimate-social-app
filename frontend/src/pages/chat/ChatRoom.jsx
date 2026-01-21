@@ -1,3 +1,4 @@
+// frontend/src/pages/chat/ChatRoom.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Peer from 'simple-peer';

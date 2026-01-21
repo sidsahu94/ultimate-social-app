@@ -1,3 +1,4 @@
+// frontend/src/components/chat/PollBubble.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';

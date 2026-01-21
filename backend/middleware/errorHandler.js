@@ -1,6 +1,6 @@
 // backend/middleware/errorHandler.js
 module.exports = (err, req, res, next) => {
-  // Log error for debugging
+  // Always log full error on server side for debugging
   console.error('🔥 ERROR:', err);
 
   const statusCode = err.statusCode || 500;
@@ -9,7 +9,7 @@ module.exports = (err, req, res, next) => {
   res.status(statusCode).json({
     success: false,
     message,
-    // Include stack trace only in development for easier debugging
+    // 🔥 SECURITY FIX: strictly hide stack in production
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack, error: err })
   });
 };

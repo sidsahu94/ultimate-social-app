@@ -6,11 +6,12 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Spinner from '../../components/common/Spinner';
 import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
 import { motion } from 'framer-motion';
-// 🔥 FIX: Added FaGoogle to imports here to prevent reference errors if used directly
-import { FaEye, FaEyeSlash, FaGoogle } from 'react-icons/fa'; 
+import { FaEye, FaEyeSlash } from 'react-icons/fa'; 
 import AppIcon from '../../components/ui/AppIcon'; 
+import API from '../../services/api'; // Ensure API is imported if used directly
+import { setUser } from '../../redux/slices/authSlice'; // Import actions
 
-const Login = () => {
+export default function Login() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,7 +20,6 @@ const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
 
-  // Deep link redirect logic
   const from = location.state?.from?.pathname || "/";
 
   useEffect(() => {
@@ -30,133 +30,132 @@ const Login = () => {
 
   const submit = async (e) => {
     e.preventDefault();
-    // We manually dispatch API call here instead of Redux thunk 
-    // to handle the special 2FA flow logic locally first
     try {
         const res = await API.post('/auth/login', form);
         
-        // 🔥 NEW: Check for 2FA
         if (res.data.requires2FA) {
             navigate('/verify-account', { 
-                state: { email: res.data.email, isLogin: true } // Pass flag
+                state: { email: res.data.email, isLogin: true } 
             });
             return;
         }
 
-        // Normal Success
-        const { token, refreshToken, user } = res.data;
+        const { token, refreshToken, user } = res.data.data || res.data; // Handle updated response structure
         localStorage.setItem('token', token);
         localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('meId', user._id);
+        
         dispatch(setUser(user));
         navigate(from, { replace: true });
 
     } catch (err) {
-        // Handle error manually since we skipped thunk
-        const msg = err.response?.data?.message || 'Login failed';
-        // You might need a local error state or dispatch a failure action to show it
-        alert(msg); // Or set local error state
+        alert(err.response?.data?.message || 'Login failed');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#E0E5EC] dark:bg-[#1A1B1E] p-6 transition-colors duration-500">
-      
-      <motion.div 
-        initial={{ y: 20, opacity: 0 }} 
-        animate={{ y: 0, opacity: 1 }} 
-        className="neu-card w-full max-w-md relative overflow-hidden flex flex-col gap-6"
-      >
-        {/* Decorative Top Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-primary-glow to-transparent shadow-neon-cyan" />
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 z-[-1]">
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-electric-violet/20 rounded-full blur-[120px] animate-pulse-slow" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-electric-cyan/20 rounded-full blur-[120px]" />
+      </div>
 
-        {/* Header Section */}
-        <div className="text-center mt-4">
-          <div className="inline-block p-4 rounded-[20px] shadow-neu-flat dark:shadow-neu-dark-flat mb-4 bg-[#E0E5EC] dark:bg-[#1A1B1E] border border-white/40 dark:border-white/5">
-             <AppIcon size={48} />
+      <motion.div 
+        initial={{ y: 20, opacity: 0, scale: 0.95 }} 
+        animate={{ y: 0, opacity: 1, scale: 1 }} 
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="glass-card w-full max-w-md p-8 relative overflow-hidden z-10"
+      >
+        {/* Top Glow Bar */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-electric-cyan via-electric-violet to-electric-pink" />
+
+        <div className="text-center mb-8">
+          <div className="inline-block mb-4 shadow-neon-cyan rounded-2xl">
+             <AppIcon size={64} />
           </div>
-          <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter mb-1">
-            WELCOME BACK
+          <h1 className="text-3xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
+            Welcome Back
           </h1>
-          <p className="text-slate-500 text-sm font-medium">Log in to the future.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+            Enter the Nexus.
+          </p>
         </div>
 
-        {/* Error Message */}
         {error && (
-          <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm text-center font-bold animate-pulse">
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm text-center font-bold"
+          >
             {error}
-          </div>
+          </motion.div>
         )}
 
-        {/* Google Login (Styled) */}
-        <div className="w-full">
+        <div className="space-y-6">
            <GoogleLoginButton />
-        </div>
 
-        <div className="relative flex items-center">
-          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">Or Email</span>
-          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
-        </div>
+           <div className="relative flex items-center py-2">
+             <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
+             <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase tracking-wider">Or continue with</span>
+             <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
+           </div>
 
-        {/* Login Form */}
-        <form onSubmit={submit} className="space-y-5">
-          <div className="space-y-1">
-            <input
-              className="neu-input"
-              placeholder="Email address"
-              type="email"
-              name="email"
-              autoComplete="email"
-              value={form.email}
-              onChange={e => setForm({...form, email: e.target.value})}
-              required
-            />
-          </div>
-          
-          <div className="space-y-1 relative">
-            <input
-              className="neu-input pr-12"
-              placeholder="Password"
-              type={showPass ? "text" : "password"}
-              name="password"
-              autoComplete="current-password"
-              value={form.password}
-              onChange={e => setForm({...form, password: e.target.value})}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass(!showPass)}
-              className="absolute right-4 top-3.5 text-gray-400 hover:text-primary transition-colors cursor-pointer"
-            >
-              {showPass ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
-            </button>
-          </div>
+           <form onSubmit={submit} className="space-y-5">
+             <div className="group">
+               <input
+                 className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 outline-none focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                 placeholder="Email address"
+                 type="email"
+                 value={form.email}
+                 onChange={e => setForm({...form, email: e.target.value})}
+                 required
+               />
+             </div>
+             
+             <div className="relative group">
+               <input
+                 className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 outline-none focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan transition-all text-gray-900 dark:text-white placeholder-gray-400 pr-12"
+                 placeholder="Password"
+                 type={showPass ? "text" : "password"}
+                 value={form.password}
+                 onChange={e => setForm({...form, password: e.target.value})}
+                 required
+               />
+               <button
+                 type="button"
+                 onClick={() => setShowPass(!showPass)}
+                 className="absolute right-4 top-3.5 text-gray-400 hover:text-electric-cyan transition-colors"
+               >
+                 {showPass ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
+               </button>
+             </div>
 
-          <div className="flex justify-end">
-              <Link 
-                  to="/forgot-password" 
-                  className="text-xs font-bold text-primary hover:text-secondary transition"
-              >
-                  Forgot Password?
-              </Link>
-          </div>
+             <div className="flex justify-end">
+                 <Link 
+                     to="/forgot-password" 
+                     className="text-xs font-bold text-gray-500 hover:text-electric-cyan transition-colors"
+                 >
+                     Forgot Password?
+                 </Link>
+             </div>
 
-          <button 
-            disabled={loading} 
-            className="btn-neon w-full flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {loading ? <Spinner /> : 'ENTER SYSTEM'}
-          </button>
-        </form>
+             <button 
+               disabled={loading} 
+               className="btn-electric w-full flex justify-center items-center gap-2 h-12 text-lg shadow-lg"
+             >
+               {loading ? <Spinner className="border-black" /> : 'Sign In'}
+             </button>
+           </form>
 
-        <div className="text-center text-sm text-gray-500">
-          New here? <Link to="/register" className="text-primary font-bold hover:text-secondary transition">Create Account</Link>
+           <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+             Don't have an account?{' '}
+             <Link to="/register" className="text-electric-cyan font-bold hover:underline">
+               Create one
+             </Link>
+           </div>
         </div>
       </motion.div>
     </div>
   );
-};
-
-export default Login;
+}
