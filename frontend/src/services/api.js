@@ -1,14 +1,14 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
-// Environment Detection
-const API_URL = import.meta.env.PROD 
-  ? '/api' 
-  : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
+// 🔥 FIX: Use the Environment Variable we set in Vercel
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const API = axios.create({
   baseURL: API_URL, 
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 
+    'Content-Type': 'application/json' 
+  },
   withCredentials: true 
 });
 
