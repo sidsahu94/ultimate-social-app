@@ -6,23 +6,36 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { sendOtpEmail } = require('../utils/email');
 
-// --- Helper: Generate Token Pair ---
-const createTokens = async (user) => {
+// --- Helper: Generate Secure OTP ---
+const generateSecureOTP = () => {
+  return crypto.randomInt(100000, 999999).toString();
+};
+
+// --- Helper: Generate Token Pair & Set Cookie ---
+const createTokensAndSetCookie = async (user, res) => {
+  // 1. Generate Tokens
   const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
   const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
-  // Store hashed refresh token in DB for security (Rotation)
+  // 2. Store hashed refresh token in DB for security (Rotation)
   user.refreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
   await user.save({ validateBeforeSave: false });
 
-  return { accessToken, refreshToken };
+  // 3. Send Refresh Token as Secure HttpOnly Cookie
+  res.cookie('jwt', refreshToken, {
+    httpOnly: true, // Cannot be accessed by JS
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
+    sameSite: 'strict', // CSRF protection
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  return accessToken;
 };
 
 // --- Helper: Generate Unique Username ---
-// Ensures users have a handle like @john1234 instead of just a name
 const generateUsername = (name) => {
   const base = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(); // Remove special chars
-  const randomSuffix = Math.floor(Math.random() * 10000);
+  const randomSuffix = crypto.randomInt(1000, 9999);
   return `${base}${randomSuffix}`;
 };
 
@@ -31,8 +44,20 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password, referralCode } = req.body;
     
-    // Check if user exists
-    if (await User.findOne({ email })) {
+    // 🔥 CHANGED: Check for EXISTING users, including Soft Deleted ones
+    // Note: This relies on your User model having a plugin (like mongoose-delete) 
+    // that respects the `includeDeleted` option.
+    const existingUser = await User.findOne({ email }).setOptions({ includeDeleted: true });
+
+    if (existingUser) {
+        if (existingUser.isDeleted) {
+            // Case: User exists but was soft-deleted
+            return res.status(400).json({ 
+                success: false, 
+                message: 'This email is associated with a deactivated account. Please contact support to reactivate.' 
+            });
+        }
+        // Case: User exists and is active
         return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
@@ -44,8 +69,8 @@ exports.register = async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 12);
     
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate Secure OTP
+    const otp = generateSecureOTP();
     const otpHash = await bcrypt.hash(otp, 10);
     
     // Auto-generate username
@@ -54,7 +79,7 @@ exports.register = async (req, res) => {
     const user = await User.create({
       name,
       email,
-      username, // 🔥 Added: Critical for mentions
+      username,
       password: hashed,
       isVerified: false, 
       referredBy: referrer ? referrer._id : null,
@@ -64,12 +89,11 @@ exports.register = async (req, res) => {
     });
 
     // 🔥 SECURITY: Strict Email Check
-    // In production, we MUST ensure the email is actually sent.
-    // If SendGrid/Resend fails, we shouldn't leave a phantom unverified account.
     const emailSent = await sendOtpEmail(email, otp, 'Verify your account');
 
     if (!emailSent && process.env.NODE_ENV === 'production') {
         // Rollback: Delete the user if email failed so they can try again
+        await User.findByIdAndUpdate(user._id, { isDeleted: true });
         await User.findByIdAndDelete(user._id);
         return res.status(500).json({ 
             success: false, 
@@ -89,6 +113,10 @@ exports.register = async (req, res) => {
 
   } catch (err) {
     console.error("Register Error:", err);
+    // Handle duplicate key error explicitly as a backup
+    if (err.code === 11000) {
+        return res.status(400).json({ success: false, message: 'Email already exists.' });
+    }
     res.status(500).json({ success: false, message: 'Server error during registration' });
   }
 };
@@ -99,13 +127,13 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
     
     const user = await User.findOne({ email }).select('+password +is2FAEnabled');
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // Handle 2FA
     if (user.is2FAEnabled) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = generateSecureOTP();
       user.tempOtp = await bcrypt.hash(otp, 10);
       user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
       await user.save();
@@ -127,10 +155,12 @@ exports.login = async (req, res) => {
       });
     }
 
-    const tokens = await createTokens(user);
+    // Generate Tokens & Set Cookie
+    const accessToken = await createTokensAndSetCookie(user, res);
+    
     res.json({
       success: true,
-      data: { ...tokens, user }
+      data: { token: accessToken, user }
     });
 
   } catch (err) {
@@ -148,7 +178,9 @@ exports.verifyOtp = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     if (user.isVerified && !user.tempOtp) {
-        return res.json({ success: true, message: 'Already verified', data: { user } });
+        // If verify endpoint called but user already verified
+        const accessToken = await createTokensAndSetCookie(user, res);
+        return res.json({ success: true, message: 'Already verified', data: { token: accessToken, user } });
     }
 
     // 🔥 SECURITY: STRICT Master OTP Check
@@ -184,11 +216,13 @@ exports.verifyOtp = async (req, res) => {
     }
 
     await user.save();
-    const tokens = await createTokens(user);
+    
+    // Generate Tokens
+    const accessToken = await createTokensAndSetCookie(user, res);
 
     res.json({
       success: true,
-      data: { ...tokens, user }
+      data: { token: accessToken, user }
     });
 
   } catch (err) {
@@ -211,13 +245,13 @@ exports.googleLogin = async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // 🔥 FIX: Generate username for Google users so they have a handle
+      // 🔥 FIX: Generate username for Google users
       const username = generateUsername(name);
 
       user = await User.create({
         name,
         email,
-        username, // Added this field
+        username,
         googleId,
         avatar: picture,
         isVerified: true,
@@ -229,8 +263,8 @@ exports.googleLogin = async (req, res) => {
       await user.save();
     }
 
-    const tokens = await createTokens(user);
-    res.json({ success: true, data: { ...tokens, user } });
+    const accessToken = await createTokensAndSetCookie(user, res);
+    res.json({ success: true, data: { token: accessToken, user } });
 
   } catch (err) {
     console.error("Google Login Error:", err.message);
@@ -238,12 +272,13 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-// --- 5. REFRESH TOKEN ---
+// --- 5. REFRESH TOKEN (Using Cookie) ---
 exports.refresh = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // 🔥 READ FROM COOKIE, NOT BODY
+    const refreshToken = req.cookies.jwt;
     
-    // Explicitly return 401 if no token, frontend will catch this and logout
+    // Explicitly return 401 if no token
     if (!refreshToken) return res.status(401).json({ success: false, message: 'No token provided' });
 
     // Verify signature
@@ -267,12 +302,12 @@ exports.refresh = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Invalid refresh token (Reuse detected)' });
     }
 
-    // Issue new pair
-    const tokens = await createTokens(user);
+    // Issue new pair & Rotate Cookie
+    const accessToken = await createTokensAndSetCookie(user, res);
     
     res.json({
       success: true,
-      data: { token: tokens.accessToken, refreshToken: tokens.refreshToken }
+      token: accessToken // Send only access token back, refresh token is in HttpOnly cookie
     });
 
   } catch (err) {
@@ -284,6 +319,12 @@ exports.refresh = async (req, res) => {
 // --- 6. LOGOUT ---
 exports.logout = async (req, res) => {
     try {
+        // Clear Cookie
+        res.cookie('jwt', 'loggedout', {
+            expires: new Date(Date.now() + 10 * 1000),
+            httpOnly: true
+        });
+
         if (req.user) {
             await User.findByIdAndUpdate(req.user._id, { refreshToken: null });
         }
@@ -300,7 +341,7 @@ exports.requestPasswordReset = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = generateSecureOTP();
         user.resetOtp = await bcrypt.hash(otp, 10);
         user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
         await user.save();
@@ -346,6 +387,3 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
-
-// Exports for reuse (optional)
-exports.createTokens = createTokens;

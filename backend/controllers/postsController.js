@@ -125,15 +125,15 @@ exports.getFeed = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('user', 'name avatar isVerified badges')
-      .populate({ path: 'comments', select: 'text user', options: { limit: 2 } })
+      // 🔥 REMOVED: .populate('comments') because it causes StrictPopulateError
       .lean();
 
     // Add Metadata
     const enrichedPosts = posts.map(p => ({
       ...p,
       isLiked: userId ? (p.likes || []).some(id => String(id) === String(userId)) : false,
-      likesCount: (p.likes || []).length,
-      commentsCount: (p.comments || []).length
+      likesCount: p.likesCount || (p.likes || []).length, // Handle both schema versions
+      commentsCount: p.commentsCount || 0
     }));
 
     // Determine next cursor
@@ -150,7 +150,6 @@ exports.getFeed = async (req, res) => {
     res.status(500).json({ success: false, message: 'Feed error' });
   }
 };
-
 exports.getDrafts = async (req, res) => {
     try {
         const drafts = await Post.find({ user: req.user._id, isDraft: true }).sort({ updatedAt: -1 });

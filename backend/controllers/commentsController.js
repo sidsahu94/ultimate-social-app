@@ -1,141 +1,127 @@
 // backend/controllers/commentsController.js
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
-const User = require("../models/User");
 const createNotification = require('../utils/notify'); 
 
 /**
  * POST /api/comments/:postId
- * Creates a comment, updates the post, emits socket event, and notifies the author.
+ * Creates a comment, updates the post counters atomically, emits socket event, and notifies the author.
  */
 exports.create = async (req, res) => {
   try {
-    const { text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ message: "Comment text required" });
+    const { text, audio } = req.body; // Supports voice comments (audio URL)
+    
+    // Validation: Must have text OR audio
+    if (!text?.trim() && !audio) {
+        return res.status(400).json({ message: "Comment cannot be empty" });
+    }
 
     const post = await Post.findById(req.params.postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // Security Check: Blocked User
-    const postOwner = await User.findById(post.user).select('blockedUsers');
-    if (postOwner.blockedUsers && postOwner.blockedUsers.includes(req.user._id)) {
-        return res.status(403).json({ message: "You are unable to comment on this post." });
-    }
-
-    const me = await User.findById(req.user._id).select('blockedUsers');
-    if (me.blockedUsers && me.blockedUsers.includes(post.user)) {
-        return res.status(403).json({ message: "You have blocked this user." });
-    }
-
-    // Create Comment
+    // 1. Create Comment (Standalone Document)
+    // We do NOT push this ID into the Post document array to ensure scalability.
     const comment = await Comment.create({
       post: post._id,
       user: req.user._id,
-      text: text.trim(),
+      text: text?.trim(),
+      audio
     });
 
-    // 🔥 FIX: Atomic Update & Score Increment
-    // Add comment to array AND increment trending score by 2 (Comments worth more than likes)
+    // 2. 🔥 Scalable: Increment Count Only (Atomic Operation)
+    // Instead of pushing to an array, we just increment the counter.
+    // We also increment 'score' for the trending algorithm.
     await Post.findByIdAndUpdate(post._id, { 
-        $push: { comments: comment._id },
-        $inc: { score: 2 } 
+        $inc: { commentsCount: 1, score: 2 } 
     });
 
+    // Populate user details for the frontend
     await comment.populate("user", "name avatar");
 
-    try {
-      const io = req.app.get("io") || global.io;
-      if (io) {
+    // 3. Real-time Event
+    const io = req.app.get("io");
+    if (io) {
         io.to(`post:${post._id}`).emit("comment:created", comment);
-      }
-    } catch (e) {
-      console.warn("Socket emit failed", e?.message);
     }
 
-    // Notify Author (if not self)
+    // 4. Notify Author (if not self)
     if (String(post.user) !== String(req.user._id)) {
       await createNotification(req, {
         toUser: post.user,
         type: 'comment',
         data: { postId: post._id, commentId: comment._id },
-        message: `${req.user.name} commented: "${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`
+        message: `${req.user.name} commented on your post`
       });
     }
 
     res.status(201).json(comment);
   } catch (e) {
-    console.error("create comment err", e);
+    console.error("Create comment error", e);
     res.status(500).json({ message: "Error adding comment" });
   }
 };
 
 /**
  * GET /api/comments/:postId
- * List all comments for a post (Simple)
+ * List comments for a post with Pagination.
+ * Uses the compound index { post: 1, createdAt: -1 } for performance.
  */
 exports.listAll = async (req, res) => {
   try {
-    const comments = await Comment.find({ post: req.params.postId })
-      .populate("user", "name avatar")
-      .sort({ createdAt: -1 });
-    res.json(comments);
-  } catch (e) {
-    res.status(500).json({ message: "Error fetching comments" });
-  }
-};
-
-/**
- * GET /api/comments/:postId/paginated
- */
-exports.listPaginated = async (req, res) => {
-  try {
     const page = parseInt(req.query.page || 0);
-    const limit = 20;
-    
+    const limit = parseInt(req.query.limit || 20);
+
+    // 🔥 Scalable: Query Comments collection directly
     const comments = await Comment.find({ post: req.params.postId })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1 }) // Newest first
       .skip(page * limit)
       .limit(limit)
       .populate("user", "name avatar");
-      
+
     res.json(comments);
   } catch (e) {
+    console.error("List comments error", e);
     res.status(500).json({ message: "Error fetching comments" });
   }
 };
 
 /**
  * DELETE /api/comments/:commentId
+ * Deletes a comment and atomically decrements the post counters.
  */
 exports.remove = async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.commentId);
-    if (!comment) return res.status(404).json({ message: "Not found" });
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
 
-    if (String(comment.user) !== String(req.user._id) && req.user.role !== "admin")
+    // Authorization: Only the author or an admin can delete
+    if (String(comment.user) !== String(req.user._id) && req.user.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
+    }
 
     await comment.deleteOne();
     
-    // Decrement score on delete and remove from array
+    // 🔥 Scalable: Decrement Count Atomically
     await Post.findByIdAndUpdate(comment.post, { 
-        $pull: { comments: comment._id },
-        $inc: { score: -2 }
+        $inc: { commentsCount: -1, score: -2 }
     });
 
-    try {
-      const io = req.app.get("io") || global.io;
-      if (io) io.to(`post:${comment.post}`).emit("comment:deleted", { commentId: comment._id });
-    } catch (e) {}
+    // Notify clients to remove the comment from UI
+    const io = req.app.get("io");
+    if (io) {
+        io.to(`post:${comment.post}`).emit("comment:deleted", { commentId: comment._id });
+    }
 
     res.json({ message: "Deleted" });
   } catch (e) {
+    console.error("Delete comment error", e);
     res.status(500).json({ message: "Error deleting comment" });
   }
 };
 
 /**
  * POST /api/comments/like/:commentId
+ * Toggle like on a comment.
  */
 exports.toggleLike = async (req, res) => {
   try {
@@ -152,18 +138,13 @@ exports.toggleLike = async (req, res) => {
 
     const updatedComment = await Comment.findByIdAndUpdate(commentId, update, { new: true });
 
-    try {
-      const io = req.app.get("io") || global.io;
-      if (io) {
-        io.to(`post:${updatedComment.post}`).emit("comment:liked", { 
-          commentId: updatedComment._id, 
-          likesCount: updatedComment.likes.length 
-        });
-      }
-    } catch (e) {}
+    // Optional: Real-time update for likes
+    // const io = req.app.get("io");
+    // if (io) io.to(`post:${updatedComment.post}`).emit("comment:updated", updatedComment);
 
     res.json({ liked: !isLiked, likesCount: updatedComment.likes.length });
   } catch (e) {
+    console.error("Toggle like error", e);
     res.status(500).json({ message: "Error toggling like" });
   }
 };

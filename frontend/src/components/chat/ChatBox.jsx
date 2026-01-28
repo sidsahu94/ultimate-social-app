@@ -1,13 +1,14 @@
 // frontend/src/components/chat/ChatBox.jsx
-import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import API from "../../services/api";
 import socket from "../../services/socket";
 import { useSelector } from "react-redux";
 import { 
-  FaPaperPlane, FaArrowLeft, FaImage, FaTimes, FaVideo, FaPen, 
+  FaPaperPlane, FaArrowLeft, FaImage, FaTimes, FaVideo, 
   FaArrowDown, FaSearch, FaChevronUp, FaChevronDown 
 } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
+import { Virtuoso } from "react-virtuoso"; // 🔥 Virtualization
 import Spinner from "../common/Spinner";
 import UserAvatar from "../ui/UserAvatar";
 import MessageBubble from "./MessageBubble";
@@ -51,13 +52,11 @@ export default function ChatBox({ chatId, onBack }) {
 
   // UI
   const [lightboxSrc, setLightboxSrc] = useState(null);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [showNewMsgBtn, setShowNewMsgBtn] = useState(false); // 🔥 NEW STATE
+  const [showNewMsgBtn, setShowNewMsgBtn] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
 
   // Refs
-  const scrollRef = useRef();
-  const containerRef = useRef();
-  const previousScrollHeight = useRef(0);
+  const virtuosoRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   // --- 1. INITIAL LOAD ---
@@ -76,13 +75,19 @@ export default function ChatBox({ chatId, onBack }) {
     const loadData = async () => {
       try {
         const { data } = await API.get(`/chat/${chatId}`);
-        setMessages(data.messages || []);
+        // Reverse them for Virtuoso if API returns newest first, 
+        // usually chat APIs return newest-first (desc), so we flip for chronological display
+        setMessages((data.messages || []).reverse());
         setPinnedIds(data.pinnedMessages || []);
         
         const other = data.participants.find(p => p._id !== myId) || data.participants[0];
         setOtherUser(other);
 
+        // Mark as read
         API.post(`/chat/${chatId}/read`).catch(() => {});
+        
+        // Scroll to bottom after render
+        setTimeout(() => virtuosoRef.current?.scrollToIndex({ index: data.messages?.length - 1, align: "end" }), 100);
       } catch (err) {
         console.error("Failed to load chat", err);
         if (onBack) onBack(); 
@@ -94,36 +99,28 @@ export default function ChatBox({ chatId, onBack }) {
     loadData();
   }, [chatId, myId]);
 
-  // --- 2. PAGINATION ---
-  const loadOlderMessages = async () => {
+  // --- 2. PAGINATION (Infinite Scroll Up) ---
+  const loadOlderMessages = useCallback(async () => {
     if (messages.length === 0 || loadingMore) return;
     
-    if (containerRef.current) {
-        previousScrollHeight.current = containerRef.current.scrollHeight;
-    }
-
-    const oldestMsg = messages[0];
     setLoadingMore(true);
+    const oldestMsg = messages[0]; // Messages are chronological [oldest ... newest]
     
     try {
       const res = await API.get(`/chat/${chatId}/messages?before=${oldestMsg.createdAt}`);
       if (res.data.length > 0) {
-        setMessages(prev => [...res.data, ...prev]);
+        // API usually returns newest-first for pagination, so reverse them to chronological
+        const olderMessages = res.data.reverse();
+        setMessages(prev => [...olderMessages, ...prev]);
+        return olderMessages.length; // Return count implies we successfully loaded
       }
     } catch (e) {
       console.error("History load error", e);
     } finally {
       setLoadingMore(false);
     }
-  };
-
-  useLayoutEffect(() => {
-    if (!loadingMore && previousScrollHeight.current > 0 && containerRef.current) {
-        const newScrollHeight = containerRef.current.scrollHeight;
-        containerRef.current.scrollTop = newScrollHeight - previousScrollHeight.current;
-        previousScrollHeight.current = 0;
-    }
-  }, [messages, loadingMore]);
+    return 0;
+  }, [chatId, messages, loadingMore]);
 
   // --- 3. SOCKET LISTENERS ---
   useEffect(() => {
@@ -141,15 +138,14 @@ export default function ChatBox({ chatId, onBack }) {
         
         setIsTyping(false);
 
-        const el = containerRef.current;
-        // Check if user is near bottom
-        const isNearBottom = el && el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-
-        if (isNearBottom) {
-            setTimeout(scrollToBottom, 100);
+        if (atBottom) {
+            // Auto scroll if already at bottom
+            setTimeout(() => {
+                virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
+            }, 50);
             API.post(`/chat/${chatId}/read`).catch(() => {});
         } else {
-            // User is reading old messages, don't auto-scroll, SHOW BUTTON
+            // Show badge if scrolled up
             setShowNewMsgBtn(true);
         }
       }
@@ -191,30 +187,12 @@ export default function ChatBox({ chatId, onBack }) {
         socket.off("chat:pinned", handlePin);
         socket.off("typing", onTyping);
     };
-  }, [chatId, myId]);
+  }, [chatId, myId, atBottom]);
 
   // --- 4. ACTIONS & UTILS ---
   const scrollToBottom = () => {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-      setShowNewMsgBtn(false); // Hide button on scroll down
-  };
-
-  useEffect(() => {
-    if (!loading && messages.length > 0) scrollToBottom();
-  }, [loading, chatId]);
-
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    
-    // Show standard "Scroll Down" arrow if far up
-    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 300);
-    
-    // Auto-hide "New Message" badge if user manually scrolls to bottom
-    if (scrollHeight - scrollTop - clientHeight < 100) {
-        setShowNewMsgBtn(false);
-    }
-    
-    if (scrollTop === 0 && !loadingMore && messages.length >= 20) loadOlderMessages();
+      virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, align: "end", behavior: "smooth" });
+      setShowNewMsgBtn(false);
   };
 
   const handleTyping = (e) => {
@@ -232,8 +210,9 @@ export default function ChatBox({ chatId, onBack }) {
           setSearchResults(res.data);
           setSearchIndex(0);
           if (res.data.length > 0) {
-              const el = document.getElementById(`msg-${res.data[0]._id}`);
-              if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const targetId = res.data[0]._id;
+              const index = messages.findIndex(m => m._id === targetId);
+              if (index !== -1) virtuosoRef.current?.scrollToIndex({ index, align: "center" });
           } else {
               addToast("No results found", { type: 'info' });
           }
@@ -244,8 +223,9 @@ export default function ChatBox({ chatId, onBack }) {
       if (searchResults.length === 0) return;
       const nextIdx = (searchIndex + 1) % searchResults.length;
       setSearchIndex(nextIdx);
-      const el = document.getElementById(`msg-${searchResults[nextIdx]._id}`);
-      if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const targetId = searchResults[nextIdx]._id;
+      const index = messages.findIndex(m => m._id === targetId);
+      if (index !== -1) virtuosoRef.current?.scrollToIndex({ index, align: "center" });
   };
 
   const handleReply = (msg) => {
@@ -308,13 +288,8 @@ export default function ChatBox({ chatId, onBack }) {
         
         if (replyingTo) payload.replyTo = replyingTo._id;
 
-        const { data } = await API.post(`/chat/${chatId}/message`, payload);
-        
-        setMessages(prev => {
-             const exists = prev.some(m => m._id === data._id);
-             if (exists) return prev;
-             return [...prev, { ...data, replyTo: replyingTo }];
-        });
+        // Optimistic append is handled by socket, but we clear input immediately
+        await API.post(`/chat/${chatId}/message`, payload);
         
         cancelAction();
         setTimeout(scrollToBottom, 100);
@@ -389,32 +364,41 @@ export default function ChatBox({ chatId, onBack }) {
         <PinnedMessage messages={messages.filter(m => pinnedIds.includes(m._id))} onUnpin={handlePinAction} />
       </div>
 
-      {/* MESSAGES LIST */}
-      <div 
-        ref={containerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-1 bg-white/50 dark:bg-transparent"
-        onScroll={handleScroll}
-      >
-        {loadingMore && <div className="text-center text-xs text-gray-400 py-2">Loading older messages...</div>}
-        
-        {messages.map((m, i) => (
-          <div id={`msg-${m._id}`} key={m._id || i}>
-            <MessageBubble 
-                message={m} 
-                isMe={(m.sender?._id || m.sender) === myId} 
-                onReply={handleReply} 
-                onEdit={handleEdit} 
-                onForward={handleForward} 
-                onPin={handlePinAction} 
-                onDelete={() => {/* stub */}} 
-                onMediaLoad={() => scrollToBottom()} 
-            />
-          </div>
-        ))}
-        <div ref={scrollRef} />
+      {/* 🔥 VIRTUALIZED MESSAGES LIST */}
+      <div className="flex-1 p-0 overflow-hidden bg-white/50 dark:bg-transparent relative">
+        <Virtuoso
+          ref={virtuosoRef}
+          style={{ height: "100%" }}
+          data={messages}
+          initialTopMostItemIndex={messages.length - 1} // Start at bottom
+          firstItemIndex={100000 - messages.length} // Reverse scrolling hack
+          startReached={loadOlderMessages} // Callback when scrolling up
+          atBottomStateChange={(isAtBottom) => {
+              setAtBottom(isAtBottom);
+              if (isAtBottom) setShowNewMsgBtn(false);
+          }}
+          followOutput="auto" // Stick to bottom when new items added if already at bottom
+          itemContent={(index, m) => (
+            <div className="px-4 py-1" key={m._id}>
+                <MessageBubble 
+                    message={m} 
+                    isMe={(m.sender?._id || m.sender) === myId} 
+                    onReply={handleReply} 
+                    onEdit={handleEdit} 
+                    onForward={handleForward} 
+                    onPin={handlePinAction} 
+                    onDelete={() => {/* stub */}} 
+                    onMediaLoad={() => { /* Virtualization handles height calc */ }} 
+                />
+            </div>
+          )}
+          components={{
+            Header: () => loadingMore && <div className="text-center text-xs text-gray-400 py-2">Loading history...</div>
+          }}
+        />
       </div>
 
-      {/* 🔥 NEW MESSAGE BUTTON */}
+      {/* NEW MESSAGE BUTTON */}
       <AnimatePresence>
         {showNewMsgBtn && (
            <motion.button 
@@ -429,15 +413,8 @@ export default function ChatBox({ chatId, onBack }) {
         )}
       </AnimatePresence>
 
-      {/* Standard Scroll Btn (only shows if scrolled up but no new msg) */}
-      {showScrollBtn && !showNewMsgBtn && (
-        <button onClick={scrollToBottom} className="absolute bottom-20 right-6 bg-white dark:bg-gray-800 text-indigo-600 p-3 rounded-full shadow-lg border dark:border-gray-700 z-40 animate-bounce">
-            <FaArrowDown />
-        </button>
-      )}
-
       {/* INPUT AREA */}
-      <div className="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 z-30 flex-shrink-0">
+      <div className="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 z-30 flex-shrink-0 shadow-upper">
         
         {(replyingTo || editingMsg) && (
             <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-t-xl border-l-4 border-indigo-500 mb-2">

@@ -9,7 +9,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     index: 'text' 
   },
-  // 🔥 FIX: Added unique username for mentions
+  // Unique username for mentions/urls
   username: { 
       type: String, 
       unique: true, 
@@ -26,9 +26,10 @@ const UserSchema = new mongoose.Schema({
       'Please provide a valid email'
     ]
   },
+  // 🔥 Fix: Password is only required if NOT a Google User
   password: { 
     type: String, 
-    required: [true, 'Please provide a password'], 
+    required: function() { return !this.googleId; }, 
     minlength: 6,
     select: false 
   },
@@ -84,7 +85,7 @@ const UserSchema = new mongoose.Schema({
     follows: { type: Boolean, default: true },
     messages: { type: Boolean, default: true },
   },
-pushSubscription: { type: [Object], select: false, default: [] },
+  pushSubscription: { type: [Object], select: false, default: [] },
   
   // --- Geo Location ---
   geo: {
@@ -129,8 +130,9 @@ UserSchema.pre('save', function(next) {
   next();
 });
 
+// 🔥 Fix: Only hash password if it exists and is modified
 UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

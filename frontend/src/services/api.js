@@ -1,18 +1,19 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
-// 🔥 FIX: Use the Environment Variable we set in Vercel
+// Use environment variable or fallback to localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const API = axios.create({
-  baseURL: API_URL, 
-  headers: { 
-    'Content-Type': 'application/json' 
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
   },
-  withCredentials: true 
+  withCredentials: true, // 🔥 Crucial: Allows sending/receiving HTTP-Only Cookies
 });
 
 // --- REQUEST INTERCEPTOR ---
+// Attaches the short-lived Access Token to every request
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -25,11 +26,12 @@ API.interceptors.request.use(
 );
 
 // --- RESPONSE INTERCEPTOR ---
+// Handles Token Refresh and Error Queueing
 let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
@@ -44,77 +46,94 @@ API.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // 🔥 NEW: Global 5xx Error Handling
+    // 🔥 Global 5xx Error Handling (Server Crash/Error)
     if (error.response?.status >= 500) {
-        // Dispatch custom event for App.jsx to pick up
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('api:error', { 
-                detail: "Server error. Please try again later." 
-            }));
-        }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('api:error', {
+            detail: 'Server error. Please try again later.',
+          })
+        );
+      }
     }
 
     // Prevent infinite loops on auth routes
-    if (originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/refresh')) {
-        return Promise.reject(error);
+    if (
+      originalRequest.url.includes('/auth/login') ||
+      originalRequest.url.includes('/auth/refresh')
+    ) {
+      return Promise.reject(error);
     }
 
-    // Handle 401 Unauthorized (Token Refresh)
+    // Handle 401 Unauthorized (Access Token Expired)
     if (error.response?.status === 401 && !originalRequest._retry) {
-      
       if (isRefreshing) {
-        return new Promise(function(resolve, reject) {
+        // If already refreshing, queue this request
+        return new Promise(function (resolve, reject) {
           failedQueue.push({ resolve, reject });
-        }).then(token => {
-          originalRequest.headers['Authorization'] = 'Bearer ' + token;
-          return API(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
+        })
+          .then((token) => {
+            originalRequest.headers['Authorization'] = 'Bearer ' + token;
+            return API(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
       }
 
       originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) throw new Error("No refresh token");
+        // Attempt refresh using the HTTP-Only cookie
+        // Note: No body needed, the cookie is sent automatically via withCredentials
+        const { data } = await axios.post(
+          `${API_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
 
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
-        const payload = data.data || data; 
+        // Backend returns the new Access Token
+        const payload = data.data || data;
+        const newToken = payload.token;
 
-        if (!payload.token) throw new Error("Invalid refresh response");
+        if (!newToken) throw new Error('Invalid refresh response');
 
-        localStorage.setItem('token', payload.token);
-        if (payload.refreshToken) localStorage.setItem('refreshToken', payload.refreshToken);
-        
-        API.defaults.headers.common['Authorization'] = 'Bearer ' + payload.token;
-        originalRequest.headers['Authorization'] = 'Bearer ' + payload.token;
-        
-        processQueue(null, payload.token);
+        // Update Local Storage with new Access Token
+        localStorage.setItem('token', newToken);
+
+        // Update default headers for future requests
+        API.defaults.headers.common['Authorization'] = 'Bearer ' + newToken;
+        originalRequest.headers['Authorization'] = 'Bearer ' + newToken;
+
+        // Process the queue of failed requests
+        processQueue(null, newToken);
+
+        // Retry the original request
         return API(originalRequest);
-
       } catch (refreshError) {
+        // Refresh failed (Cookie expired or invalid)
         processQueue(refreshError, null);
-        
+
         // Critical Cleanup
         localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('meId');
-        
+
+        // Dispatch Logout Event (App.jsx listens to this)
         window.dispatchEvent(new Event('auth:logout'));
-        
+
+        // Redirect to Login if not already on a public page
         const publicPaths = ['/login', '/register', '/welcome', '/verify-account'];
         if (!publicPaths.includes(window.location.pathname)) {
-            window.location.href = '/login';
+          window.location.href = '/login';
         }
-        
+
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
-    
+
     return Promise.reject(error);
   }
 );

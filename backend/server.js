@@ -8,26 +8,29 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
+const cookieParser = require('cookie-parser');
 const { Server } = require("socket.io");
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
 const path = require('path');
 require('dotenv').config();
-
-// 🔥 CRON JOB: Enable Scheduled Posts & Story Cleanup
-// Ensure these files exist in backend/cron/
-require('./cron/publish'); 
-require('./cron/storyCleanup'); // Uncomment if you implemented the cleanup cron
 
 // Custom Modules
 const errorHandler = require('./middleware/errorHandler');
 const AppError = require('./utils/AppError');
-const socketService = require('./services/socketService'); // 🔥 Extracted Socket Logic
+const socketService = require('./services/socketService');
 
 // Init App
 const app = express();
 const server = http.createServer(app);
 
-// 🔥 SERVER TIMEOUT: Increase to 5 minutes for large file uploads (Reels)
-server.timeout = 300000; 
+// 🔥 Fix 1: Trust Proxy (Required for Render/Heroku deployment)
+// This fixes the "X-Forwarded-For" validation error in logs and rate limiters
+app.set('trust proxy', 1);
+
+// 🔥 Fix 2: Secure timeout settings to prevent Slowloris attacks
+server.headersTimeout = 65000;
+server.keepAliveTimeout = 61000;
 
 // --- SECURITY & PERFORMANCE MIDDLEWARE ---
 app.use(helmet({
@@ -41,19 +44,18 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      // In dev, sometimes it's easier to allow all, but strictly block in prod
-      return callback(null, true); 
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
   },
-  credentials: true,
+  credentials: true, // Required for HttpOnly Cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
 // Body Parsers
 app.use(express.json({ limit: '50kb' })); // Limit JSON body size
+app.use(cookieParser()); // Parse secure cookies
 app.use(mongoSanitize()); // Prevent NoSQL Injection
 app.use(xss()); // Prevent XSS
 app.use(compression()); // Gzip compression
@@ -78,10 +80,10 @@ mongoose.connect(process.env.MONGO_URI)
   });
 
 mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️ MongoDB Disconnected. Attempting reconnect...');
+  console.warn('⚠️ MongoDB Disconnected. Attempting reconnect...');
 });
 
-// --- SOCKET.IO SETUP ---
+// --- SOCKET.IO & REDIS SETUP ---
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -90,6 +92,23 @@ const io = new Server(server, {
   path: '/socket.io',
   pingTimeout: 60000,
 });
+
+// Redis Adapter (Only if REDIS_URL is present)
+if (process.env.REDIS_URL) {
+  (async () => {
+    try {
+      const pubClient = createClient({ url: process.env.REDIS_URL });
+      const subClient = pubClient.duplicate();
+      
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('✅ Redis Adapter Connected for Socket.io');
+    } catch (err) {
+      console.warn('⚠️ Redis connection failed, falling back to memory adapter:', err.message);
+    }
+  })();
+}
 
 // Make io accessible globally (for controllers)
 global.io = io;
@@ -113,13 +132,13 @@ app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/tags', require('./routes/tags'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/stories', require('./routes/stories'));
+app.use('/api/polls', require('./routes/polls'));
 
-// Optional Feature Routes (Wrap in try-catch to prevent crash if file missing)
+// Optional Feature Routes
 const optionalRoutes = [
     { path: '/api/search', file: './routes/search' },
     { path: '/api/live', file: './routes/live' },
     { path: '/api/social', file: './routes/social' },
-    { path: '/api/polls', file: './routes/polls' },
     { path: '/api/shop', file: './routes/shop' },
     { path: '/api/payouts', file: './routes/payouts' },
     { path: '/api/moderation', file: './routes/moderation' },
@@ -148,9 +167,9 @@ if (process.env.NODE_ENV === 'production') {
         res.sendFile(path.join(clientBuildPath, 'index.html'));
     });
 } else {
-    app.get('/', (req, res) => {
-        res.send('API Running in Development Mode. Frontend not served.');
-    });
+   app.get('/', (req, res) => {
+     res.send('API is Running Successfully. Frontend is hosted separately in Dev mode.');
+   });
 }
 
 // --- ERROR HANDLING ---
