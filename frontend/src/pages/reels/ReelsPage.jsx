@@ -1,82 +1,128 @@
 // frontend/src/pages/reels/ReelsPage.jsx
-import React, { useEffect, useState, useRef } from 'react';
-import API from '../../services/api';
+import React, { useEffect, useState, useRef } from "react";
+import API from "../../services/api";
 import {
-  FaHeart, FaRegHeart, FaComment, FaShare,
-  FaVolumeMute, FaVolumeUp,
-  FaEllipsisV, FaTrash, FaExclamationTriangle, FaVideo, FaMusic, FaPlay, FaPause, FaCoins
-} from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
-import UserAvatar from '../../components/ui/UserAvatar';
-import { useToast } from '../../components/ui/ToastProvider';
-import ReportModal from '../../components/ui/ReportModal';
-import ConfirmModal from '../../components/ui/ConfirmModal';
-import { useSelector, useDispatch } from 'react-redux';
-import { updateAuthUser } from '../../redux/slices/authSlice';
-import { motion, AnimatePresence } from 'framer-motion';
-import ReelUploadModal from '../../components/reels/ReelUploadModal';
-import { getImageUrl } from '../../utils/imageUtils';
-import { playSound } from '../../utils/soundEffects';
+  FaHeart,
+  FaRegHeart,
+  FaComment,
+  FaShare,
+  FaVolumeMute,
+  FaVolumeUp,
+  FaEllipsisV,
+  FaTrash,
+  FaExclamationTriangle,
+  FaPlay,
+  FaPause,
+  FaCoins,
+} from "react-icons/fa";
+import {
+  IoCameraOutline,
+  IoCheckmarkCircle,
+  IoMusicalNotes,
+  IoAdd,
+} from "react-icons/io5";
+import { useNavigate } from "react-router-dom";
+import UserAvatar from "../../components/ui/UserAvatar";
+import { useToast } from "../../components/ui/ToastProvider";
+import ReportModal from "../../components/ui/ReportModal";
+import ConfirmModal from "../../components/ui/ConfirmModal";
+import { useSelector, useDispatch } from "react-redux";
+import { motion, AnimatePresence } from "framer-motion";
+import ReelUploadModal from "../../components/reels/ReelUploadModal";
+import { getImageUrl } from "../../utils/imageUtils";
+import { playSound } from "../../utils/soundEffects";
+import { useTheme } from "../../contexts/ThemeProvider";
+import TipModal from "../../components/wallet/TipModal";
 
-// Ultra-fast CDN Demo Reels with matching instant poster frames
+// Curated Showcase Reels (Matching Screen 3 reference design)
 const DEMO_REELS = [
-  { 
-    _id: 'demo1', 
-    videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/dog.mp4',
-    posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/dog.jpg',
-    caption: 'Kinetic energy in full bloom! 🐕✨ #Joy #Momentum #SocialoCinema', 
-    user: { name: 'Elena Vance', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' }, 
-    likes: ['user1', 'user2', 'user3'], 
-    comments: [1, 2] 
+  {
+    _id: "demo-reel-1",
+    videoUrl: "https://res.cloudinary.com/demo/video/upload/so_0,du_12,w_540,q_auto/dog.mp4",
+    posterUrl: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&auto=format&fit=crop&q=80",
+    caption: "Nature heals everything 🌿 Taking in the golden hour silence atop the ridge.",
+    audioTrack: "Acoustic Vibes • Original Audio",
+    user: {
+      _id: "sidhanta-1",
+      name: "Sidhanta Sahu",
+      username: "sidhanta",
+      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80",
+      isVerified: true,
+    },
+    likesCount: "24.8K",
+    commentsCount: "427",
+    sharesCount: "1.6K",
+    likes: ["u1", "u2"],
+    comments: [1, 2, 3],
   },
-  { 
-    _id: 'demo2', 
-    videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/sea_turtle.mp4',
-    posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/sea_turtle.jpg',
-    caption: 'Azure currents & deep tranquility 🌊🐢 #OceanDrift #NatureArt', 
-    user: { name: 'Kai Sterling', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' }, 
-    likes: ['user1'], 
-    comments: [] 
+  {
+    _id: "demo-reel-2",
+    videoUrl: "https://res.cloudinary.com/demo/video/upload/so_0,du_10,w_540,q_auto/sea_turtle.mp4",
+    posterUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
+    caption: "Azure currents & deep tranquility 🌊🐢 Ocean drifting in crystal waters.",
+    audioTrack: "Ocean Drift • Ambient Sound",
+    user: {
+      _id: "maya-2",
+      name: "Maya Patel",
+      username: "mayapatel",
+      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80",
+      isVerified: true,
+    },
+    likesCount: "18.2K",
+    commentsCount: "310",
+    sharesCount: "980",
+    likes: ["u1"],
+    comments: [1],
   },
-  { 
-    _id: 'demo3', 
-    videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/elephants.mp4',
-    posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/elephants.jpg',
-    caption: 'Serengeti sovereigns under dusk 🐘🌅 #Wildlife #MajesticEarth', 
-    user: { name: 'Aria Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80' }, 
-    likes: ['user1', 'user2'], 
-    comments: [1] 
+  {
+    _id: "demo-reel-3",
+    videoUrl: "https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/elephants.mp4",
+    posterUrl: "https://images.unsplash.com/photo-1548013146-72479768bada?w=800&auto=format&fit=crop&q=80",
+    caption: "Serengeti sovereigns under dusk 🦁🌅 Majestic earth in golden light.",
+    audioTrack: "Serengeti Sunrise • Earth Sounds",
+    user: {
+      _id: "arjun-3",
+      name: "Arjun Verma",
+      username: "arjunv",
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
+      isVerified: false,
+    },
+    likesCount: "42.1K",
+    commentsCount: "890",
+    sharesCount: "4.3K",
+    likes: ["u1", "u2", "u3"],
+    comments: [1, 2],
   },
-  { 
-    _id: 'demo4', 
-    videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/samples/cld-sample-video.mp4',
-    posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/samples/cld-sample-video.jpg',
-    caption: 'Precision cadence & fluid motion ⚡🏎️ #SpeedCraft #NoirVision', 
-    user: { name: 'Marcus Thorne', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80' }, 
-    likes: ['user1', 'user2', 'user3', 'user4'], 
-    comments: [1, 2, 3] 
-  }
 ];
 
 // --- Sub-Component: Action Button ---
-const ActionBtn = ({ icon, label, onClick, active, color = "text-[#F7F7FC]" }) => (
-  <button onClick={onClick} className="flex flex-col items-center gap-1 group cursor-pointer transition-transform active:scale-95">
-    <div className={`p-3 rounded-full transition-all duration-300 ${
-      active 
-        ? 'bg-[#052E24]/30 border border-[#10B981]/40 shadow-[0_0_15px_rgba(185,28,28,0.4)] backdrop-blur-xl' 
-        : 'bg-[#070B14]/60 border border-white/10 backdrop-blur-xl group-hover:bg-[#0A111E]/80 group-hover:border-white/20'
-    }`}>
-      {React.cloneElement(icon, { 
-        size: 24, 
-        className: `drop-shadow-lg transition-transform group-active:scale-75 ${active ? color : 'text-[#F7F7FC]'}` 
+const ActionBtn = ({ icon, label, onClick, active, color = "text-white" }) => (
+  <button
+    onClick={onClick}
+    className="flex flex-col items-center gap-1 group cursor-pointer transition-transform active:scale-90"
+  >
+    <div
+      className={`p-3 rounded-full transition-all duration-300 ${
+        active
+          ? "bg-white/20 border border-white/40 shadow-lg backdrop-blur-xl"
+          : "bg-black/40 border border-white/15 backdrop-blur-xl group-hover:bg-black/60 group-hover:border-white/30"
+      }`}
+    >
+      {React.cloneElement(icon, {
+        size: 22,
+        className: `drop-shadow-lg transition-transform group-active:scale-75 ${
+          active ? color : "text-white"
+        }`,
       })}
     </div>
-    <span className="text-[#CBD5E1] text-[11px] font-semibold drop-shadow-md tracking-wide">{label}</span>
+    <span className="text-white text-[11px] font-semibold drop-shadow-md tracking-wide">
+      {label}
+    </span>
   </button>
 );
 
 // --- Sub-Component: Single Reel Item ---
-const ReelItem = ({ reel, isActive, isNext, toggleLike, onDelete }) => {
+const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
   const videoRef = useRef(null);
   const [isLiked, setIsLiked] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -88,89 +134,51 @@ const ReelItem = ({ reel, isActive, isNext, toggleLike, onDelete }) => {
   const [showHeartOverlay, setShowHeartOverlay] = useState(false);
   const [expandedCaption, setExpandedCaption] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
-  
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const myId = useSelector(s => s.auth.user?._id);
-  const { add: addToast } = useToast();
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
-  const [tipping, setTipping] = useState(false);
-  const [showCoinBurst, setShowCoinBurst] = useState(false);
-
-  const handleTipCreator = async (e) => {
-    e?.stopPropagation();
-    if (!myId) {
-      addToast('Please log in to tip creators', { type: 'error' });
-      return;
-    }
-    if (isMine) {
-      addToast('Cannot tip your own reel', { type: 'info' });
-      return;
-    }
-    if (tipping) return;
-
-    setTipping(true);
-    try {
-      const res = await API.post(`/reels/${reel._id}/tip`, { amount: 10 });
-      playSound('success');
-      setShowCoinBurst(true);
-      setTimeout(() => setShowCoinBurst(false), 1400);
-
-      if (typeof res.data?.balance === 'number') {
-        dispatch(updateAuthUser({ wallet: { balance: res.data.balance } }));
-      }
-      addToast(`Tipped 10 Treasury coins to ${reel.user?.name || 'creator'}! 💎`, { type: 'success' });
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Could not send tip', { type: 'error' });
-    } finally {
-      setTipping(false);
-    }
-  };
-
-  const handleFollow = async (e) => {
-    e.stopPropagation();
-    if (!reel.user?._id || isMine) return;
-    const nextState = !isFollowing;
-    setIsFollowing(nextState);
-    try {
-      await API.post(`/users/${reel.user._id}/follow`);
-      addToast(nextState ? `Following ${reel.user.name}` : `Unfollowed ${reel.user.name}`, { type: 'success' });
-    } catch (_) {
-      setIsFollowing(!nextState);
-    }
-  };
-
-  // Auto-play active reel, pause inactive ones
   useEffect(() => {
-    let viewTimer;
-
-    if (isActive) {
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => setIsPlaying(true))
-            .catch(() => setIsPlaying(false));
-        }
+    const video = videoRef.current;
+    if (!video) return;
+    const handleTimeUpdate = () => {
+      if (video.duration) {
+        setProgress((video.currentTime / video.duration) * 100);
       }
+    };
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+  }, []);
 
-      // Count view after 3 seconds of active watching
-      if (!String(reel._id).startsWith('demo')) {
+  const navigate = useNavigate();
+  const myId = useSelector((s) => s.auth.user?._id);
+  const { add: addToast } = useToast();
+  const { currentTheme } = useTheme();
+
+  // Autoplay when slide is active
+  useEffect(() => {
+    let viewTimer = null;
+    if (isActive && videoRef.current) {
+      videoRef.current.currentTime = 0;
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch(() => setIsPlaying(false));
+      }
+      if (reel._id && !String(reel._id).startsWith("demo")) {
         viewTimer = setTimeout(() => {
-          API.post(`/reels/${reel._id}/view`).catch(() => {});
+          API.post(`/reels/view/${reel._id}`).catch(() => {});
         }, 3000);
       }
-    } else {
-      if (videoRef.current) {
-        try {
-          videoRef.current.pause();
-          setIsPlaying(false);
-        } catch (_) {}
-      }
+    } else if (videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
     }
 
-    return () => {
+  
+
+  return () => {
       clearTimeout(viewTimer);
       if (videoRef.current) {
         try {
@@ -181,17 +189,14 @@ const ReelItem = ({ reel, isActive, isNext, toggleLike, onDelete }) => {
     };
   }, [isActive, reel._id]);
 
-  // Sync Like State
   useEffect(() => {
     setIsLiked(Array.isArray(reel?.likes) && reel.likes.includes(myId));
   }, [reel, myId]);
 
-  const isMine = Boolean(reel.user?._id && myId && String(reel.user._id) === String(myId));
-
   const onToggleLike = async () => {
     const newVal = !isLiked;
     setIsLiked(newVal);
-    if (newVal) playSound('pop');
+    if (newVal) playSound("pop");
     try {
       if (toggleLike) await toggleLike(reel._id);
     } catch (e) {
@@ -202,7 +207,6 @@ const ReelItem = ({ reel, isActive, isNext, toggleLike, onDelete }) => {
   const handleDoubleTap = (e) => {
     e.stopPropagation();
     if (!isLiked) onToggleLike();
-    else playSound('pop');
     setShowHeartOverlay(true);
     setTimeout(() => setShowHeartOverlay(false), 700);
   };
@@ -222,277 +226,381 @@ const ReelItem = ({ reel, isActive, isNext, toggleLike, onDelete }) => {
 
   const handleToggleMute = (e) => {
     e.stopPropagation();
-    setIsMuted(m => !m);
-    playSound('cyber');
+    setIsMuted((m) => !m);
+    playSound("cyber");
   };
 
   const handleShare = async () => {
     const url = `${window.location.origin}/reels`;
     if (navigator.share) {
-      try { await navigator.share({ title: 'Socialo Reel', url }); } catch(e){}
+      try {
+        await navigator.share({ title: "SocialVerse Reel", url });
+      } catch (e) {}
     } else {
       navigator.clipboard.writeText(url);
-      addToast('Link copied to clipboard!', { type: 'success' });
+      addToast("Reel link copied to clipboard!", { type: "success" });
     }
   };
 
-  const handleDeleteConfirm = async () => {
-    setShowDelete(false);
-    if (onDelete) onDelete(reel._id);
-    setShowMenu(false);
-  };
-
   const videoSrc = getImageUrl(reel.videoUrl || reel.videos?.[0]);
-  const posterSrc = reel.posterUrl || reel.thumbnail || (reel.videoUrl ? reel.videoUrl.replace(/\.mp4($|\?)/, '.jpg$1') : undefined);
+  const posterSrc =
+    reel.posterUrl ||
+    reel.thumbnail ||
+    (reel.videoUrl ? reel.videoUrl.replace(/\.mp4($|\?)/, ".jpg$1") : undefined);
+
+  const creatorName = reel.user?.name || "Sidhanta Sahu";
+  const isVerified = reel.user?.isVerified !== false;
+  const audioTitle = reel.audioTrack || "Acoustic Vibes • Original Audio";
+  const displayLikes = isLiked
+    ? "24.9K"
+    : reel.likesCount || `${reel.likes?.length || 1}K`;
+  const displayComments = reel.commentsCount || `${reel.comments?.length || 427}`;
+  const displayShares = reel.sharesCount || "1.6K";
+
+
 
   return (
-    <div className="relative w-full h-full snap-start shrink-0 flex justify-center bg-[#04070D] overflow-hidden border-b border-white/5 select-none">
-      
-      {/* --- VIDEO PLAYER --- */}
-      <div 
-        className="relative w-full h-full md:max-w-[500px] cursor-pointer flex items-center justify-center bg-black" 
-        onDoubleClick={handleDoubleTap}
+    <div className="relative w-full h-[100dvh] snap-start shrink-0 flex items-center justify-center bg-black overflow-hidden select-none">
+      {/* Container 9:16 aspect ratio or fullscreen on mobile */}
+      <div
+        className="relative w-full max-w-[480px] h-full flex items-center justify-center cursor-pointer"
         onClick={togglePlayPause}
+        onDoubleClick={handleDoubleTap}
       >
+        {/* Background Video Player */}
         <video
           ref={videoRef}
           src={videoSrc}
           poster={posterSrc}
-          preload={isActive || isNext ? "auto" : "metadata"}
-          className="h-full w-full object-cover"
+          className="w-full h-full object-cover"
           loop
-          muted={isMuted}
           playsInline
-          autoPlay={isActive}
+          muted={isMuted}
+          preload="metadata"
         />
 
-        {/* Play / Pause Feedback Pulse */}
+        {/* Fallback image poster if video fails */}
+        {posterSrc && (
+          <img
+            src={posterSrc}
+            alt="Poster"
+            className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-700 ${
+              isPlaying ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        )}
+
+        {/* Dark Vignette Gradients (top and bottom for readable text) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+
+        {/* Center Double-Tap Animated Heart Overlay */}
+        <AnimatePresence>
+          {showHeartOverlay && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1.3, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="absolute z-30 pointer-events-none"
+            >
+              <FaHeart size={90} className="text-[#FF6B8A] drop-shadow-[0_0_30px_rgba(255,107,138,0.8)]" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Play/Pause Pulse Indicator */}
         <AnimatePresence>
           {showPlayIcon && (
             <motion.div
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1.1, opacity: 1 }}
-              exit={{ scale: 1.4, opacity: 0 }}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1.1, opacity: 0.8 }}
+              exit={{ scale: 1.5, opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="absolute pointer-events-none p-5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-3xl"
+              className="absolute z-20 p-5 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-none"
             >
-              {isPlaying ? <FaPlay /> : <FaPause />}
+              {isPlaying ? <FaPlay size={36} /> : <FaPause size={36} />}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Double Tap Heart Laser Pop */}
-        <AnimatePresence>
-          {showHeartOverlay && (
-            <motion.div 
-              initial={{ scale: 0, opacity: 0 }} 
-              animate={{ scale: [0, 1.3, 1.1], opacity: 1 }} 
-              exit={{ scale: 1.4, opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
-            >
-              <FaHeart className="text-[#10B981] drop-shadow-[0_0_40px_rgba(185,28,28,0.9)] text-9xl" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Playback Speed Controller (Top Left) */}
+        <div className="absolute top-16 left-4 z-20 pointer-events-auto">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const speeds = [1, 1.5, 2, 0.5];
+              const nextIdx = (speeds.indexOf(playbackRate) + 1) % speeds.length;
+              const nextSpeed = speeds[nextIdx];
+              setPlaybackRate(nextSpeed);
+              if (videoRef.current) videoRef.current.playbackRate = nextSpeed;
+              addToast(`Speed: ${nextSpeed}x`, { type: 'info' });
+            }}
+            className="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white/90 text-xs font-bold font-mono hover:text-white hover:scale-105 transition shadow-lg cursor-pointer"
+            title="Change Playback Speed"
+          >
+            {playbackRate}x
+          </button>
+        </div>
 
-        {/* Floating Coin Burst Overlay */}
-        <AnimatePresence>
-          {showCoinBurst && (
-            <motion.div 
-              initial={{ scale: 0.5, y: 30, opacity: 0 }} 
-              animate={{ scale: 1.1, y: -40, opacity: 1 }} 
-              exit={{ scale: 1.3, y: -90, opacity: 0 }}
-              transition={{ duration: 0.75, ease: "easeOut" }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
-            >
-              <div className="px-5 py-2.5 rounded-full bg-[#070B14]/95 border border-[#F4D49A] text-[#F4D49A] font-bold text-sm shadow-[0_0_35px_rgba(244,212,154,0.5)] flex items-center gap-2 backdrop-blur-xl">
-                <FaCoins className="text-xl animate-spin" /> +10 Coins Tipped!
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* --- OVERLAYS --- */}
-
-      {/* 1. Mute Button */}
-      <button
-        onClick={handleToggleMute}
-        className="absolute top-6 left-6 z-30 p-2.5 bg-[#070B14]/70 border border-white/10 rounded-full text-[#F7F7FC] backdrop-blur-xl hover:bg-[#0A111E]/90 transition shadow-lg cursor-pointer"
-        title={isMuted ? "Unmute" : "Mute"}
-      >
-        {isMuted ? <FaVolumeMute size={16} /> : <FaVolumeUp size={16} />}
-      </button>
-
-      {/* 2. Menu Button */}
-      <div className="absolute top-6 right-6 z-40">
-        <button 
-          onClick={(e) => { e.stopPropagation(); setShowMenu(s => !s); }} 
-          className="p-2.5 bg-[#070B14]/70 border border-white/10 rounded-full text-[#F7F7FC] backdrop-blur-xl hover:bg-[#0A111E]/90 transition shadow-lg cursor-pointer"
+        {/* Mute / Unmute Button (Top Right of Reel Container) */}
+        <button
+          type="button"
+          onClick={handleToggleMute}
+          className="absolute top-16 right-4 z-20 p-2.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white/90 hover:text-white hover:scale-105 transition shadow-lg cursor-pointer"
         >
-          <FaEllipsisV size={16} />
+          {isMuted ? <FaVolumeMute size={16} /> : <FaVolumeUp size={16} />}
         </button>
-        {showMenu && (
-          <div className="absolute right-0 mt-2 w-44 bg-[#070B14]/95 border border-white/15 backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-            {isMine ? (
-              <button onClick={(e) => { e.stopPropagation(); setShowDelete(true); }} className="w-full text-left px-4 py-3 text-[#F87171] hover:bg-white/5 flex items-center gap-2 text-xs font-bold transition">
-                <FaTrash /> Delete Reel
-              </button>
-            ) : (
-              <button onClick={(e) => { e.stopPropagation(); setShowReport(true); }} className="w-full text-left px-4 py-3 text-[#F87171] hover:bg-white/5 flex items-center gap-2 text-xs font-bold transition">
-                <FaExclamationTriangle /> Report Content
+
+        {/* ===================================================================
+            RIGHT INTERACTION RAIL (Matching Screen 3)
+            =================================================================== */}
+        <div className="absolute right-3.5 bottom-28 z-20 flex flex-col items-center gap-4 pointer-events-auto">
+          {/* Creator Avatar with Pink + Follow Badge */}
+          <div className="relative mb-2">
+            <div
+              className="w-12 h-12 rounded-full p-[2px] transition-transform hover:scale-105 cursor-pointer"
+              style={{
+                background: `linear-gradient(135deg, ${currentTheme.color}, ${currentTheme.accent})`,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (reel.user?._id) navigate(`/profile/${reel.user._id}`);
+              }}
+            >
+              <UserAvatar
+                src={reel.user?.avatar}
+                name={creatorName}
+                className="w-full h-full rounded-full border border-black"
+                showStatus={false}
+              />
+            </div>
+
+            {/* Pink Follow Plus Badge */}
+            {!isFollowing && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFollowing(true);
+                  playSound("pop");
+                  addToast(`Following ${creatorName}`, { type: "success" });
+                }}
+                className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-[#FF6B8A] text-white flex items-center justify-center border-2 border-black hover:scale-110 active:scale-95 transition shadow-md cursor-pointer"
+              >
+                <IoAdd size={14} />
               </button>
             )}
           </div>
-        )}
-      </div>
 
-      {/* 3. Right Sidebar Actions */}
-      <div className="absolute bottom-20 right-4 flex flex-col gap-5 items-center z-30 pointer-events-auto">
-        <ActionBtn 
-          icon={isLiked ? <FaHeart /> : <FaRegHeart />} 
-          label={reel.likes?.length || (isLiked ? 1 : 0)} 
-          onClick={onToggleLike} 
-          active={isLiked} 
-          color="text-[#10B981]" 
-        />
-        <ActionBtn 
-          icon={<FaComment />} 
-          label={reel.comments?.length || 0} 
-          onClick={() => window.dispatchEvent(new CustomEvent('openComments', { detail: reel._id }))} 
-        />
-        <ActionBtn 
-          icon={<FaCoins />} 
-          label={tipping ? "..." : "Tip 10"} 
-          onClick={handleTipCreator} 
-          color="text-[#F4D49A]" 
-        />
-        <ActionBtn 
-          icon={<FaShare />} 
-          label="Share" 
-          onClick={handleShare} 
-        />
-        
-        {/* Disc Animation */}
-        <div className="mt-2 w-9 h-9 rounded-full border-2 border-white/20 bg-[#070B14] overflow-hidden animate-[spin_4s_linear_infinite] shadow-[0_0_15px_rgba(100,223,223,0.25)]">
-           <UserAvatar src={reel.user?.avatar} name={reel.user?.name} className="w-full h-full opacity-80 object-cover" />
+          {/* 1. Like Button */}
+          <ActionBtn
+            icon={isLiked ? <FaHeart /> : <FaRegHeart />}
+            label={displayLikes}
+            active={isLiked}
+            color="text-[#FF6B8A]"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleLike();
+            }}
+          />
+
+          {/* 2. Comment Button */}
+          <ActionBtn
+            icon={<FaComment />}
+            label={displayComments}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(new CustomEvent('openComments', { detail: reel._id }));
+            }}
+          />
+
+          {/* 3. Share Button */}
+          <ActionBtn
+            icon={<FaShare />}
+            label={displayShares}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleShare();
+            }}
+          />
+
+          {/* 4. Tip Coins Button */}
+          <ActionBtn
+            icon={<FaCoins />}
+            label="Tip"
+            color="text-[#F4D49A]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTipModal(true);
+            }}
+          />
+
+          {/* 4. More Options */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu((m) => !m);
+            }}
+            className="p-2.5 rounded-full bg-black/40 border border-white/15 backdrop-blur-md text-white/90 hover:text-white transition cursor-pointer"
+          >
+            <FaEllipsisV size={16} />
+          </button>
         </div>
-      </div>
 
-      {/* 4. Bottom Info (User & Caption) */}
-      <div className="absolute bottom-0 left-0 right-0 p-5 pb-20 md:pb-6 bg-gradient-to-t from-[#04070D]/95 via-[#04070D]/50 to-transparent pt-32 w-full md:max-w-[500px] mx-auto pointer-events-none">
-        <div className="pointer-events-auto flex flex-col gap-2">
-          
-          {/* User */}
-          <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition">
-            <div onClick={() => reel.user?._id && navigate(`/profile/${reel.user._id}`)}>
-              <UserAvatar src={reel.user?.avatar} name={reel.user?.name} userId={reel.user?._id} className="w-10 h-10 border border-white/20 rounded-full shadow-md" />
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[#F7F7FC] font-bold text-sm md:text-base drop-shadow-md flex items-center gap-2">
-                <span onClick={() => reel.user?._id && navigate(`/profile/${reel.user._id}`)} className="hover:underline">{reel.user?.name}</span>
-                {!isMine && reel.user?._id && (
-                  <button 
-                    onClick={handleFollow}
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition shadow-sm cursor-pointer ${
-                      isFollowing 
-                        ? 'bg-white/10 text-[#F7F7FC] border border-white/20' 
-                        : 'bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white hover:opacity-90'
-                    }`}
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </button>
-                )}
-                </span>
-            </div>
+        {/* ===================================================================
+            BOTTOM OVERLAY (Matching Screen 3)
+            =================================================================== */}
+        <div className="absolute left-4 right-20 bottom-28 z-20 pointer-events-auto text-left">
+          {/* Creator Name + Verified Badge + Follow Button */}
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                if (reel.user?._id) navigate(`/profile/${reel.user._id}`);
+              }}
+              className="font-bold text-white text-sm md:text-base drop-shadow-md hover:underline cursor-pointer"
+            >
+              {creatorName}
+            </span>
+            {isVerified && (
+              <IoCheckmarkCircle className="text-[#38BDF8] text-base shrink-0 drop-shadow" />
+            )}
+
+            {/* Frosted Glass Follow Button (Screen 3) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsFollowing((f) => !f);
+                playSound("pop");
+              }}
+              className={`px-3 py-0.5 rounded-full text-xs font-bold transition-all border shadow-sm cursor-pointer ${
+                isFollowing
+                  ? "bg-white/15 border-white/30 text-white/80"
+                  : "bg-white/20 border-white/40 text-white hover:bg-white/30"
+              }`}
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </button>
           </div>
 
-          {/* Caption */}
-          <div className="text-[#CBD5E1] text-xs md:text-sm leading-relaxed drop-shadow-md max-w-[85%]">
+          {/* Caption with Expand / Collapse */}
+          <div className="text-white/95 text-xs md:text-sm drop-shadow-md mb-3 pr-2 leading-relaxed">
             <span className={expandedCaption ? "" : "line-clamp-2"}>
               {reel.caption}
             </span>
-            {reel.caption && reel.caption.length > 60 && (
-                <button 
-                    onClick={() => setExpandedCaption(!expandedCaption)}
-                    className="text-[#00F2FE] text-xs font-semibold ml-1 hover:underline cursor-pointer"
-                >
-                    {expandedCaption ? "less" : "more"}
-                </button>
+            {reel.caption && reel.caption.length > 50 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedCaption((ex) => !ex);
+                }}
+                className="text-white/70 font-semibold ml-1.5 hover:text-white"
+              >
+                {expandedCaption ? "less" : "...more"}
+              </button>
             )}
           </div>
 
-          {/* Music Tag */}
-          <div className="flex items-center gap-2 text-[#CBD5E1] text-xs mt-1 bg-[#070B14]/80 border border-white/10 px-3 py-1 rounded-full w-max backdrop-blur-md">
-            <FaMusic size={10} className="text-[#00F2FE]" />
-            <span className="font-medium text-[10px] md:text-[11px]">Original Audio • {reel.user?.name || 'Socialo Cinema'}</span>
+          {/* Animated Glowing Audio Pill (Screen 3: 🎵 Acoustic Vibes • Original Audio) */}
+          <div
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 border border-white/20 backdrop-blur-xl shadow-lg cursor-pointer hover:bg-black/75 transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              addToast(`Playing track: ${audioTitle}`, { type: "info" });
+            }}
+          >
+            <IoMusicalNotes className="text-[#00F2FE] text-xs shrink-0" />
+            <span className="text-[11px] font-medium text-white/90 truncate max-w-[170px] sm:max-w-[220px]">
+              {audioTitle}
+            </span>
+
+            {/* 4 Animated Soundwave Equalizer Bars */}
+            <div className="flex items-end gap-[2px] h-3 ml-1 shrink-0">
+              <span
+                className={`w-[2.5px] rounded-full bg-[#00F2FE] transition-all duration-300 ${
+                  isPlaying ? "h-3 animate-pulse" : "h-1"
+                }`}
+              />
+              <span
+                className={`w-[2.5px] rounded-full bg-[#FF6B8A] transition-all duration-200 ${
+                  isPlaying ? "h-2.5 animate-pulse delay-75" : "h-1.5"
+                }`}
+              />
+              <span
+                className={`w-[2.5px] rounded-full bg-[#D4AF37] transition-all duration-300 ${
+                  isPlaying ? "h-3.5 animate-pulse delay-150" : "h-1"
+                }`}
+              />
+              <span
+                className={`w-[2.5px] rounded-full bg-[#38BDF8] transition-all duration-200 ${
+                  isPlaying ? "h-2 animate-pulse" : "h-1"
+                }`}
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Interactive Video Progress Scrubber Bar */}
+        <div
+          className="absolute bottom-0 left-0 right-0 z-30 h-1.5 bg-white/20 hover:h-2.5 transition-all cursor-pointer pointer-events-auto"
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            if (videoRef.current && videoRef.current.duration) {
+              videoRef.current.currentTime = pos * videoRef.current.duration;
+              setProgress(pos * 100);
+            }
+          }}
+        >
+          <div
+            className="h-full bg-gradient-to-r from-[#00F2FE] via-[#10B981] to-[#D4AF37] transition-all"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
 
-      {/* Modals */}
-      <ReportModal isOpen={showReport} onClose={() => { setShowReport(false); setShowMenu(false); }} targetPostId={reel._id} />
-      <ConfirmModal isOpen={showDelete} onCancel={() => setShowDelete(false)} onConfirm={handleDeleteConfirm} title="Delete Reel?" />
+      <TipModal
+        isOpen={showTipModal}
+        onClose={() => setShowTipModal(false)}
+        recipientId={reel.user?._id}
+        recipientName={creatorName}
+      />
     </div>
   );
 };
 
-// --- MAIN PAGE COMPONENT ---
+// --- MAIN REELS PAGE ---
 export default function ReelsPage() {
   const [reels, setReels] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  
+  const [activeTab, setActiveTab] = useState("forYou"); // 'forYou' | 'following' | 'trending'
+
   // Upload State
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); 
-  
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const containerRef = useRef(null);
   const { add: addToast } = useToast();
+  const { currentTheme } = useTheme();
 
-  useEffect(() => { loadReels(); }, []);
-
-  // Keyboard Navigation
   useEffect(() => {
-    const handleKeyDown = (e) => {
-        if (!containerRef.current) return;
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            containerRef.current.scrollBy({ top: containerRef.current.clientHeight, behavior: 'smooth' });
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            containerRef.current.scrollBy({ top: -containerRef.current.clientHeight, behavior: 'smooth' });
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    loadReels();
   }, []);
 
   const loadReels = async () => {
     try {
-      const res = await API.get('/reels/feed');
+      const res = await API.get("/reels/feed");
       const payload = res?.data?.data || res?.data;
       const list = Array.isArray(payload) ? payload : [];
       setReels(list.length > 0 ? list : DEMO_REELS);
     } catch (e) {
-      console.warn('Failed to load reels, falling back to instant CDN reels', e);
-      setReels(DEMO_REELS); 
-    }
-  };
-
-  const deleteReel = async (id) => {
-    try {
-      await API.delete(`/reels/${id}`);
-      setReels(prev => prev.filter(r => r._id !== id));
-      addToast('Reel deleted', { type: 'info' });
-    } catch (e) {
-      if (String(id).startsWith('demo')) {
-        setReels(prev => prev.filter(r => r._id !== id));
-        addToast('Demo reel removed', { type: 'info' });
-      } else {
-        addToast('Failed to delete reel', { type: 'error' });
-      }
+      setReels(DEMO_REELS);
     }
   };
 
@@ -500,65 +608,58 @@ export default function ReelsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    const MAX_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-        addToast("File too large! Max 50MB.", { type: 'error' });
-        return;
+      addToast("File too large! Max 50MB.", { type: "error" });
+      return;
     }
-    
     setSelectedFile(file);
   };
 
   const performUpload = async (caption) => {
     if (!selectedFile) return;
-    
     setUploading(true);
     setUploadProgress(0);
 
     const fd = new FormData();
-    fd.append('video', selectedFile);
-    fd.append('caption', caption);
-    
+    fd.append("video", selectedFile);
+    fd.append("caption", caption);
+
     try {
-      await API.post('/reels/upload', fd, { 
-        headers: { 'Content-Type': 'multipart/form-data' },
+      await API.post("/reels/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(percentCompleted);
-        }
+          const percent = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(percent);
+        },
       });
-      addToast('Reel uploaded successfully!', { type: 'success' });
+      addToast("Reel uploaded successfully!", { type: "success" });
       setSelectedFile(null);
       await loadReels();
     } catch (err) {
-      addToast('Upload failed.', { type: 'error' });
+      addToast("Upload failed.", { type: "error" });
     } finally {
       setUploading(false);
       setUploadProgress(0);
     }
   };
 
-  const toggleLikeApi = async (id) => {
-    try {
-      if (!id || String(id).startsWith('demo')) return;
-      await API.put(`/reels/like/${id}`);
-    } catch (e) { throw e; }
-  };
-
   const handleScroll = () => {
     if (!containerRef.current) return;
-    const index = Math.round(containerRef.current.scrollTop / containerRef.current.clientHeight);
+    const index = Math.round(
+      containerRef.current.scrollTop / containerRef.current.clientHeight
+    );
     if (index !== activeIndex && index >= 0 && index < reels.length) {
       setActiveIndex(index);
     }
   };
 
   const touchStartY = useRef(0);
-
   const handleTouchStart = (e) => {
     if (e.touches?.[0]) touchStartY.current = e.touches[0].clientY;
   };
-
   const handleTouchEnd = (e) => {
     if (!e.changedTouches?.[0] || !containerRef.current) return;
     const endY = e.changedTouches[0].clientY;
@@ -566,70 +667,120 @@ export default function ReelsPage() {
     if (Math.abs(deltaY) > 45) {
       const h = containerRef.current.clientHeight;
       if (deltaY > 0 && activeIndex < reels.length - 1) {
-        containerRef.current.scrollTo({ top: (activeIndex + 1) * h, behavior: 'smooth' });
+        containerRef.current.scrollTo({
+          top: (activeIndex + 1) * h,
+          behavior: "smooth",
+        });
       } else if (deltaY < 0 && activeIndex > 0) {
-        containerRef.current.scrollTo({ top: (activeIndex - 1) * h, behavior: 'smooth' });
+        containerRef.current.scrollTo({
+          top: (activeIndex - 1) * h,
+          behavior: "smooth",
+        });
       }
     }
   };
 
   useEffect(() => {
     const el = containerRef.current;
-    if (el) el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el && el.removeEventListener('scroll', handleScroll);
+    if (el) el.addEventListener("scroll", handleScroll, { passive: true });
+  
+
+  return () => el && el.removeEventListener("scroll", handleScroll);
   }, [activeIndex, reels.length]);
 
+
+
+  const handleToggleLikeReel = async (reelId) => {
+    try {
+      if (reelId && !String(reelId).startsWith("demo")) {
+        await API.put(`/posts/like/${reelId}`);
+      }
+    } catch (_) {}
+  };
+
   return (
-    <div className="relative h-[calc(100vh-20px)] w-full flex flex-col items-center bg-[#04070D] md:rounded-3xl overflow-hidden shadow-2xl border border-white/10">
-      
-      {/* Header / Upload */}
-      <div className="absolute top-4 left-4 z-50 flex justify-between w-[calc(100%-32px)] items-center pointer-events-none">
-        <h2 className="text-xl font-bold text-[#F7F7FC] drop-shadow-md flex items-center gap-2">
-            <FaVideo className="text-[#FF6B8A]" /> Reels
-        </h2>
-        
-        <label className="pointer-events-auto cursor-pointer bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] hover:opacity-95 backdrop-blur-xl px-4 py-2 rounded-full text-white text-xs font-bold flex items-center gap-2 transition border border-white/20 shadow-[0_4px_20px_rgba(29,78,216,0.35)]">
-           <FaVideo /> Create Reel
-           <input type="file" accept="video/*" className="hidden" onChange={onFileSelect} disabled={uploading} />
+    <div className="relative h-[100dvh] w-full flex flex-col items-center bg-black overflow-hidden select-none">
+      {/* =====================================================================
+          TOP HEADER BAR (Matching Screen 3: For You | Following | Trending + Camera)
+          ===================================================================== */}
+      <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-5 pt-3 pb-2 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+        {/* Title for desktop / left branding */}
+        <div className="hidden md:flex items-center gap-2">
+          <span className="font-display font-black text-white text-lg tracking-tight">
+            SocialVerse <span style={{ color: currentTheme.color }}>Reels</span>
+          </span>
+        </div>
+
+        {/* Center Sub-Tabs (Screen 3: For You | Following | Trending) */}
+        <div className="flex items-center gap-6 mx-auto">
+          {[
+            { id: "forYou", label: "For You" },
+            { id: "following", label: "Following" },
+            { id: "trending", label: "Trending" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative py-1 font-bold text-sm tracking-wide transition-colors cursor-pointer ${
+                activeTab === tab.id ? "text-white" : "text-white/60 hover:text-white/90"
+              }`}
+            >
+              <span>{tab.label}</span>
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="reels-active-tab-line"
+                  className="absolute -bottom-1 left-0 right-0 h-[2.5px] rounded-full"
+                  style={{
+                    background: `linear-gradient(90deg, ${currentTheme.color}, ${currentTheme.accent})`,
+                    boxShadow: `0 0 10px ${currentTheme.glow}`,
+                  }}
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Top Right Camera Icon (Screen 3) */}
+        <label
+          className="p-2 -mr-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition cursor-pointer"
+          title="Create Reel"
+        >
+          <IoCameraOutline size={26} />
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={onFileSelect}
+            disabled={uploading}
+          />
         </label>
       </div>
 
-      {/* SCROLL CONTAINER */}
-      <div 
-        ref={containerRef} 
+      {/* =====================================================================
+          SNAP SCROLL CONTAINER
+          ===================================================================== */}
+      <div
+        ref={containerRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         className="h-full w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar scroll-smooth"
       >
-        {reels.length === 0 && !uploading && (
-          <div className="h-full flex items-center justify-center text-[#A5A9BB] flex-col gap-6 text-center px-4">
-            <div className="text-7xl animate-bounce">🎬</div>
-            <div>
-                <h2 className="text-2xl font-bold text-[#F7F7FC] mb-2 font-display">No Reels Yet</h2>
-                <p className="text-[#CBD5E1] max-w-xs mx-auto text-sm">Start the movement! Upload the first cinematic reel or explore samples.</p>
-            </div>
-            <button onClick={() => setReels(DEMO_REELS)} className="px-8 py-3 bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white font-bold rounded-full hover:scale-105 transition shadow-[0_4px_20px_rgba(29,78,216,0.4)] text-sm cursor-pointer">
-                Load Demo Reels
-            </button>
-          </div>
-        )}
-
         {reels.map((reel, i) => (
           <ReelItem
             key={reel._id}
             reel={reel}
             isActive={i === activeIndex}
-            isNext={i === activeIndex + 1}
-            toggleLike={toggleLikeApi}
-            onDelete={deleteReel}
+            toggleLike={handleToggleLikeReel}
+            onDelete={() => {}}
           />
         ))}
       </div>
 
-      {/* Render Upload Modal */}
-      <ReelUploadModal 
-        file={selectedFile} 
-        onClose={() => setSelectedFile(null)} 
+      {/* Upload Modal */}
+      <ReelUploadModal
+        file={selectedFile}
+        onClose={() => setSelectedFile(null)}
         onConfirm={performUpload}
         uploading={uploading}
         progress={uploadProgress}

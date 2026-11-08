@@ -146,7 +146,25 @@ app.use(xss());
 
 app.use(requestLogger);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.get(['/health', '/api/health', '/api/v1/health'], (req, res) => res.status(200).json({ status: 'OK', uptime: process.uptime() }));
+app.get(['/health', '/api/health', '/api/v1/health'], (req, res) => {
+  const mem = process.memoryUsage();
+  return res.status(200).json({
+    status: 'healthy',
+    platform: 'SocialVerse ∞ — Beyond Social',
+    version: '2.0.0-PROD',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    database: {
+      status: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
+      name: mongoose.connection.name || 'socialverse_db'
+    },
+    system: {
+      nodeVersion: process.version,
+      memoryHeapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+      memoryRssMB: Math.round(mem.rss / 1024 / 1024),
+    }
+  });
+});
 
 // --- DATABASE ---
 const connectDatabase = require('./config/db');
@@ -240,9 +258,13 @@ const translateRoutes = require('./routes/translate');
 const usersRoutes = require('./routes/users'); 
 const walletRoutes = require('./routes/wallet');
 const spacesRoutes = require('./routes/spaces');
+const eventsRoutes = require('./routes/events');
+const gamesRoutes = require('./routes/games');
 
 // Mount Sub-routers on top of the API root router topology
 apiRouter.use('/spaces', spacesRoutes);
+apiRouter.use('/events', eventsRoutes);
+apiRouter.use('/games', gamesRoutes);
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/apps', appsRoutes);
@@ -254,6 +276,7 @@ apiRouter.use('/extra', extraRoutes);
 apiRouter.use('/follow-suggest', followSuggestRoutes);
 apiRouter.use('/integrations', integrationsRoutes);
 apiRouter.use('/live', liveRoutes);
+apiRouter.use('/market', marketplaceRoutes);
 apiRouter.use('/marketplace', marketplaceRoutes);
 apiRouter.use('/moderation', moderationRoutes);
 apiRouter.use('/notifications', notificationsRoutes);
@@ -262,6 +285,7 @@ apiRouter.use('/polls', pollsRoutes);
 apiRouter.use('/posts', postsRoutes);
 apiRouter.use('/proxy', proxyRoutes);
 apiRouter.use('/reels', reelsRoutes);
+apiRouter.use('/report', reportsRoutes);
 apiRouter.use('/reports', reportsRoutes);
 apiRouter.use('/search', searchRoutes);
 apiRouter.use('/shop', shopRoutes);
@@ -275,6 +299,45 @@ apiRouter.use('/wallet', walletRoutes);
 // Mount the integrated route cluster onto both /api/v1 and /api for seamless backwards compatibility
 app.use('/api/v1', apiRouter);
 app.use('/api', apiRouter);
+
+// --- DYNAMIC SSR OPENGRAPH PREVIEWS FOR SOCIAL CRAWLERS ---
+app.get(['/post/:id', '/reels/:id'], async (req, res, next) => {
+  const userAgent = req.headers['user-agent'] || '';
+  const isBot = /facebookexternalhit|Twitterbot|WhatsApp|TelegramBot|Slackbot|LinkedInBot|Discordbot/i.test(userAgent);
+  if (!isBot) return next();
+
+  try {
+    const Post = require('./models/Post');
+    const post = await Post.findById(req.params.id).populate('user', 'name avatar username');
+    if (post) {
+      const title = `${post.user?.name || 'Creator'} on SocialVerse ∞`;
+      const desc = (post.content || post.caption || 'Beyond Social Networking').slice(0, 160);
+      const img = post.mediaUrl || post.images?.[0] || post.thumbnail || 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=1200';
+      return res.status(200).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${title}</title>
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${desc}" />
+  <meta property="og:image" content="${img}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="SocialVerse ∞" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${desc}" />
+  <meta name="twitter:image" content="${img}" />
+</head>
+<body style="background:#04070D;color:#FFF;font-family:sans-serif;padding:40px;text-align:center;">
+  <h2>${title}</h2>
+  <p>${desc}</p>
+  <img src="${img}" style="max-width:90%;border-radius:16px;margin-top:20px;" />
+</body>
+</html>`);
+    }
+  } catch (_) {}
+  next();
+});
 
 // --- FRONTEND STATIC ASSETS & SPA ROUTING ---
 const frontendDistPath = path.resolve(__dirname, '../frontend/dist');

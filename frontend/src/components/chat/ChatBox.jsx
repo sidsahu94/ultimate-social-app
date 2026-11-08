@@ -28,6 +28,42 @@ import { useToast } from '../ui/ToastProvider';
 import { encryptMessage } from '../../utils/security';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const DEMO_CHAT_MESSAGES = {
+  demo_chat_ai: {
+    other: { _id: 'system_social_ai', name: 'Social AI Assistant', avatar: '/socialverse-logo.jpg', isVerified: true },
+    messages: [
+      { _id: 'm1', content: 'Welcome to SocialVerse AI Studio! 🚀 I have analyzed trending creator hashtags across your network.', sender: { _id: 'system_social_ai', name: 'Social AI Assistant' }, createdAt: new Date(Date.now() - 3600000).toISOString() },
+      { _id: 'm2', content: "I've drafted 3 viral hooks for your upcoming reel. Want me to apply them?", sender: { _id: 'system_social_ai', name: 'Social AI Assistant' }, createdAt: new Date(Date.now() - 300000).toISOString() }
+    ]
+  },
+  demo_chat_elena: {
+    other: { _id: 'demo_u_elena', name: 'Elena Vance', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200', isVerified: true },
+    messages: [
+      { _id: 'm1', content: 'Hey Sidhanta! Loved your latest architectural photography of the Bandra Sea Link ✨', sender: { _id: 'demo_u_elena', name: 'Elena Vance' }, createdAt: new Date(Date.now() - 7200000).toISOString() },
+      { _id: 'm2', content: 'Are you planning to present your WebRTC and spatial audio work at the Zurich summit?', sender: { _id: 'demo_u_elena', name: 'Elena Vance' }, createdAt: new Date(Date.now() - 2700000).toISOString() }
+    ]
+  },
+  demo_chat_aarav: {
+    other: { _id: 'sugg_aarav', name: 'Aarav Deshmukh', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', isVerified: true },
+    messages: [
+      { _id: 'm1', content: 'Hey brother! That WebRTC setup you shared is buttery smooth.', sender: { _id: 'sugg_aarav', name: 'Aarav Deshmukh' }, createdAt: new Date(Date.now() - 14400000).toISOString() },
+      { _id: 'm2', content: "Can't wait to test the minigames on the new Royal Aether theme.", sender: { _id: 'sugg_aarav', name: 'Aarav Deshmukh' }, createdAt: new Date(Date.now() - 7200000).toISOString() }
+    ]
+  },
+  demo_chat_aman: {
+    other: { _id: 'demo_u_aman', name: 'Aman Verma', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', isVerified: true },
+    messages: [
+      { _id: 'm1', content: "Let me know when you're free for the weekend sunset shoot!", sender: { _id: 'demo_u_aman', name: 'Aman Verma' }, createdAt: new Date(Date.now() - 21600000).toISOString() }
+    ]
+  },
+  demo_chat_neha: {
+    other: { _id: 'demo_u_neha', name: 'Neha Sharma', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', isVerified: true },
+    messages: [
+      { _id: 'm1', content: 'The new Royal Aether theme looks breathtaking on mobile!', sender: { _id: 'demo_u_neha', name: 'Neha Sharma' }, createdAt: new Date(Date.now() - 43200000).toISOString() }
+    ]
+  }
+};
+
 export default function ChatBox({ chatId, onBack }) {
   const { add: addToast } = useToast();
   const currentUser = useSelector((s) => s.auth.user);
@@ -74,6 +110,16 @@ export default function ChatBox({ chatId, onBack }) {
   const loadData = async () => {
     if (!chatId) return;
     setLoading(true);
+
+    if (chatId.startsWith('demo_chat_') || DEMO_CHAT_MESSAGES[chatId]) {
+      const demo = DEMO_CHAT_MESSAGES[chatId] || DEMO_CHAT_MESSAGES.demo_chat_ai;
+      setMessages(demo.messages.slice());
+      setOtherUser(demo.other);
+      setLoading(false);
+      requestAnimationFrame(() => scrollToBottom('auto'));
+      return;
+    }
+
     try {
       const { data } = await API.get(`/chat/${chatId}`);
       const chat = data?.data || data;
@@ -90,8 +136,13 @@ export default function ChatBox({ chatId, onBack }) {
       API.post(`/chat/${chatId}/read`).catch(() => {});
       requestAnimationFrame(() => scrollToBottom('auto'));
     } catch (err) {
-      console.error('Failed to load chat', err);
-      onBack?.();
+      if (DEMO_CHAT_MESSAGES[chatId]) {
+        const demo = DEMO_CHAT_MESSAGES[chatId];
+        setMessages(demo.messages.slice());
+        setOtherUser(demo.other);
+      } else {
+        onBack?.();
+      }
     } finally {
       setLoading(false);
     }
@@ -366,6 +417,43 @@ export default function ChatBox({ chatId, onBack }) {
       };
 
       if (replyingTo) payload.replyTo = replyingTo._id;
+
+      if (chatId.startsWith('demo_chat_')) {
+        const myMsg = {
+          _id: 'msg_' + Date.now(),
+          content: text,
+          sender: { _id: myId || 'me', name: currentUser?.name || 'You' },
+          createdAt: new Date().toISOString()
+        };
+        setMessages((prev) => [...prev, myMsg]);
+        cancelAction();
+        requestAnimationFrame(() => scrollToBottom('smooth'));
+
+        // Interactive AI and peer response simulation
+        setTimeout(() => {
+          setIsTyping(true);
+          setTimeout(() => {
+            setIsTyping(false);
+            let replyText = "Received! Let me review this and get back to you shortly.";
+            if (chatId === 'demo_chat_ai') {
+              replyText = `✨ Social AI: Analyzing "${text}". High engagement potential detected! Adding smart hashtags #SocialVerse #BeyondSocial.`;
+            } else if (chatId === 'demo_chat_elena') {
+              replyText = "Sounds incredible! Looking forward to collaborating on this.";
+            } else if (chatId === 'demo_chat_aarav') {
+              replyText = "100%! Testing it right away on my phone.";
+            }
+            const replyMsg = {
+              _id: 'reply_' + Date.now(),
+              content: replyText,
+              sender: otherUser || { name: 'Peer' },
+              createdAt: new Date().toISOString()
+            };
+            setMessages((prev) => [...prev, replyMsg]);
+            requestAnimationFrame(() => scrollToBottom('smooth'));
+          }, 1200);
+        }, 600);
+        return;
+      }
 
       const res = await API.post(`/chat/${chatId}/message`, payload);
       const sent = res.data?.data || res.data;

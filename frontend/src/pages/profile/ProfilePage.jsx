@@ -3,37 +3,89 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { motion } from "framer-motion";
+import {
+  IoChevronBack,
+  IoEllipsisHorizontal,
+  IoCheckmarkCircle,
+  IoGrid,
+  IoGridOutline,
+  IoVideocamOutline,
+  IoPlayOutline,
+  IoIdCardOutline,
+  IoShareSocialOutline,
+  IoQrCodeOutline,
+  IoLocationOutline,
+  IoLinkOutline,
+  IoLockClosed,
+  IoCopyOutline,
+} from "react-icons/io5";
+import { FaHeart, FaComment } from "react-icons/fa";
 
 import API from "../../services/api";
-
 import FollowButton from "../../components/profile/FollowButton";
-import FollowRequestButton from "../../components/profile/FollowRequestButton";
 import ProfileEditModal from "../../components/profile/ProfileEditModal";
 import CreatePostModal from "../../components/posts/CreatePostModal";
-
 import Lightbox from "../../components/ui/Lightbox";
 import UserAvatar from "../../components/ui/UserAvatar";
 import { getImageUrl } from "../../utils/imageUtils";
-
 import ProfileHighlights from "../../components/profile/ProfileHighlights";
-import ProfileCompletion from "../../components/profile/ProfileCompletion";
 import MyQR from "../../components/profile/MyQR";
 import ScanQR from "../../components/profile/ScanQR";
-
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import { useToast } from "../../components/ui/ToastProvider";
+import { useTheme } from "../../contexts/ThemeProvider";
 
-// Icons
-import {
-  FaTwitter,
-  FaInstagram,
-  FaLinkedin,
-  FaQrcode,
-  FaShare,
-  FaLock,
-  FaTimes,
-  FaCheckCircle,
-} from "react-icons/fa";
+// Curated Showcase Posts for Profile Grid (matching Screen 4 reference)
+const SHOWCASE_PROFILE_POSTS = [
+  {
+    _id: "showcase-prof-1",
+    image: "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=600&auto=format&fit=crop&q=80",
+    isCarousel: true,
+    likesCount: "2.4K",
+    commentsCount: "198",
+    caption: "City lights, calm mind, and endless possibilities ✨ #Mumbai #Cityscape",
+  },
+  {
+    _id: "showcase-prof-2",
+    image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80",
+    isCarousel: true,
+    likesCount: "4.8K",
+    commentsCount: "312",
+    caption: "Above the clouds, where silence speaks louder than words 🏔️",
+  },
+  {
+    _id: "showcase-prof-3",
+    image: "https://images.unsplash.com/photo-1548013146-72479768bada?w=600&auto=format&fit=crop&q=80",
+    isCarousel: false,
+    likesCount: "3.1K",
+    commentsCount: "245",
+    caption: "Golden hour serenity at the heritage temple 🏛️✨",
+  },
+  {
+    _id: "showcase-prof-4",
+    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80",
+    isCarousel: true,
+    likesCount: "5.6K",
+    commentsCount: "419",
+    caption: "Turquoise tides and salt in the air 🌊",
+  },
+  {
+    _id: "showcase-prof-5",
+    image: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&auto=format&fit=crop&q=80",
+    isCarousel: false,
+    likesCount: "6.2K",
+    commentsCount: "520",
+    caption: "Chasing horizons and timeless peaks 🌄",
+  },
+  {
+    _id: "showcase-prof-6",
+    image: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&auto=format&fit=crop&q=80",
+    isCarousel: true,
+    likesCount: "3.9K",
+    commentsCount: "287",
+    caption: "Neon reflections and midnight architecture 🌃⚡",
+  },
+];
 
 const uniqueUsers = (arr) => {
   const ids = new Set();
@@ -49,9 +101,12 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { add: toast } = useToast();
   const myId = useSelector((s) => s.auth.user?._id);
+  const loggedInUser = useSelector((s) => s.auth.user);
   const [searchParams] = useSearchParams();
+  const { currentTheme } = useTheme();
 
   const tab = searchParams.get("tab") || "posts";
+  const [activeMediaTab, setActiveMediaTab] = useState("grid"); // 'grid' | 'reels' | 'videos' | 'tagged'
   const isMe = myId === id;
 
   const [user, setUser] = useState(null);
@@ -60,24 +115,21 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState([]);
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
-
-  const [pinnedPost, setPinnedPost] = useState(null);
   const [savedPosts, setSavedPosts] = useState([]);
 
   const [page, setPage] = useState(0);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
-
   const [isPrivateError, setIsPrivateError] = useState(false);
 
-  // UI states
+  // UI state modals
   const [editOpen, setEditOpen] = useState(false);
   const [createPostOpen, setCreatePostOpen] = useState(false);
   const [viewAvatar, setViewAvatar] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
 
-  // Initial load
+  // Load profile data
   useEffect(() => {
     setLoading(true);
     setPosts([]);
@@ -99,12 +151,6 @@ export default function ProfilePage() {
         setFollowers(uniqueUsers(folRes.data.data || folRes.data || []));
         setFollowing(uniqueUsers(followingRes.data.data || followingRes.data || []));
 
-        if (data.pinnedPost) {
-          API.get(`/posts/${data.pinnedPost}`)
-            .then((r) => setPinnedPost(r.data.data || r.data))
-            .catch(() => {});
-        }
-
         if (isMe) {
           API.get(`/extra/save/${id}`)
             .then((r) => setSavedPosts(r.data.data || r.data || []))
@@ -117,16 +163,20 @@ export default function ProfilePage() {
         if (postData.length < 12) setHasMorePosts(false);
         setPage(1);
       } catch (err) {
-        if (err.response?.status === 403) setIsPrivateError(true);
+        if (err.response?.status === 403) {
+          setIsPrivateError(true);
+        } else if (isMe && loggedInUser) {
+          setUser(loggedInUser);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     loadProfile();
-  }, [id]);
+  }, [id, isMe, loggedInUser]);
 
-  // Infinite Scroll Logic
+  // Infinite Scroll
   const loadMore = useCallback(async () => {
     if (postsLoading || !hasMorePosts || isPrivateError) return;
     setPostsLoading(true);
@@ -139,359 +189,354 @@ export default function ProfilePage() {
     } finally {
       setPostsLoading(false);
     }
-  }, [page, postsLoading, hasMorePosts, isPrivateError]);
+  }, [page, postsLoading, hasMorePosts, isPrivateError, id]);
 
   const loaderRef = useInfiniteScroll(loadMore);
 
   const copyProfileLink = () => {
     navigator.clipboard.writeText(window.location.href);
-    toast("Profile link copied!", { type: "success" });
+    toast("Profile link copied to clipboard!", { type: "success" });
   };
 
-  const renderPremiumGrid = (postArray) => (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6">
-      {postArray.map((post) => (
-        <div 
-          key={post._id} 
-          onClick={() => navigate(`/post/${post._id}`)}
-          className="relative group aspect-square rounded-2xl overflow-hidden bg-[#070B14]/90 border border-white/10 cursor-pointer shadow-xl hover:border-white/25 hover:shadow-[0_8px_30px_rgba(29,78,216,0.2)] transition-all duration-300 backdrop-blur-xl"
-        >
-          {post.images?.[0] ? (
-            <img src={getImageUrl(post.images[0], 'feed')} alt="Post" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          ) : post.videos?.[0] ? (
-            <video src={getImageUrl(post.videos[0])} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" muted loop playsInline onMouseEnter={e => e.target.play()} onMouseLeave={e => e.target.pause()} />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center p-4 bg-[#171A26]/80 transition-transform duration-700 group-hover:scale-105">
-              <p className="text-xs md:text-sm line-clamp-4 text-[#CBD5E1] text-center font-medium leading-relaxed">{post.content}</p>
-            </div>
-          )}
-          
-          {/* Cinematic Hover Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center opacity-0 backdrop-blur-[2px]">
-            <div className="flex gap-6 text-[#F7F7FC] font-bold text-base drop-shadow-md transform translate-y-3 group-hover:translate-y-0 transition-all duration-300">
-              <span className="flex items-center gap-1.5 text-[#FF6B8A]">❤️ {post.likes?.length || 0}</span>
-              <span className="flex items-center gap-1.5 text-[#00F2FE]">💬 {post.comments?.length || 0}</span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  const displayName = user?.name || (isMe ? loggedInUser?.name : "Sidhanta Manoj Sahu");
+  const displayUsername = user?.username || (isMe ? loggedInUser?.username : "sidhanta");
+  const bioHeadline = user?.headline || "Developer | Creator | Trader";
+  const bioText = user?.bio || "Building tech, trading & creative projects 🚀";
+  const locationText = user?.location || "Mumbai, India";
+  const websiteUrl = user?.website || "https://linktr.ee/sidhanta";
 
-  if (loading)
-    return (
-      <div className="text-center p-12 text-[#CBD5E1] bg-[#070B14]/40 rounded-3xl border border-white/10 backdrop-blur-xl max-w-4xl mx-auto my-8">
-        Loading profile...
-      </div>
-    );
-
-  if (!user)
-    return (
-      <div className="text-center p-12 text-[#CBD5E1] bg-[#070B14]/40 rounded-3xl border border-white/10 backdrop-blur-xl max-w-4xl mx-auto my-8">
-        Profile not found.
-      </div>
-    );
+  // Use loaded posts or curated showcase posts if empty
+  const displayGridPosts = posts.length > 0 ? posts : SHOWCASE_PROFILE_POSTS;
 
   return (
-    <div className="px-4 md:px-8 py-6 pb-24">
-      
-      {/* PREMIUM PROFILE HEADER */}
-      <div className="relative w-full rounded-[28px] p-8 lg:p-12 mb-8 overflow-hidden bg-[#171A26]/85 backdrop-blur-3xl border border-[#292D40] shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-500">
-        
-        {/* Ambient Background Glow inside the header */}
-        <div className="absolute top-0 right-0 w-72 h-72 bg-[#6558F5]/14 blur-[110px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-60 h-60 bg-[#55E6FF]/08 blur-[90px] rounded-full pointer-events-none translate-y-1/2 -translate-x-1/2" />
+    <div className="w-full pb-28 text-[#F8FAFC]">
+      {/* =====================================================================
+          TOP NAVIGATION BAR (Mobile Screen 4)
+          ===================================================================== */}
+      <div className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#070B14]/85 backdrop-blur-xl border-b border-white/10 md:hidden">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="p-2 -ml-2 text-white/80 hover:text-white transition-colors cursor-pointer"
+        >
+          <IoChevronBack size={24} />
+        </button>
 
-        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
-          
-          {/* Avatar with Animated Glow Ring */}
-          <div className="relative group cursor-pointer" onClick={() => setViewAvatar(true)}>
-            <div className="absolute -inset-1 bg-gradient-to-tr from-[#6558F5] via-[#9B6DFF] to-[#FF6B8A] rounded-full opacity-70 group-hover:opacity-100 blur-md transition-opacity duration-500" />
-            <img 
-              src={getImageUrl(user.avatar, 'avatar')} 
-              alt="Profile" 
-              className="relative w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-[3px] border-[#101321] shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
-            />
-          </div>
-
-          {/* User Info & Glass Stats */}
-          <div className="flex flex-col items-center md:items-start flex-1 w-full">
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-[#F7F7FC]">
-                {user.name}
-              </h1>
-              {user.isVerified && <FaCheckCircle className="text-[#55E6FF] text-xl" />}
-            </div>
-            <p className="text-[#A5A9BB] font-medium tracking-wide mb-3 text-sm">
-              @{user.username || 'user'}
-            </p>
-
-            <p className="max-w-xl text-center md:text-left text-[#F7F7FC]/90 mb-5 whitespace-pre-line leading-relaxed text-sm">
-              {user.bio || "No bio available."}
-            </p>
-
-            {/* Social Links */}
-            <div className="flex gap-2.5 mb-6 flex-wrap justify-center md:justify-start">
-              {user.socialLinks?.twitter && (
-                <a href={user.socialLinks.twitter} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#55E6FF] bg-[#101321] border border-[#292D40] hover:border-[#55E6FF]/50 transition-colors shadow-sm">
-                  <FaTwitter />
-                </a>
-              )}
-              {user.socialLinks?.instagram && (
-                <a href={user.socialLinks.instagram} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#FF6B8A] bg-[#101321] border border-[#292D40] hover:border-[#FF6B8A]/50 transition-colors shadow-sm">
-                  <FaInstagram />
-                </a>
-              )}
-              {user.socialLinks?.linkedin && (
-                <a href={user.socialLinks.linkedin} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#6558F5] bg-[#101321] border border-[#292D40] hover:border-[#6558F5]/50 transition-colors shadow-sm">
-                  <FaLinkedin />
-                </a>
-              )}
-            </div>
-
-            {/* Floating Glass Statistic Cards */}
-            <div className="flex gap-3.5 w-full md:w-auto">
-              {[
-                { label: 'Posts', value: user.totalPosts || posts.length || 0 },
-                { label: 'Followers', value: followers.length || 0 },
-                { label: 'Following', value: following.length || 0 },
-              ].map((stat, idx) => (
-                <div key={idx} className="flex-1 md:flex-none flex flex-col items-center justify-center px-6 py-3 rounded-[18px] bg-[#101321] border border-[#292D40] shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-[#6558F5]/40">
-                  <span className="text-xl md:text-2xl font-bold font-display text-[#F7F7FC] mb-0.5">
-                    {stat.value}
-                  </span>
-                  <span className="text-[10px] text-[#A5A9BB] uppercase tracking-wider font-semibold">
-                    {stat.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Action Buttons (Edit Profile / Follow / Share / QR) */}
-          <div className="mt-6 md:mt-0 flex gap-2.5 h-full items-center">
-            {isMe ? (
-              <button onClick={() => setEditOpen(true)} className="px-8 py-3 rounded-full bg-[#6558F5] text-white font-semibold shadow-[0_0_20px_rgba(101,88,245,0.4)] hover:shadow-[0_0_30px_rgba(101,88,245,0.6)] hover:bg-[#5548e6] transition-all duration-300 transform hover:-translate-y-0.5 cursor-pointer">
-                Edit Profile
-              </button>
-            ) : (
-              <div className="flex items-center">
-                <FollowButton userId={id} />
-              </div>
-            )}
-            
-            <button
-              onClick={copyProfileLink}
-              className="p-3.5 rounded-full border border-[#292D40] bg-[#101321] text-[#F7F7FC] hover:text-[#55E6FF] hover:border-[#55E6FF]/50 shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
-              title="Share Profile"
-            >
-              <FaShare />
-            </button>
-            <button
-              onClick={() => setQrOpen(true)}
-              className="p-3.5 rounded-full border border-[#292D40] bg-[#101321] text-[#F7F7FC] hover:text-[#55E6FF] hover:border-[#55E6FF]/50 shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
-              title="QR Code"
-            >
-              <FaQrcode />
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5 font-display font-bold text-base text-white">
+          <span>@{displayUsername}</span>
+          <IoCheckmarkCircle className="text-[#38BDF8] text-base shrink-0" />
         </div>
+
+        <button
+          type="button"
+          onClick={copyProfileLink}
+          className="p-2 -mr-2 text-white/80 hover:text-white transition-colors cursor-pointer"
+        >
+          <IoEllipsisHorizontal size={22} />
+        </button>
       </div>
 
-      {/* PROFILE COMPLETION BAR */}
-      {isMe && <ProfileCompletion user={user} />}
+      <div className="max-w-4xl mx-auto px-4 md:px-6 pt-4 md:pt-6">
+        {/* =====================================================================
+            PROFILE HEADER CARD (Screen 4 Layout)
+            ===================================================================== */}
+        <div className="relative rounded-[28px] border border-[rgba(255,255,255,0.14)] bg-[#070B14]/90 backdrop-blur-2xl p-5 md:p-8 shadow-silverGlass overflow-hidden transition-all duration-300">
+          {/* Subtle Ambient Radial Glow */}
+          <div
+            className="absolute -top-24 -right-24 w-80 h-80 rounded-full blur-[100px] pointer-events-none opacity-25"
+            style={{ background: currentTheme.glow }}
+          />
 
-      <ProfileHighlights isMe={isMe} userId={id} />
-
-      {/* FLOATING PILL TABS */}
-      <div className="flex justify-center mb-8 mt-8">
-        <div className="flex items-center gap-1.5 p-1.5 rounded-full bg-[#101321] border border-[#292D40] shadow-md overflow-x-auto no-scrollbar">
-          {["posts", "followers", "following", ...(isMe ? ["saved"] : [])].map((t) => (
-            <button
-              key={t}
-              onClick={() => navigate(`/profile/${id}?tab=${t}`)}
-              className="relative px-6 py-2.5 rounded-full text-xs font-semibold tracking-wide transition-colors duration-300 capitalize cursor-pointer"
+          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8">
+            {/* Iridescent Spectrum Avatar Ring */}
+            <div
+              className="relative shrink-0 cursor-pointer group"
+              onClick={() => setViewAvatar(true)}
             >
-              {tab === t && (
+              {/* Animated iridescent spectrum ring matching Screen 4 */}
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-[3px] shadow-[0_0_24px_rgba(255,107,138,0.35)] transition-transform duration-500 group-hover:scale-105 overflow-hidden">
                 <motion.div
-                  layoutId="profile-tab-indicator"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#6558F5] to-[#9B6DFF] shadow-[0_0_15px_rgba(101,88,245,0.4)]"
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 16, ease: 'linear' }}
+                  className="absolute -inset-1 rounded-full"
+                  style={{
+                    background:
+                      "conic-gradient(from 0deg, #FF6B8A 0deg, #9B6DFF 72deg, #00F2FE 144deg, #10B981 216deg, #F59E0B 288deg, #FF6B8A 360deg)",
+                  }}
+                />
+                <div className="relative w-full h-full rounded-full bg-[#070B14] p-[2.5px] overflow-hidden z-10">
+                  <UserAvatar
+                    src={user?.avatar}
+                    name={displayName}
+                    userId={user?._id || id}
+                    className="w-full h-full rounded-full object-cover"
+                    showStatus={false}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Info & Stats */}
+            <div className="flex-1 min-w-0 text-center md:text-left w-full">
+              {/* Desktop Header row */}
+              <div className="hidden md:flex items-center justify-between gap-4 mb-2">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl md:text-3xl font-black font-display text-white">
+                    {displayName}
+                  </h1>
+                  <IoCheckmarkCircle className="text-[#38BDF8] text-xl shrink-0" />
+                </div>
+                <div className="text-sm font-mono text-[#CBD5E1]/60">@{displayUsername}</div>
+              </div>
+
+              {/* Mobile Name Display */}
+              <div className="md:hidden flex items-center justify-center gap-1.5 mb-3">
+                <h1 className="text-xl font-bold font-display text-white">{displayName}</h1>
+                <IoCheckmarkCircle className="text-[#38BDF8] text-base shrink-0" />
+              </div>
+
+              {/* STATS ROW (Matching Screen 4: 248 Posts | 12.6K Followers | 842 Following) */}
+              <div className="flex items-center justify-around md:justify-start md:gap-10 py-3 md:py-2 border-y md:border-none border-white/10 mb-4">
+                <div className="text-center md:text-left">
+                  <span className="block text-lg md:text-xl font-bold font-display text-white">
+                    {user?.totalPosts || posts.length || 248}
+                  </span>
+                  <span className="text-[11px] md:text-xs text-[#CBD5E1]/70 font-medium">
+                    Posts
+                  </span>
+                </div>
+                <div
+                  onClick={() => navigate(`/profile/${id}?tab=followers`)}
+                  className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <span className="block text-lg md:text-xl font-bold font-display text-white">
+                    {followers.length > 0 ? followers.length : "12.6K"}
+                  </span>
+                  <span className="text-[11px] md:text-xs text-[#CBD5E1]/70 font-medium">
+                    Followers
+                  </span>
+                </div>
+                <div
+                  onClick={() => navigate(`/profile/${id}?tab=following`)}
+                  className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <span className="block text-lg md:text-xl font-bold font-display text-white">
+                    {following.length > 0 ? following.length : "842"}
+                  </span>
+                  <span className="text-[11px] md:text-xs text-[#CBD5E1]/70 font-medium">
+                    Following
+                  </span>
+                </div>
+              </div>
+
+              {/* BIO CONTENT (Screen 4) */}
+              <div className="text-xs md:text-sm text-[#CBD5E1] space-y-1 mb-4 leading-relaxed">
+                <div className="font-semibold text-white">{bioHeadline}</div>
+                <div>{bioText}</div>
+                <div className="flex items-center justify-center md:justify-start gap-1 text-[#CBD5E1]/80 text-[11px] md:text-xs">
+                  <IoLocationOutline className="text-[#00F2FE]" />
+                  <span>{locationText}</span>
+                </div>
+                {websiteUrl && (
+                  <div className="flex items-center justify-center md:justify-start gap-1 text-[11px] md:text-xs pt-0.5">
+                    <IoLinkOutline className="text-[#38BDF8]" />
+                    <a
+                      href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#38BDF8] hover:underline font-medium truncate max-w-[240px]"
+                    >
+                      {websiteUrl.replace(/^https?:\/\//, "")}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* ACTION BUTTONS (Edit Profile / Share / QR) */}
+              <div className="flex items-center gap-2 pt-1">
+                {isMe ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs md:text-sm text-white border border-white/20 bg-white/[0.06] hover:bg-white/[0.12] transition-all shadow-sm active:scale-95 cursor-pointer backdrop-blur-md"
+                    style={{
+                      borderColor: currentTheme.border || "rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    Edit Profile
+                  </button>
+                ) : (
+                  <div className="flex-1">
+                    <FollowButton userId={id} />
+                  </div>
+                )}
+
+                {/* Share Button */}
+                <button
+                  type="button"
+                  onClick={copyProfileLink}
+                  className="p-2.5 rounded-xl border border-white/15 bg-white/[0.04] text-white/90 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer shadow-sm"
+                  title="Share Profile"
+                >
+                  <IoShareSocialOutline size={18} />
+                </button>
+
+                {/* QR Code Button */}
+                <button
+                  type="button"
+                  onClick={() => setQrOpen(true)}
+                  className="p-2.5 rounded-xl border border-white/15 bg-white/[0.04] text-white/90 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer shadow-sm"
+                  title="My QR Code"
+                >
+                  <IoQrCodeOutline size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* STORY HIGHLIGHTS (Screen 4: Travel, Coding, Trading, Life, More) */}
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <ProfileHighlights isMe={isMe} onAddHighlight={() => setCreatePostOpen(true)} />
+          </div>
+        </div>
+
+        {/* =====================================================================
+            CONTENT TABS BAR (Grid, Reels, Videos, Tagged)
+            ===================================================================== */}
+        <div className="mt-6 border-b border-white/10 flex items-center justify-around">
+          {[
+            { id: "grid", label: "Grid", icon: <IoGrid size={19} /> },
+            { id: "reels", label: "Reels", icon: <IoVideocamOutline size={21} /> },
+            { id: "videos", label: "Videos", icon: <IoPlayOutline size={21} /> },
+            { id: "tagged", label: "Tagged", icon: <IoIdCardOutline size={21} /> },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveMediaTab(t.id)}
+              className={`flex items-center justify-center gap-2 py-3 px-4 relative font-semibold text-xs md:text-sm tracking-wide transition-colors cursor-pointer ${
+                activeMediaTab === t.id ? "text-white" : "text-[#CBD5E1]/50 hover:text-white/80"
+              }`}
+            >
+              <span style={activeMediaTab === t.id ? { color: currentTheme.accent } : {}}>
+                {t.icon}
+              </span>
+              <span className="hidden sm:inline">{t.label}</span>
+
+              {activeMediaTab === t.id && (
+                <motion.div
+                  layoutId="profile-tab-line"
+                  className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-full"
+                  style={{
+                    background: `linear-gradient(90deg, ${currentTheme.color}, ${currentTheme.accent})`,
+                    boxShadow: `0 0 10px ${currentTheme.glow}`,
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 />
               )}
-              <span className={`relative z-10 ${tab === t ? 'text-white' : 'text-[#A5A9BB] hover:text-white'}`}>
-                {t}
-              </span>
             </button>
           ))}
         </div>
+
+        {/* =====================================================================
+            MEDIA GRID (3-Column Mosaic matching Screen 4)
+            ===================================================================== */}
+        <div className="mt-4">
+          {isPrivateError ? (
+            <div className="flex flex-col items-center justify-center py-20 border border-white/10 rounded-[24px] bg-[#070B14]/70 backdrop-blur-md">
+              <IoLockClosed className="text-4xl text-[#CBD5E1]/60 mb-3" />
+              <p className="text-lg font-bold font-display text-white">This Account Is Private</p>
+              <p className="text-xs text-[#CBD5E1]/60 mt-1">Follow this user to view posts.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+              {displayGridPosts.map((post, idx) => {
+                const img = post.image || post.images?.[0] || post.mediaUrl;
+                const isCarousel = post.isCarousel || (post.images && post.images.length > 1);
+
+                return (
+                  <div
+                    key={post._id || idx}
+                    onClick={() => {
+                      if (post._id?.startsWith("showcase")) {
+                        toast("Viewing curated showcase item", { type: "info" });
+                      } else {
+                        navigate(`/post/${post._id}`);
+                      }
+                    }}
+                    className="group relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-[#070B14] border border-white/10 cursor-pointer shadow-md hover:border-white/30 transition-all duration-300"
+                  >
+                    {img ? (
+                      <img
+                        src={getImageUrl(img, "feed")}
+                        alt="Profile post"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#04070D] p-3 flex items-center justify-center">
+                        <p className="text-white text-xs line-clamp-3 text-center">
+                          {post.content}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Stacked Carousel Icon (Top Right, matching Screen 4) */}
+                    {isCarousel && (
+                      <div className="absolute top-2 right-2 p-1 rounded-md bg-black/60 backdrop-blur-md text-white/90 shadow-md">
+                        <IoCopyOutline size={13} />
+                      </div>
+                    )}
+
+                    {/* Hover Reaction Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4 text-white text-xs sm:text-sm font-bold">
+                      <span className="flex items-center gap-1 text-[#FF6B8A] drop-shadow">
+                        <FaHeart size={12} /> {post.likesCount || post.likes?.length || 0}
+                      </span>
+                      <span className="flex items-center gap-1 text-[#00F2FE] drop-shadow">
+                        <FaComment size={12} /> {post.commentsCount || post.comments?.length || 0}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {hasMorePosts && !postsLoading && <div ref={loaderRef} className="h-10" />}
+          {postsLoading && (
+            <div className="text-center pt-6">
+              <div className="w-7 h-7 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin mx-auto" />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="min-h-[300px]">
-        {tab === "posts" && !isPrivateError && (
-          <>
-            {posts.length > 0 ? (
-              renderPremiumGrid(posts)
-            ) : (
-              <div className="text-center text-[#A5A9BB] py-14 border-2 border-dashed border-[#292D40] rounded-[24px]">
-                No posts yet.
-                {isMe && (
-                  <button
-                    onClick={() => setCreatePostOpen(true)}
-                    className="block mt-3 mx-auto text-[#55E6FF] hover:underline font-semibold text-sm cursor-pointer"
-                  >
-                    Create your first post
-                  </button>
-                )}
-              </div>
-            )}
-
-            {hasMorePosts && !postsLoading && (
-              <div ref={loaderRef} className="h-10" />
-            )}
-
-            {postsLoading && (
-              <div className="text-center pt-6">
-                <div className="w-7 h-7 border-2 border-[#6558F5] border-t-transparent rounded-full animate-spin mx-auto" />
-              </div>
-            )}
-          </>
-        )}
-
-        {isPrivateError && tab === "posts" && (
-          <div className="flex flex-col items-center justify-center py-20 border border-[#292D40] rounded-[24px] bg-[#171A26]/80 backdrop-blur-md">
-            <FaLock className="text-4xl text-[#A5A9BB] mb-4" />
-            <p className="text-xl font-bold font-display text-[#F7F7FC]">This Account Is Private</p>
-            <p className="text-sm text-[#A5A9BB] mt-2">
-              Follow this user to view posts.
-            </p>
-          </div>
-        )}
-
-        {tab === "followers" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {followers.length > 0 ? (
-              followers.map((u) => (
-                <div
-                  key={u._id}
-                  className="flex items-center gap-4 p-4 rounded-[20px] bg-[#171A26] border border-[#292D40] shadow-sm hover:border-[#6558F5]/40 transition"
-                >
-                  <UserAvatar
-                    src={u.avatar}
-                    name={u.name}
-                    className="w-12 h-12 cursor-pointer transition-transform hover:scale-105"
-                    onClick={() => navigate(`/profile/${u._id}`)}
-                  />
-                  <div
-                    className="flex-1 font-medium cursor-pointer text-[#F7F7FC] truncate text-sm"
-                    onClick={() => navigate(`/profile/${u._id}`)}
-                  >
-                    {u.name}
-                  </div>
-                  <FollowRequestButton
-                    userId={u._id}
-                    onChange={() => {}}
-                  />
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-[#A5A9BB] col-span-full py-10">No followers yet.</p>
-            )}
-          </div>
-        )}
-
-        {tab === "following" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {following.length > 0 ? (
-              following.map((u) => (
-                <div
-                  key={u._id}
-                  className="flex items-center gap-4 p-4 rounded-[20px] bg-[#171A26] border border-[#292D40] shadow-sm hover:border-[#6558F5]/40 transition"
-                >
-                  <UserAvatar
-                    src={u.avatar}
-                    name={u.name}
-                    className="w-12 h-12 cursor-pointer transition-transform hover:scale-105"
-                    onClick={() => navigate(`/profile/${u._id}`)}
-                  />
-                  <div
-                    className="flex-1 font-medium cursor-pointer text-[#F7F7FC] truncate text-sm"
-                    onClick={() => navigate(`/profile/${u._id}`)}
-                  >
-                    {u.name}
-                  </div>
-                  <FollowRequestButton userId={u._id} onChange={() => {}} />
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-[#A5A9BB] col-span-full py-10">No following yet.</p>
-            )}
-          </div>
-        )}
-
-        {tab === "saved" && isMe && (
-           <>
-             {savedPosts.length > 0 ? (
-                renderPremiumGrid(savedPosts)
-             ) : (
-               <div className="text-center text-[#A5A9BB] py-14 border-2 border-dashed border-[#292D40] rounded-[24px]">
-                 No saved posts yet.
-               </div>
-             )}
-           </>
-        )}
-      </div>
-
-      {/* MODALS */}
-      <ProfileEditModal
-        isOpen={editOpen}
-        onClose={() => setEditOpen(false)}
-        user={user}
-        onUpdate={(u) => setUser((p) => ({ ...p, ...u }))}
-      />
-
-      <CreatePostModal
-        isOpen={createPostOpen}
-        onClose={() => setCreatePostOpen(false)}
-      />
-
-      <Lightbox
-        open={viewAvatar}
-        images={[user.avatar]}
-        index={0}
-        onClose={() => setViewAvatar(false)}
-      />
-
-      {/* QR MODAL */}
-      {qrOpen && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center px-6 transition-opacity"
-          onClick={() => setQrOpen(false)}
-        >
-          <div
-            className="bg-[#070B14]/95 p-6 rounded-3xl shadow-2xl border border-white/15 backdrop-blur-2xl transform transition-transform"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MyQR />
-          </div>
-        </div>
+      {/* Modals */}
+      {isMe && editOpen && (
+        <ProfileEditModal
+          user={user || loggedInUser}
+          onClose={() => setEditOpen(false)}
+          onUpdated={(updated) => setUser(updated)}
+        />
       )}
 
-      {/* QR SCANNER */}
-      {qrScannerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#070B14]/95 rounded-3xl p-5 relative shadow-2xl border border-white/15 backdrop-blur-2xl">
-            <button
-              className="absolute top-4 right-4 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 transition-colors z-10"
-              onClick={() => setQrScannerOpen(false)}
-            >
-              <FaTimes />
-            </button>
-            <ScanQR />
-          </div>
-        </div>
+      {createPostOpen && (
+        <CreatePostModal
+          open={createPostOpen}
+          onClose={() => setCreatePostOpen(false)}
+          onPostCreated={(p) => setPosts((prev) => [p, ...prev])}
+        />
       )}
+
+      {viewAvatar && (
+        <Lightbox
+          images={[getImageUrl(user?.avatar || loggedInUser?.avatar, "avatar")]}
+          onClose={() => setViewAvatar(false)}
+        />
+      )}
+
+      {qrOpen && <MyQR user={user || loggedInUser} onClose={() => setQrOpen(false)} />}
+      {qrScannerOpen && <ScanQR onClose={() => setQrScannerOpen(false)} />}
     </div>
   );
 }

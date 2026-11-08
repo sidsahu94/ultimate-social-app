@@ -1,442 +1,557 @@
 // frontend/src/pages/explore/Explore.jsx
 import React, { useEffect, useState } from "react";
-import API from "../../services/api";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  IoSearchOutline,
+  IoScanOutline,
+  IoCopyOutline,
+  IoPlay,
+  IoMenuOutline,
+  IoClose,
+  IoHeart,
+  IoChatbubble,
+  IoLocationOutline,
+  IoFlame,
+  IoPeopleOutline,
+  IoSparkles,
+} from "react-icons/io5";
+
+import API from "../../services/api";
 import Spinner from "../../components/common/Spinner";
-import { FaHashtag, FaUserPlus, FaSearch, FaFire, FaHistory, FaTimes, FaCompass, FaHeart, FaComment } from 'react-icons/fa';
 import UserAvatar from "../../components/ui/UserAvatar";
 import { getImageUrl } from "../../utils/imageUtils";
 import { playSound } from "../../utils/soundEffects";
+import { useTheme } from "../../contexts/ThemeProvider";
 
-let cachedExploreSuggestions = null;
-let lastSuggestionsFetchTime = 0;
-const exploreCategoryCache = new Map();
+// Curated Staggered Mosaic Pieces (Matching Screen 2 of the reference design)
+const CURATED_EXPLORE_PIECES = [
+  {
+    _id: "exp-1",
+    aspect: "tall", // Portrait aspect
+    image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=700&auto=format&fit=crop&q=80",
+    caption: "Frozen peaks reaching into the infinite sky 🏔️",
+    isCarousel: true,
+    user: { name: "Elena Vance", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+    likes: "18.4K",
+    comments: "342",
+  },
+  {
+    _id: "exp-2",
+    aspect: "square",
+    image: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=700&auto=format&fit=crop&q=80",
+    caption: "City cadence and neon reflections in the midnight rain 🌃✨",
+    isCarousel: false,
+    user: { name: "Marcus Thorne", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200" },
+    likes: "22.1K",
+    comments: "419",
+  },
+  {
+    _id: "exp-3",
+    aspect: "square",
+    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=700&auto=format&fit=crop&q=80",
+    caption: "Turquoise shorelines and calm Pacific breeze 🌊🌴",
+    isCarousel: false,
+    user: { name: "Kai Sterling", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200" },
+    likes: "14.9K",
+    comments: "215",
+  },
+  {
+    _id: "exp-4",
+    aspect: "tall",
+    image: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=700&auto=format&fit=crop&q=80",
+    caption: "Pristine macro morning dew drops on emerald foliage 🍃💧",
+    isCarousel: true,
+    user: { name: "Aria Chen", avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200" },
+    likes: "31.2K",
+    comments: "580",
+  },
+  {
+    _id: "exp-5",
+    aspect: "tall",
+    isVideo: true,
+    viewCount: "1.2M",
+    image: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=700&auto=format&fit=crop&q=80",
+    caption: "Sunset hiker atop the clouds watching golden horizons 🌄",
+    isCarousel: true,
+    user: { name: "Sidhanta Sahu", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200" },
+    likes: "45.7K",
+    comments: "912",
+  },
+  {
+    _id: "exp-6",
+    aspect: "square",
+    image: "https://images.unsplash.com/photo-1548013146-72479768bada?w=700&auto=format&fit=crop&q=80",
+    caption: "Ancient heritage sandstone temple bathed in dusk light 🏛️✨",
+    isCarousel: false,
+    user: { name: "Neha Sharma", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" },
+    likes: "19.3K",
+    comments: "288",
+  },
+  {
+    _id: "exp-7",
+    aspect: "square",
+    isVideo: true,
+    viewCount: "432K",
+    image: "https://images.unsplash.com/photo-1534188753412-3e26d0d618d6?w=700&auto=format&fit=crop&q=80",
+    caption: "Serengeti king in deep golden gaze 🦁",
+    isCarousel: true,
+    user: { name: "Vikram Mehta", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200" },
+    likes: "38.6K",
+    comments: "640",
+  },
+  {
+    _id: "exp-8",
+    aspect: "tall",
+    image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=700&auto=format&fit=crop&q=80",
+    caption: "Secret turquoise cove surrounded by lush alpine pines 🌲💧",
+    isCarousel: false,
+    user: { name: "Ishita Roy", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+    likes: "27.4K",
+    comments: "430",
+  },
+];
+
+const TRENDING_PLACES = [
+  { name: "Mumbai, India", count: "142K posts", img: "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=400" },
+  { name: "Swiss Alps", count: "98K posts", img: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400" },
+  { name: "Bali, Indonesia", count: "86K posts", img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400" },
+  { name: "Kyoto, Japan", count: "64K posts", img: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=400" },
+];
 
 export default function Explore() {
-    const navigate = useNavigate();
-    const [query, setQuery] = useState("");
-    const [activeCategory, setActiveCategory] = useState('For You');
-    const [results, setResults] = useState({ users: [], posts: [], hashtags: [] });
-    const [suggestions, setSuggestions] = useState({ users: [], trendingHashtags: [] });
-    const [loading, setLoading] = useState(false);
-    const [recentSearches, setRecentSearches] = useState([]);
-    const [categoryPosts, setCategoryPosts] = useState([]);
-    const [loadingCategoryPosts, setLoadingCategoryPosts] = useState(false);
+  const navigate = useNavigate();
+  const { currentTheme } = useTheme();
 
-    // Load History
-    useEffect(() => {
-        const saved = localStorage.getItem('recent_searches');
-        if (saved) { try { setRecentSearches(JSON.parse(saved)); } catch(e) {} }
-    }, []);
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("For You"); // 'For You' | 'Trending' | 'People' | 'Places'
+  const [results, setResults] = useState({ users: [], posts: [], hashtags: [] });
+  const [suggestions, setSuggestions] = useState({ users: [], trendingHashtags: [] });
+  const [loading, setLoading] = useState(false);
+  const [categoryPosts, setCategoryPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
 
-    const addToHistory = (term) => {
-        if (!term || term.length < 2) return;
-        const newSet = new Set([term, ...recentSearches]);
-        const newArr = Array.from(newSet).slice(0, 5);
-        setRecentSearches(newArr);
-        localStorage.setItem('recent_searches', JSON.stringify(newArr));
+  // Load Suggestions
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      try {
+        const r = await API.get("/extra/suggestions");
+        const payload = r.data.data || r.data || {};
+        setSuggestions({
+          users: Array.isArray(payload.users) ? payload.users : [],
+          trendingHashtags: Array.isArray(payload.trendingHashtags) ? payload.trendingHashtags : [],
+        });
+      } catch (e) {
+        // Fallback demo users
+      }
     };
+    fetchSuggestions();
+  }, []);
 
-    const removeFromHistory = (term, e) => {
-        e.stopPropagation();
-        const newArr = recentSearches.filter(s => s !== term);
-        setRecentSearches(newArr);
-        localStorage.setItem('recent_searches', JSON.stringify(newArr));
+  // Fetch Feed for current category
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setLoadingPosts(true);
+      try {
+        let res;
+        if (activeCategory === "For You" || activeCategory === "Trending") {
+          res = await API.get("/posts/trending");
+        } else if (activeCategory === "Places") {
+          res = await API.get("/search/global?q=places");
+        } else {
+          res = await API.get(`/search/global?q=${encodeURIComponent(activeCategory)}`);
+        }
+        const raw = res.data?.data || res.data;
+        const postsList = Array.isArray(raw) ? raw : raw?.posts || [];
+        setCategoryPosts(postsList);
+      } catch (e) {
+        setCategoryPosts([]);
+      } finally {
+        setLoadingPosts(false);
+      }
     };
+    fetchPosts();
+  }, [activeCategory]);
 
-    // Load Suggestions (Users & Trends)
-    useEffect(() => {
-        if (cachedExploreSuggestions && Date.now() - lastSuggestionsFetchTime < 180000) {
-            setSuggestions(cachedExploreSuggestions);
-            return;
-        }
+  // Handle Search
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults({ users: [], posts: [], hashtags: [] });
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await API.get(`/search/global?q=${encodeURIComponent(query)}`);
+        setResults(r.data.data || r.data || { users: [], posts: [], hashtags: [] });
+      } catch (e) {
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-        const fetchSuggestions = async () => {
-            try {
-                const r = await API.get('/extra/suggestions');
-                const payload = r.data.data || r.data || {};
-                
-                const data = { 
-                    users: Array.isArray(payload.users) ? payload.users : [],
-                    trendingHashtags: Array.isArray(payload.trendingHashtags) ? payload.trendingHashtags : []
-                };
-                cachedExploreSuggestions = data;
-                lastSuggestionsFetchTime = Date.now();
-                setSuggestions(data);
-            } catch (e) {
-                console.error("Failed to load suggestions", e);
-            }
-        };
-        fetchSuggestions();
-    }, []);
+  // Combined grid posts (database posts or curated showcase pieces)
+  const mosaicPieces =
+    categoryPosts.length >= 4 ? categoryPosts : CURATED_EXPLORE_PIECES;
 
-    // Load Category Posts for Explore feed
-    useEffect(() => {
-        const cachedCat = exploreCategoryCache.get(activeCategory);
-        if (cachedCat && Date.now() - cachedCat.time < 120000) {
-            setCategoryPosts(cachedCat.posts);
-            return;
-        }
+  return (
+    <div className="w-full pb-28 text-[#F8FAFC]">
+      {/* =====================================================================
+          HEADER (Mobile Screen 2: Hamburger + Explore + Search with QR Scanner)
+          ===================================================================== */}
+      <div className="sticky top-0 z-30 bg-[#070B14]/90 backdrop-blur-2xl border-b border-white/10 px-4 pt-3 pb-3">
+        {/* Title Row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="p-1 -ml-1 text-white/80 hover:text-white md:hidden"
+            >
+              <IoMenuOutline size={26} />
+            </button>
+            <h1 className="text-xl md:text-2xl font-black font-display text-white tracking-tight">
+              Explore
+            </h1>
+          </div>
 
-        const fetchCategoryPosts = async () => {
-            setLoadingCategoryPosts(true);
-            try {
-                let res;
-                if (activeCategory === 'For You' || activeCategory === 'Trending') {
-                    res = await API.get('/posts/trending');
-                } else {
-                    res = await API.get(`/search/global?q=${encodeURIComponent(activeCategory)}`);
+          <span
+            className="text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider"
+            style={{
+              background: `linear-gradient(135deg, ${currentTheme.color}25, ${currentTheme.accent}20)`,
+              border: `1px solid ${currentTheme.color}50`,
+              color: currentTheme.accent,
+            }}
+          >
+            Curated Feed
+          </span>
+        </div>
+
+        {/* Search Bar with QR Scanner Icon (Screen 2) */}
+        <div className="relative mb-3">
+          <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50 text-lg" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search posts, people, tags..."
+            className="w-full pl-10 pr-11 py-2.5 rounded-2xl bg-[#04070D]/85 border border-white/15 outline-none focus:border-white/40 transition-all text-white placeholder-white/40 text-sm shadow-inner"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white p-1"
+            >
+              <IoClose size={18} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate("/profile")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition"
+              title="Scan QR"
+            >
+              <IoScanOutline size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* CATEGORY FILTER PILLS (Screen 2: For You | 🔥 Trending | 👥 People | 📍 Places) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
+          {[
+            { id: "For You", label: "For You", icon: null },
+            { id: "Trending", label: "Trending", icon: <IoFlame className="text-[#FF6B8A]" /> },
+            { id: "People", label: "People", icon: <IoPeopleOutline className="text-[#00F2FE]" /> },
+            { id: "Places", label: "Places", icon: <IoLocationOutline className="text-[#F59E0B]" /> },
+          ].map((cat) => {
+            const isActive = activeCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  playSound("pop");
+                  setActiveCategory(cat.id);
+                }}
+                className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 border cursor-pointer ${
+                  isActive
+                    ? "text-white shadow-lg scale-105"
+                    : "bg-[#04070D]/70 border-white/10 text-white/70 hover:text-white hover:border-white/20"
+                }`}
+                style={
+                  isActive
+                    ? {
+                        background: `linear-gradient(135deg, ${currentTheme.color}40, ${currentTheme.accent}30)`,
+                        borderColor: currentTheme.accent,
+                        boxShadow: `0 0 14px ${currentTheme.glow}`,
+                      }
+                    : {}
                 }
-                const raw = res.data?.data || res.data;
-                let postsList = Array.isArray(raw) ? raw : (raw?.posts || []);
+              >
+                {cat.icon}
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-                // If category search has 0 items, fetch trending as fallback so feed is never blank
-                if ((!postsList || postsList.length === 0) && activeCategory !== 'For You') {
-                    const fallbackRes = await API.get('/posts/trending');
-                    const fallbackRaw = fallbackRes.data?.data || fallbackRes.data;
-                    postsList = Array.isArray(fallbackRaw) ? fallbackRaw : [];
-                }
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-4">
+        {/* =====================================================================
+            SEARCH RESULTS VIEW (When query is active)
+            ===================================================================== */}
+        {query ? (
+          <div className="space-y-6">
+            {loading && (
+              <div className="flex justify-center py-12">
+                <Spinner />
+              </div>
+            )}
 
-                exploreCategoryCache.set(activeCategory, { posts: postsList, time: Date.now() });
-                setCategoryPosts(postsList);
-            } catch (err) {
-                console.error("Failed to load category posts", err);
-                setCategoryPosts([]);
-            } finally {
-                setLoadingCategoryPosts(false);
-            }
-        };
-        fetchCategoryPosts();
-    }, [activeCategory]);
+            {!loading && results.users?.length === 0 && results.posts?.length === 0 && (
+              <div className="text-center text-white/60 py-14 rounded-2xl border border-dashed border-white/15 bg-white/[0.02]">
+                No direct results found for "{query}". Try browsing the curated feed.
+              </div>
+            )}
 
-    // Handle Search Execution
-    useEffect(() => {
-        if (!query.trim()) {
-            setResults({ users: [], posts: [], hashtags: [] });
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-            setLoading(true);
-            try {
-                const r = await API.get(`/search/global?q=${encodeURIComponent(query)}`);
-                setResults(r.data.data || r.data || { users: [], posts: [], hashtags: [] });
-                
-                const payload = r.data.data || r.data;
-                if (payload?.users?.length > 0 || payload?.posts?.length > 0) {
-                    addToHistory(query);
-                }
-            } catch (e) { 
-                console.error(e); 
-            } finally { 
-                setLoading(false); 
-            }
-        }, 350); 
-        return () => clearTimeout(timer);
-    }, [query]);
-
-    const categories = ['For You', 'Trending', 'Design', 'Technology', 'Photography', 'Art'];
-
-    const handleSelectCategory = (cat) => {
-        playSound('pop');
-        setActiveCategory(cat);
-    };
-
-    return (
-        <div className="w-full pb-24 font-sans text-[#F8FAFC]">
-            
-            {/* EXPLORE HEADER */}
-            <div className="mb-6 rounded-[24px] bg-[#070B14]/85 backdrop-blur-xl p-5 border border-[rgba(226,232,240,0.14)] shadow-silverGlass">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h1 className="text-2xl md:text-3xl font-black font-display tracking-tight text-[#F8FAFC]">
-                      Discover<span className="text-[#D4AF37]">.</span>
-                    </h1>
-                    <p className="text-xs text-[#CBD5E1]/70 font-medium mt-0.5">Curated creators, aesthetic pieces &amp; real-time trends</p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#1D4ED8]/20 text-[#00F2FE] border border-[rgba(226,232,240,0.14)]">
-                    Curated Feed
-                  </span>
-                </div>
-
-                {/* Search Bar */}
-                <div className="relative mb-4">
-                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#CBD5E1]/50 text-sm" />
-                    <input 
-                        value={query} 
-                        onChange={e => setQuery(e.target.value)} 
-                        placeholder="Search creators, thoughts, tags..." 
-                        className="w-full pl-11 pr-10 py-3 rounded-2xl bg-[#04070D]/80 shadow-inner border border-[rgba(226,232,240,0.14)] outline-none focus:border-[#00F2FE] focus:ring-1 focus:ring-[#00F2FE] transition-all text-[#F8FAFC] placeholder-[#CBD5E1]/40 text-sm"
-                    />
-                    {query && (
-                      <button 
-                        onClick={() => setQuery('')}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#CBD5E1]/50 hover:text-white p-1"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                </div>
-                
-                {/* Floating Glass Categories */}
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1">
-                  {categories.map((cat, i) => (
-                    <button 
-                      key={i}
-                      onClick={() => handleSelectCategory(cat)}
-                      className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 border cursor-pointer ${
-                        activeCategory === cat 
-                          ? 'bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white border-transparent shadow-sapphireGlow scale-105' 
-                          : 'bg-[#04070D]/70 border-[rgba(226,232,240,0.12)] text-[#CBD5E1]/70 hover:text-[#00F2FE] hover:border-[#00F2FE]/40'
-                      }`}
+            {/* Users */}
+            {results.users?.length > 0 && (
+              <div className="rounded-2xl border border-white/15 bg-[#070B14]/85 p-4 backdrop-blur-md">
+                <h3 className="font-bold mb-3 text-white/70 text-xs uppercase tracking-wider">
+                  Creators
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {results.users.map((u) => (
+                    <Link
+                      key={u._id}
+                      to={`/profile/${u._id}`}
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.05] transition border border-transparent hover:border-white/10"
                     >
-                      {cat}
-                    </button>
+                      <UserAvatar src={u.avatar} name={u.name} className="w-10 h-10" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-sm text-white truncate">{u.name}</div>
+                        <div className="text-xs text-white/50 truncate">
+                          @{u.username || "creator"}
+                        </div>
+                      </div>
+                    </Link>
                   ))}
                 </div>
-            </div>
+              </div>
+            )}
 
-            <div className="space-y-6">
-                {query ? (
-                    /* --- SEARCH RESULTS VIEW --- */
-                    <div className="space-y-6 animate-fade-in">
-                        {loading && (
-                          <div className="flex justify-center py-12"><Spinner /></div>
-                        )}
-                        
-                        {!loading && results.users?.length === 0 && results.posts?.length === 0 && (
-                            <div className="text-center text-[#CBD5E1]/60 py-12 border-2 border-dashed border-[rgba(226,232,240,0.14)] rounded-[24px] bg-[#070B14]/40">
-                                No direct results found for "{query}". Try a different term or browse categories.
-                            </div>
-                        )}
-
-                        {/* Users Results */}
-                        {results.users?.length > 0 && (
-                            <div className="bg-[#070B14]/85 backdrop-blur-md rounded-[24px] border border-[rgba(226,232,240,0.14)] p-5 shadow-silverGlass">
-                                <h3 className="font-bold mb-3 text-[#CBD5E1]/70 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                                  <FaUserPlus className="text-[#00F2FE]" /> Creators
-                                </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {results.users.map(u => (
-                                        <Link key={u._id} to={`/profile/${u._id}`} className="flex items-center gap-3 p-2.5 hover:bg-white/[0.04] rounded-2xl transition border border-transparent hover:border-[rgba(226,232,240,0.14)]">
-                                            <UserAvatar src={u.avatar} name={u.name} className="w-10 h-10" />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="font-bold text-sm text-[#F8FAFC] truncate">{u.name}</div>
-                                                <div className="text-xs text-[#CBD5E1]/60 truncate">@{u.username || 'creator'}</div>
-                                            </div>
-                                        </Link>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Posts Results */}
-                        {results.posts?.length > 0 && (
-                            <div>
-                                <h3 className="font-bold mb-3 text-[#CBD5E1]/70 text-xs uppercase tracking-wider px-1">Posts</h3>
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {results.posts.map((post) => (
-                                    <div 
-                                      key={post._id} 
-                                      onClick={() => navigate(`/post/${post._id}`)}
-                                      className="group relative rounded-[20px] overflow-hidden bg-[#070B14] border border-[rgba(226,232,240,0.14)] cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:border-[#00F2FE]/50 hover:shadow-silverGlass"
-                                    >
-                                      {post.image || post.images?.[0] || post.mediaUrl ? (
-                                        <div className="aspect-square overflow-hidden bg-[#04070D]">
-                                          <img 
-                                            src={getImageUrl(post.image || post.images?.[0] || post.mediaUrl, 'feed')} 
-                                            alt="Post" 
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                                            loading="lazy"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <div className="aspect-square bg-[#04070D] p-5 flex items-center justify-center">
-                                            <p className="text-[#F8FAFC] text-xs font-medium line-clamp-4 text-center">
-                                                {post.content}
-                                            </p>
-                                        </div>
-                                      )}
-                                      
-                                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
-                                          <div className="flex items-center gap-2 mb-1.5">
-                                            <UserAvatar src={post.user?.avatar} name={post.user?.name} className="w-6 h-6 border border-[#00F2FE]" />
-                                            <span className="text-[#F8FAFC] font-medium text-xs truncate">
-                                              {post.user?.name || 'Creator'}
-                                            </span>
-                                          </div>
-                                          
-                                          <p className="text-[#CBD5E1]/90 text-[11px] line-clamp-2 mb-2 font-light">
-                                            {post.content}
-                                          </p>
-                                          
-                                          <div className="flex items-center gap-2 text-white font-semibold text-[11px]">
-                                            <span className="flex items-center gap-1 backdrop-blur-md bg-black/50 border border-white/10 px-2 py-0.5 rounded-full text-red-400">
-                                              <FaHeart size={10} /> {post.likes?.length || post.likesCount || 0}
-                                            </span>
-                                            <span className="flex items-center gap-1 backdrop-blur-md bg-black/50 border border-white/10 px-2 py-0.5 rounded-full text-[#00F2FE]">
-                                              <FaComment size={10} /> {post.comments?.length || post.commentsCount || 0}
-                                            </span>
-                                          </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                            </div>
-                        )}
+            {/* Posts Grid */}
+            {results.posts?.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {results.posts.map((post) => (
+                  <div
+                    key={post._id}
+                    onClick={() => navigate(`/post/${post._id}`)}
+                    className="relative aspect-square rounded-xl overflow-hidden bg-black/40 border border-white/10 cursor-pointer group"
+                  >
+                    <img
+                      src={getImageUrl(post.image || post.images?.[0] || post.mediaUrl, "feed")}
+                      alt="Result"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeCategory === "People" ? (
+          /* ===================================================================
+              PEOPLE VIEW (When "👥 People" tab is selected)
+              =================================================================== */
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white/70">
+              Suggested Creators For You
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(suggestions.users.length > 0
+                ? suggestions.users
+                : [
+                    { _id: "u1", name: "Aarav Deshmukh", username: "aaravd", followersCount: "42.1K" },
+                    { _id: "u2", name: "Riya Sharma", username: "riyas", followersCount: "28.5K" },
+                    { _id: "u3", name: "Karan Patel", username: "karanp", followersCount: "19.3K" },
+                    { _id: "u4", name: "Neha Verma", username: "nehav", followersCount: "35.8K" },
+                  ]
+              ).map((u) => (
+                <div
+                  key={u._id}
+                  className="flex items-center justify-between p-3.5 rounded-2xl border border-white/15 bg-[#070B14]/85 backdrop-blur-xl"
+                >
+                  <Link
+                    to={`/profile/${u._id}`}
+                    className="flex items-center gap-3 min-w-0 flex-1"
+                  >
+                    <UserAvatar src={u.avatar} name={u.name} className="w-12 h-12" />
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-white truncate">{u.name}</div>
+                      <div className="text-xs text-white/50 truncate">
+                        @{u.username || "creator"}
+                      </div>
+                      <div className="text-[11px] font-semibold text-[#00F2FE] mt-0.5">
+                        {u.followersCount || `${u.followers?.length || 12} followers`}
+                      </div>
                     </div>
-                ) : (
-                    /* --- DEFAULT EXPLORE FEED --- */
-                    <div className="space-y-6 animate-fade-in">
-                        
-                        {/* Recent Searches */}
-                        {recentSearches.length > 0 && (
-                            <div>
-                                <h3 className="font-bold text-[#CBD5E1]/70 text-xs uppercase mb-2.5 flex items-center gap-2">
-                                    <FaHistory size={11} /> Recent Searches
-                                </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {recentSearches.map(term => (
-                                        <div 
-                                            key={term} 
-                                            onClick={() => setQuery(term)}
-                                            className="px-3.5 py-1.5 bg-[#070B14] border border-[rgba(226,232,240,0.14)] rounded-full text-xs font-semibold hover:border-[#00F2FE] cursor-pointer flex items-center gap-2 group transition text-[#F8FAFC] shadow-sm"
-                                        >
-                                            {term}
-                                            <span onClick={(e) => removeFromHistory(term, e)} className="text-[#CBD5E1]/60 hover:text-[#10B981] p-0.5 rounded-full"><FaTimes size={9} /></span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                  </Link>
 
-                        {/* Swipe Discovery Banner */}
-                        <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] p-6 text-white shadow-sapphireGlow border border-white/15">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                <div>
-                                    <h2 className="text-xl md:text-2xl font-black font-display mb-1">Swipe Discovery 🔥</h2>
-                                    <p className="text-xs opacity-90 font-medium">Experience full-screen cinematic cards &amp; swipe to discover new creators.</p>
-                                </div>
-                                <Link to="/discover" className="shrink-0 bg-[#04070D] text-[#F8FAFC] hover:text-[#00F2FE] px-6 py-2.5 rounded-full text-xs font-bold shadow-xl transition-all border border-[rgba(226,232,240,0.2)] hover:border-[#00F2FE]">
-                                    Launch Swipe
-                                </Link>
-                            </div>
-                        </div>
-
-                        {/* Suggested Creators Strip */}
-                        {suggestions.users?.length > 0 && (
-                          <div>
-                              <div className="flex items-center justify-between mb-3">
-                                <h3 className="font-bold text-sm flex items-center gap-2 text-[#F8FAFC]">
-                                    <FaUserPlus className="text-[#00F2FE]" /> Suggested Creators
-                                </h3>
-                                <Link to="/discovery/follow-suggestions" className="text-xs text-[#00F2FE] hover:underline font-semibold">
-                                  View all
-                                </Link>
-                              </div>
-
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                  {suggestions.users.slice(0, 3).map(u => (
-                                      <Link key={u._id} to={`/profile/${u._id}`} className="bg-[#070B14] border border-[rgba(226,232,240,0.14)] p-4 rounded-[20px] flex flex-col items-center gap-2.5 hover:-translate-y-1 hover:border-[#00F2FE]/50 transition text-center group shadow-silverGlass">
-                                          <div className="relative">
-                                              <UserAvatar src={u.avatar} name={u.name} className="w-14 h-14 transition-transform group-hover:scale-105" />
-                                          </div>
-                                          <div className="w-full">
-                                              <div className="font-bold text-xs text-[#F8FAFC] truncate">{u.name}</div>
-                                              <div className="text-[11px] text-[#CBD5E1]/60 truncate">
-                                                  @{u.username || 'creator'}
-                                              </div>
-                                              <div className="text-[10px] text-[#00F2FE] mt-1 font-semibold">
-                                                  {u.followers?.length || 0} followers
-                                              </div>
-                                          </div>
-                                      </Link>
-                                  ))}
-                              </div>
-                          </div>
-                        )}
-
-                        {/* Curated Category Exploration Feed */}
-                        <div className="pt-2">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-bold text-base flex items-center gap-2 text-[#F8FAFC]">
-                                    <FaCompass className="text-[#D4AF37]" /> {activeCategory} Feed
-                                </h3>
-                                <span className="text-xs text-[#CBD5E1]/60 font-medium">
-                                  {categoryPosts.length > 0 ? `${categoryPosts.length} pieces` : 'Curated'}
-                                </span>
-                            </div>
-
-                            {loadingCategoryPosts ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {[1, 2, 3, 4, 5, 6].map((k) => (
-                                    <div key={k} className="relative aspect-square rounded-[20px] overflow-hidden bg-[#070B14] border border-white/10 animate-pulse">
-                                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-[shimmer_1.8s_infinite]" />
-                                    </div>
-                                  ))}
-                                </div>
-                            ) : categoryPosts.length === 0 ? (
-                                <div className="text-center text-[#CBD5E1]/60 py-12 border-2 border-dashed border-[rgba(226,232,240,0.14)] rounded-[24px] bg-[#070B14]/30">
-                                    <p className="font-semibold text-sm">Curating pieces for {activeCategory}...</p>
-                                    <p className="text-xs text-[#CBD5E1]/40 mt-1">Explore other categories or create your own post!</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {categoryPosts.map((post) => (
-                                    <div 
-                                      key={post._id} 
-                                      onClick={() => navigate(`/post/${post._id}`)}
-                                      className="group relative rounded-[20px] overflow-hidden bg-[#070B14] border border-[rgba(226,232,240,0.14)] cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:border-[#00F2FE]/50 hover:shadow-silverGlass"
-                                    >
-                                      {post.image || post.images?.[0] || post.mediaUrl ? (
-                                        <div className="aspect-square overflow-hidden bg-[#04070D]">
-                                          <img 
-                                            src={getImageUrl(post.image || post.images?.[0] || post.mediaUrl, 'feed')} 
-                                            alt="Explore piece" 
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                                            loading="lazy"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <div className="aspect-square bg-[#04070D] p-5 flex items-center justify-center">
-                                            <p className="text-[#F8FAFC] text-xs font-medium line-clamp-4 text-center">
-                                                {post.content}
-                                            </p>
-                                        </div>
-                                      )}
-                                      
-                                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-4">
-                                          <div className="flex items-center gap-2 mb-1.5">
-                                            <UserAvatar src={post.user?.avatar} name={post.user?.name} className="w-6 h-6 border border-[#00F2FE]" />
-                                            <span className="text-[#F8FAFC] font-medium text-xs truncate">
-                                              {post.user?.name || 'Creator'}
-                                            </span>
-                                          </div>
-                                          
-                                          {post.content && (
-                                            <p className="text-[#CBD5E1]/90 text-[11px] line-clamp-2 mb-2 font-light">
-                                              {post.content}
-                                            </p>
-                                          )}
-                                          
-                                          <div className="flex items-center gap-2 text-white font-semibold text-[11px]">
-                                            <span className="flex items-center gap-1 backdrop-blur-md bg-black/50 border border-white/10 px-2 py-0.5 rounded-full text-red-400">
-                                              <FaHeart size={10} /> {post.likes?.length || post.likesCount || 0}
-                                            </span>
-                                            <span className="flex items-center gap-1 backdrop-blur-md bg-black/50 border border-white/10 px-2 py-0.5 rounded-full text-[#00F2FE]">
-                                              <FaComment size={10} /> {post.comments?.length || post.commentsCount || 0}
-                                            </span>
-                                          </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playSound("pop");
+                    }}
+                    className="px-4 py-1.5 rounded-full text-xs font-bold text-white shadow-md hover:scale-105 transition-transform"
+                    style={{
+                      background: `linear-gradient(135deg, ${currentTheme.color}, ${currentTheme.accent})`,
+                    }}
+                  >
+                    Follow
+                  </button>
+                </div>
+              ))}
             </div>
-        </div>
-    );
+          </div>
+        ) : activeCategory === "Places" ? (
+          /* ===================================================================
+              PLACES VIEW (When "📍 Places" tab is selected)
+              =================================================================== */
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white/70">
+              Trending Destinations & Spots
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {TRENDING_PLACES.map((place, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setQuery(place.name.split(",")[0]);
+                  }}
+                  className="group relative h-40 rounded-2xl overflow-hidden border border-white/15 cursor-pointer shadow-lg"
+                >
+                  <img
+                    src={place.img}
+                    alt={place.name}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-3.5">
+                    <span className="font-bold text-white text-sm drop-shadow">
+                      {place.name}
+                    </span>
+                    <span className="text-[11px] text-white/70 font-medium">
+                      {place.count}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* ===================================================================
+              MOSAIC MASONRY GRID (Screen 2: For You / Trending)
+              Staggered 2-column on mobile, 3-4 column on desktop
+              =================================================================== */
+          <div className="space-y-4">
+            {activeCategory === "Trending" && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                {[
+                  { tag: "#IndiaTechSummit", count: "142K posts" },
+                  { tag: "#MumbaiRains", count: "98K posts" },
+                  { tag: "#AIRevolution", count: "276K posts" },
+                  { tag: "#CreatorEconomy", count: "64K posts" },
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setQuery(item.tag)}
+                    className="flex items-center gap-2 whitespace-nowrap px-3.5 py-2 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-xs text-white transition-all cursor-pointer group shrink-0"
+                  >
+                    <span className="font-bold text-[#38BDF8]">{item.tag}</span>
+                    <span className="text-[10px] text-[#CBD5E1]/60">{item.count}</span>
+                    <span className="text-[#10B981] text-xs font-bold transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5">↗</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5">
+            {mosaicPieces.map((piece, idx) => {
+              const img = piece.image || piece.images?.[0] || piece.mediaUrl;
+              const isVideo = piece.isVideo;
+              const viewCount = piece.viewCount;
+              const isCarousel = piece.isCarousel;
+              const isTall = piece.aspect === "tall" || idx % 3 === 0;
+
+              return (
+                <div
+                  key={piece._id || idx}
+                  onClick={() => {
+                    if (piece._id?.startsWith("exp")) {
+                      if (isVideo) {
+                        navigate("/reels");
+                      }
+                    } else {
+                      navigate(`/post/${piece._id}`);
+                    }
+                  }}
+                  className={`group relative rounded-2xl overflow-hidden bg-[#070B14] border border-white/10 cursor-pointer shadow-md hover:border-white/30 transition-all duration-300 ${
+                    isTall ? "row-span-2 aspect-[4/5] sm:aspect-[3/4]" : "aspect-square"
+                  }`}
+                >
+                  <img
+                    src={getImageUrl(img, "feed")}
+                    alt="Explore piece"
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    loading="lazy"
+                  />
+
+                  {/* Stacked Carousel Icon (Top Right, Screen 2) */}
+                  {isCarousel && (
+                    <div className="absolute top-2.5 right-2.5 p-1 rounded-md bg-black/60 backdrop-blur-md text-white/90 shadow-md">
+                      <IoCopyOutline size={14} />
+                    </div>
+                  )}
+
+                  {/* Video Play Badge (Bottom Left, Screen 2: ▷ 1.2M / ▷ 432K) */}
+                  {isVideo && viewCount && (
+                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white font-bold text-[11px] shadow-lg">
+                      <IoPlay size={11} className="text-white" />
+                      <span>{viewCount}</span>
+                    </div>
+                  )}
+
+                  {/* Hover Overlay with Creator & Reactions */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3.5">
+                    {piece.user && (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <UserAvatar
+                          src={piece.user.avatar}
+                          name={piece.user.name}
+                          className="w-6 h-6 border border-white/30"
+                        />
+                        <span className="text-white text-xs font-semibold truncate">
+                          {piece.user.name}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 text-white text-xs font-bold">
+                      <span className="flex items-center gap-1 text-[#FF6B8A]">
+                        <IoHeart size={12} /> {piece.likes || piece.likesCount || 0}
+                      </span>
+                      <span className="flex items-center gap-1 text-[#00F2FE]">
+                        <IoChatbubble size={11} /> {piece.comments || piece.commentsCount || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

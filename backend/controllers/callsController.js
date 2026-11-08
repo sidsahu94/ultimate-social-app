@@ -29,6 +29,31 @@ exports.createRoom = async (req, res) => {
   }
 };
 
+
+// WebRTC ICE / TURN Servers for NAT Traversal
+exports.getIceServers = async (req, res) => {
+  try {
+    const domain = process.env.METERED_DOMAIN || 'ultimatesocialapp.metered.live';
+    const apiKey = process.env.METERED_API_KEY || '0ec94b4ba5088a157a189ce2005843619ed8';
+
+    if (domain && apiKey) {
+      const response = await fetch(`https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`);
+      if (response.ok) {
+        const iceServers = await response.json();
+        return res.json({ iceServers });
+      }
+    }
+  } catch (_) {}
+
+  return res.json({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ],
+  });
+};
+
 exports.joinRoom = async (req, res) => {
   try {
     const { roomId } = req.params;

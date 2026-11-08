@@ -5,11 +5,11 @@ export default function AppIcon({ size = 64, className = '' }) {
   return (
     <div 
       style={{ width: size, height: size }}
-      className={`relative rounded-[22%] overflow-hidden shadow-xl shadow-teal-500/20 ring-1 ring-white/15 shrink-0 ${className}`}
+      className={`relative rounded-[22%] overflow-hidden shadow-2xl shadow-[#00F2FE]/25 ring-1 ring-white/20 shrink-0 ${className}`}
     >
       <img 
-        src="/socialo-logo.jpg" 
-        alt="Socialo" 
+        src="/socialverse-logo.jpg" 
+        alt="SocialVerse ∞" 
         className="w-full h-full object-cover select-none"
       />
     </div>

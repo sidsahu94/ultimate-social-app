@@ -44,7 +44,9 @@ async function safeCreateIndex(collection, keys, options = {}) {
   } catch (err) {
     const ignorable =
       err?.code === 85 ||
+      err?.code === 86 ||
       err?.codeName === 'IndexOptionsConflict' ||
+      err?.codeName === 'IndexKeySpecsConflict' ||
       /already exists/i.test(err?.message || '');
 
     if (ignorable) {

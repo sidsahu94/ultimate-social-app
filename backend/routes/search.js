@@ -1,6 +1,6 @@
 // backend/routes/search.js
 const router = require("express").Router();
-const { protect } = require("../middleware/authMiddleware");
+const { protect, optionalAuth } = require("../middleware/authMiddleware");
 const searchController = require('../controllers/searchController');
 const Post = require("../models/Post");
 const User = require("../models/User");
@@ -11,7 +11,7 @@ router.get("/global", searchController.global);
 
 // --- ORIGINAL BASIC SEARCH (fallback) ---
 // This will handle: GET /api/search?q=...
-router.get("/", protect, async (req, res) => {
+router.get("/", optionalAuth, async (req, res) => {
   const q = (req.query.q || "").trim();
   if (!q) return res.json({ users: [], posts: [] }); // Return object as expected
   

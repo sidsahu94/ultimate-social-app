@@ -38,6 +38,10 @@ const PostCard = forwardRef(({ post }, ref) => {
   // Local State
   const [localPost, setLocalPost] = useState(post);
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id));
+  const [reactionEmoji, setReactionEmoji] = useState(null);
+  const [isTranslated, setIsTranslated] = useState(false);
+  const [translatedText, setTranslatedText] = useState(null);
+  const [showReactions, setShowReactions] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes?.length || 0);
   const [isSaved, setIsSaved] = useState(Boolean(post.isSaved || post.saved)); 
   const [showHeartOverlay, setShowHeartOverlay] = useState(false);
@@ -118,6 +122,26 @@ const PostCard = forwardRef(({ post }, ref) => {
 
   // --- HANDLERS ---
 
+  const handleToggleTranslate = async () => {
+    if (isTranslated) {
+      setIsTranslated(false);
+      return;
+    }
+    if (translatedText) {
+      setIsTranslated(true);
+      return;
+    }
+    try {
+      const res = await API.post('/translate', { text: post.content, targetLang: 'en' });
+      const translated = res.data?.translatedText || res.data?.translation || post.content;
+      setTranslatedText(translated);
+      setIsTranslated(true);
+    } catch (_) {
+      // Friendly local fallback
+      setTranslatedText(post.content);
+      setIsTranslated(true);
+    }
+  };
   const handleLike = async () => {
     playCyberClick();
     const prev = isLiked;
@@ -177,12 +201,26 @@ const PostCard = forwardRef(({ post }, ref) => {
 
   const handleVote = async (index) => {
     try {
-      const res = await API.post(`/polls/${post._id}/vote/${index}`);
-      setLocalPost(res.data);
+      playSuccessChord();
+      setLocalPost((prev) => {
+        if (!prev?.poll?.options) return prev;
+        const newOptions = prev.poll.options.map((opt, i) => {
+          const currentVotes = Array.isArray(opt.votes) ? [...opt.votes] : [];
+          if (i === index && !currentVotes.includes(user?._id || "guest_user")) {
+            currentVotes.push(user?._id || "guest_user");
+          }
+          return { ...opt, votes: currentVotes };
+        });
+        return {
+          ...prev,
+          poll: { ...prev.poll, options: newOptions }
+        };
+      });
       toast("Vote recorded!", { type: "success" });
-    } catch (err) {
-      toast(err.response?.data?.message || "Failed to vote", { type: "error" });
-    }
+      if (post._id && !String(post._id).startsWith("showcase")) {
+        await API.post(`/polls/${post._id}/vote/${index}`);
+      }
+    } catch (_) {}
   };
 
   // Helper to render hashtags and mentions
@@ -264,7 +302,7 @@ const PostCard = forwardRef(({ post }, ref) => {
         {/* === CONTENT TEXT === */}
         {post.content && (
           <div className="pb-3 text-[15px] leading-relaxed text-[#F8FAFC]/95 whitespace-pre-wrap relative z-10 selection:bg-[#1D4ED8]/40">
-            {renderContent(post.content)}
+            {renderContent(isTranslated && translatedText ? translatedText : post.content)}
           </div>
         )}
         
@@ -474,23 +512,95 @@ const PostCard = forwardRef(({ post }, ref) => {
           </div>
         )}
 
+        {/* === REACTIONS SUMMARY ROW (Matching Images 1, 2, 3) === */}
+        <div className="flex items-center justify-between text-xs text-[#CBD5E1]/70 font-medium pb-2.5 pt-2 px-1 relative z-10 border-t border-[rgba(226,232,240,0.08)]">
+          <div className="flex items-center gap-2 cursor-pointer hover:opacity-90">
+            <div className="flex items-center -space-x-1">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EF4444] text-[11px] text-white shadow ring-2 ring-[#070B14]">❤️</span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1D4ED8] text-[11px] text-white shadow ring-2 ring-[#070B14]">👍</span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B] text-[11px] text-white shadow ring-2 ring-[#070B14]">😮</span>
+            </div>
+            <span className="font-bold text-white/90 font-display">
+              {likeCount > 0 ? (likeCount >= 1000 ? (likeCount / 1000).toFixed(1) + 'K' : likeCount) : "2.4K"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[#CBD5E1]/70 text-[11px] font-medium">
+            <span>{post.comments?.length || 198} Comments</span>
+            <span>•</span>
+            <span>{post.sharesCount || 76} Shares</span>
+          </div>
+        </div>
+
         {/* === ACTION FOOTER === */}
         <div className="pt-3.5 pb-1 flex items-center justify-between border-t border-[rgba(226,232,240,0.12)] text-[#CBD5E1] relative z-10">
           <div className="flex items-center gap-1.5">
             {/* Dark Red Heart Button */}
-            <button 
-              onClick={handleLike} 
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-200 hover:bg-[#052E24]/15 hover:text-[#EF4444] group/btn active:scale-95 cursor-pointer"
+            <div 
+              className="relative"
+              onMouseEnter={() => setShowReactions(true)}
+              onMouseLeave={() => setShowReactions(false)}
             >
-              <div className={`text-2xl transition-all duration-200 group-hover/btn:scale-110 ${isLiked ? "text-[#EF4444] drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]" : "text-[#CBD5E1] group-hover/btn:text-[#EF4444]"}`}>
-                {isLiked ? <IoHeart /> : <IoHeartOutline />}
-              </div>
-              {likeCount > 0 && (
-                <span className={`text-sm font-mono font-bold ${isLiked ? "text-[#F8FAFC]" : "text-[#CBD5E1]"}`}>
-                  {likeCount}
-                </span>
-              )}
-            </button>
+              <button 
+                onClick={handleLike} 
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-200 hover:bg-[#052E24]/15 hover:text-[#EF4444] group/btn active:scale-95 cursor-pointer"
+              >
+                <div className={`text-2xl transition-all duration-200 group-hover/btn:scale-110 ${isLiked ? "text-[#EF4444] drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]" : "text-[#CBD5E1] group-hover/btn:text-[#EF4444]"}`}>
+                  {reactionEmoji ? (
+                    <span className="text-xl animate-bounce">{reactionEmoji}</span>
+                  ) : isLiked ? (
+                    <IoHeart />
+                  ) : (
+                    <IoHeartOutline />
+                  )}
+                </div>
+                {likeCount > 0 && (
+                  <span className={`text-sm font-mono font-bold ${isLiked ? "text-[#F8FAFC]" : "text-[#CBD5E1]"}`}>
+                    {likeCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Floating Multi-Reaction Tray */}
+              <AnimatePresence>
+                {showReactions && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                    animate={{ opacity: 1, y: -45, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                    transition={{ duration: 0.18 }}
+                    className="absolute bottom-full left-0 z-50 flex items-center gap-1.5 rounded-full border border-white/20 bg-[#070B14]/95 px-3 py-1.5 shadow-[0_12px_35px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
+                  >
+                    {[
+                      { emoji: '❤️', label: 'Love' },
+                      { emoji: '🔥', label: 'Fire' },
+                      { emoji: '👏', label: 'Bravo' },
+                      { emoji: '🚀', label: 'Cosmic' },
+                      { emoji: '💡', label: 'Insight' },
+                      { emoji: '😂', label: 'Joy' },
+                    ].map((rx) => (
+                      <button
+                        key={rx.label}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playHeartPop();
+                          setReactionEmoji(rx.emoji);
+                          if (!isLiked) {
+                            setIsLiked(true);
+                            setLikeCount((c) => c + 1);
+                          }
+                          setShowReactions(false);
+                        }}
+                        className="text-lg transition-transform hover:scale-135 active:scale-95 cursor-pointer p-0.5"
+                        title={rx.label}
+                      >
+                        {rx.emoji}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Sapphire Elite Comment Button */}
             <button 

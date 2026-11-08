@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaSyncAlt, FaTimes, FaRocket } from 'react-icons/fa';
 
-const APP_CURRENT_VERSION = 'v4.2.0-aetheria';
+const APP_CURRENT_VERSION = 'v5.0.0-socialverse';
 
 export default function UpdateNotificationBanner() {
   const [showUpdate, setShowUpdate] = useState(false);
@@ -11,9 +11,8 @@ export default function UpdateNotificationBanner() {
 
   useEffect(() => {
     // 1. Check if previous user has an older version saved
-    const savedVersion = localStorage.getItem('socialo_app_version');
+    const savedVersion = localStorage.getItem('socialverse_app_version');
     if (!savedVersion || savedVersion !== APP_CURRENT_VERSION) {
-      // Small delay so user sees the page settle before displaying banner
       const timer = setTimeout(() => setShowUpdate(true), 2500);
       return () => clearTimeout(timer);
     }
@@ -46,7 +45,7 @@ export default function UpdateNotificationBanner() {
   const handleApplyUpdate = async () => {
     setIsUpdating(true);
     try {
-      localStorage.setItem('socialo_app_version', APP_CURRENT_VERSION);
+      localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
 
       // Clear all old caches
       if ('caches' in window) {
@@ -71,7 +70,7 @@ export default function UpdateNotificationBanner() {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('socialo_app_version', APP_CURRENT_VERSION);
+    localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
     setShowUpdate(false);
   };
 
@@ -100,14 +99,14 @@ export default function UpdateNotificationBanner() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-[#F8FAFC]">
-                    Socialo Update Ready
+                    SocialVerse ∞ Update Ready
                   </span>
                   <span className="rounded-full bg-[#10B981]/20 border border-[#10B981]/40 px-2 py-0.5 text-[9px] font-bold text-[#10B981]">
-                    NEW
+                    LIVE
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-[#CBD5E1]/80 leading-snug">
-                  Aetheria Noir theme, Daily Quests &amp; VIP Media Paywall are ready.
+                  8 luxury themes, 3D Social AI assistant, dynamic stories &amp; cinematic backdrop are ready.
                 </p>
               </div>
             </div>

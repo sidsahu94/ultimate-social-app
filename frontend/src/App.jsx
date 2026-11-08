@@ -15,8 +15,10 @@ import CommentsModal from './components/posts/CommentsModal';
 import CreatePostModal from './components/posts/CreatePostModal';
 import IncomingCallModal from './components/common/IncomingCallModal';
 import CommandPalette from './components/common/CommandPalette';
+import InstallAppModal from './components/common/InstallAppModal';
 import AdminCyberGateway from './components/common/AdminCyberGateway';
 import UpdateNotificationBanner from './components/common/UpdateNotificationBanner';
+import CinematicEnvironmentalBackdrop from './components/common/CinematicEnvironmentalBackdrop';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AdminRoute from './components/common/AdminRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -30,6 +32,7 @@ const Explore = lazy(() => import('./pages/explore/Explore'));
 const SwipeExplore = lazy(() => import('./pages/discovery/SwipeExplore'));
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
 const SavedPage = lazy(() => import('./pages/saved/Saved'));
+const MemoriesPage = lazy(() => import('./pages/memories/Memories'));
 const TagFeed = lazy(() => import('./pages/explore/TagFeed'));
 const SearchAdvanced = lazy(() => import('./pages/explore/SearchAdvanced'));
 
@@ -89,7 +92,7 @@ function LoadingShell() {
           </motion.div>
         </div>
         <p className="font-display text-xs tracking-widest uppercase bg-gradient-to-r from-[#00F2FE] via-[#10B981] to-[#D4AF37] bg-clip-text text-transparent font-semibold">
-          Aetheria Imperial Noir...
+          SocialVerse ∞ • Beyond Social
         </p>
       </div>
     </div>
@@ -117,6 +120,7 @@ function AppContent() {
   const [createContent, setCreateContent] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showAdminPortal, setShowAdminPortal] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   const { socket } = useSocket();
   const { add: addToast } = useToast();
@@ -150,6 +154,7 @@ function AppContent() {
     };
 
     const onOpenAdmin = () => setShowAdminPortal(true);
+    const onOpenInstall = () => setShowInstallModal(true);
 
     const onApiError = (e) => {
       addToast(e.detail, { type: 'error' });
@@ -162,6 +167,7 @@ function AppContent() {
     window.addEventListener('openComments', onOpenComments);
     window.addEventListener('openCreatePost', onOpenCreate);
     window.addEventListener('openAdminGateway', onOpenAdmin);
+    window.addEventListener('openInstallApp', onOpenInstall);
     window.addEventListener('api:error', onApiError);
 
     return () => {
@@ -172,6 +178,7 @@ function AppContent() {
       window.removeEventListener('openComments', onOpenComments);
       window.removeEventListener('openCreatePost', onOpenCreate);
       window.removeEventListener('openAdminGateway', onOpenAdmin);
+      window.removeEventListener('openInstallApp', onOpenInstall);
       window.removeEventListener('api:error', onApiError);
     };
   }, [dispatch, addToast, navigate]);
@@ -190,9 +197,11 @@ function AppContent() {
 
   return (
     <div className="app-layout-frame relative flex h-[100dvh] overflow-hidden bg-[#04070D] font-sans text-[#F8FAFC]">
+      <CinematicEnvironmentalBackdrop />
+
       {!isOnline && (
         <div className="absolute left-0 right-0 top-0 z-[9999] bg-[#070F1E] border-b border-[#00F2FE]/40 py-1 text-center text-xs font-bold text-[#00F2FE] shadow-md">
-          You are offline. Reconnecting to Socialo network...
+          You are offline. Reconnecting to SocialVerse network...
         </div>
       )}
 
@@ -229,12 +238,15 @@ function AppContent() {
                   <Route path="/chat/:id" element={<ProtectedRoute><PageTransition><ChatPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><PageTransition><NotificationsPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/saved" element={<ProtectedRoute><PageTransition><SavedPage /></PageTransition></ProtectedRoute>} />
+                  <Route path="/memories" element={<ProtectedRoute><PageTransition><MemoriesPage /></PageTransition></ProtectedRoute>} />
+                  <Route path="/groups" element={<PageTransition><FollowSuggestions /></PageTransition>} />
                   <Route path="/drafts" element={<ProtectedRoute><PageTransition><DraftsPage /></PageTransition></ProtectedRoute>} />
 
                   <Route path="/profile/:id" element={<PageTransition><ProfilePage /></PageTransition>} />
                   <Route path="/post/:id" element={<PageTransition><PostPage /></PageTransition>} />
 
                   <Route path="/shop" element={<PageTransition><Marketplace /></PageTransition>} />
+                  <Route path="/marketplace" element={<Navigate to="/shop" replace />} />
                   <Route path="/events" element={<PageTransition><EventsPage /></PageTransition>} />
                   <Route path="/wallet" element={<ProtectedRoute><PageTransition><WalletPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/games" element={<PageTransition><GamesPage /></PageTransition>} />
@@ -285,6 +297,7 @@ function AppContent() {
         <UpdateNotificationBanner />
         <CommandPalette onOpenAdminPortal={() => setShowAdminPortal(true)} />
         <AdminCyberGateway isOpen={showAdminPortal} onClose={() => setShowAdminPortal(false)} />
+        <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
       </main>
     </div>
   );

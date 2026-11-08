@@ -49,10 +49,10 @@ export default function Register() {
              <AppIcon size={64} />
           </div>
           <h1 className="font-display text-3xl font-bold tracking-tight text-[#F7F7FC]">
-            Join Socialo<span className="text-[#6558F5]">.</span>
+            Join SocialVerse<span className="text-[#38BDF8]"> ∞</span>
           </h1>
           <p className="text-[11px] text-[#A5A9BB] font-sans tracking-[0.25em] uppercase mt-1 font-semibold">
-            Aurora Noir • Expression
+            Beyond Social • Next-Gen Network
           </p>
         </div>
 

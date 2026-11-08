@@ -21,7 +21,7 @@ const FILTERS = [
   { name: 'Warm', val: 'sepia(0.3) saturate(1.4)' },
 ];
 
-export default function CreatePostModal({ isOpen, onClose, onPosted, initialData }) {
+export default function CreatePostModal({ isOpen, onClose, onPosted, initialData, initialTab }) {
   const [activeTab, setActiveTab] = useState('post'); 
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
@@ -46,14 +46,44 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
   // AI Creator Studio State
   const [selectedTone, setSelectedTone] = useState('obsidian');
   const [showAiStudio, setShowAiStudio] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState('1:1'); // '1:1' | '4:5' | '16:9'
 
   const { add } = useToast();
   const currentUser = useSelector((s) => s.auth?.user);
 
-  // 🔥 EFFECT: Load Initial Data (Drafts/Reposts)
+  // Auto-restore saved draft
+  useEffect(() => {
+    if (!initialData && isOpen && !text) {
+      const savedDraft = localStorage.getItem('socialverse_draft_post');
+      if (savedDraft) setText(savedDraft);
+    }
+  }, [isOpen]);
+
+  // Auto-save draft
+  useEffect(() => {
+    if (text) {
+      localStorage.setItem('socialverse_draft_post', text);
+    }
+  }, [text]);
+
+  useEffect(() => {
+    if (initialTab) {
+      if (initialTab === 'poll') setActiveTab('poll');
+      else if (initialTab === 'reel') setActiveTab('reel');
+      else if (initialTab === 'ai') {
+        setActiveTab('post');
+        setShowAiStudio(true);
+      } else {
+        setActiveTab('post');
+      }
+    }
+  }, [initialTab]);
+
+  // 🔥 EFFECT: Load Initial Data (Drafts/Reposts/AI Prompt)
   useEffect(() => {
     if (initialData) {
-        setText(initialData.content || '');
+        setText(initialData.content || (typeof initialData === 'string' ? initialData : ''));
+        if (initialData.openAiStudio) setShowAiStudio(true);
         if (initialData.isDraft) setDraftId(initialData._id); // Track draft ID
     } else if (!isOpen) {
         // Reset on close
@@ -64,6 +94,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
         setFilter(''); 
         setTagSuggestions([]); 
         setDraftId(null);
+        setShowAiStudio(false);
     }
   }, [isOpen, initialData]);
 
@@ -187,6 +218,9 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
          await API.post('/posts', fd);
       }
 
+      if (!isSaveDraft) {
+        localStorage.removeItem('socialverse_draft_post');
+      }
       if (onPosted) onPosted();
       onClose();
       add(isSaveDraft ? 'Draft saved!' : 'Posted successfully!', { type: 'success' });
@@ -362,14 +396,39 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
               {/* Media Preview */}
               {files.length > 0 && (
                 <div className="mb-4">
-                  <div className="relative h-64 w-full rounded-xl overflow-hidden border border-[rgba(226,232,240,0.14)] bg-black group">
-                    <button onClick={() => setFiles([])} className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full z-20 hover:bg-[#052E24] transition"><FaTimes /></button>
+                  {/* Aspect Ratio Toggle Bar */}
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#CBD5E1]/60">
+                      Framing Ratio
+                    </span>
+                    <div className="flex gap-1.5 bg-[#04070D] p-1 rounded-lg border border-white/10 text-xs">
+                      {['1:1', '4:5', '16:9'].map((ratio) => (
+                        <button
+                          key={ratio}
+                          type="button"
+                          onClick={() => setAspectRatio(ratio)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                            aspectRatio === ratio
+                              ? 'bg-[#00F2FE]/20 text-[#00F2FE] border border-[#00F2FE]/40'
+                              : 'text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={`relative w-full rounded-xl overflow-hidden border border-[rgba(226,232,240,0.14)] bg-black group ${
+                    aspectRatio === '1:1' ? 'h-64 sm:h-72' : aspectRatio === '4:5' ? 'h-80 sm:h-96' : 'h-48 sm:h-56'
+                  }`}>
+                    <button onClick={() => setFiles([])} className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full z-20 hover:bg-[#052E24] transition cursor-pointer"><FaTimes /></button>
                     {files[0].type.includes('video') ? (
-                      <video src={URL.createObjectURL(files[0])} className="h-full w-full object-contain" controls />
+                      <video src={URL.createObjectURL(files[0])} className="h-full w-full object-cover" controls />
                     ) : (
                       <img 
                         src={URL.createObjectURL(files[0])} 
-                        className="h-full w-full object-contain transition-all duration-300"
+                        className={`h-full w-full ${aspectRatio === '1:1' ? 'object-cover' : 'object-contain'} transition-all duration-300`}
                         style={{ filter: filter }}
                         alt="preview"
                       />

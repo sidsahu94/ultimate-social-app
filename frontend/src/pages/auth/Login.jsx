@@ -103,10 +103,10 @@ export default function Login() {
             <AppIcon size={64} />
           </div>
           <h1 className="font-display text-3xl font-bold tracking-tight text-[#F7F7FC]">
-            Welcome to Socialo<span className="text-[#D4AF37]">.</span>
+            Welcome to SocialVerse<span className="text-[#38BDF8]"> ∞</span>
           </h1>
           <p className="text-[11px] text-[#CBD5E1]/80 font-sans tracking-[0.25em] uppercase mt-1.5 font-semibold">
-            AURORA NOIR &bull; LUXURY CONNECT
+            BEYOND SOCIAL &bull; NEXT-GEN NETWORK
           </p>
         </div>
 

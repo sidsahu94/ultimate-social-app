@@ -17,7 +17,7 @@ const asNumber = (value, fallback = 0) => {
 
 exports.getEvents = async (req, res) => {
   try {
-    const events = await Event.find({ date: { $gte: new Date() } })
+    let events = await Event.find({ date: { $gte: new Date() } })
       .select('title date location description image host attendees createdAt')
       .populate('host', 'name avatar')
       .sort({ date: 1 })

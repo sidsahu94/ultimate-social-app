@@ -1,16 +1,16 @@
-
 {
-  "short_name": "SocialApp",
-  "name": "Ultimate Social App",
+  "short_name": "SocialVerse",
+  "name": "SocialVerse ∞ — Beyond Social",
+  "description": "Next-Gen Social Network with 8 luxury themes, cinematic canvas, and 3D creative AI.",
   "icons": [
     {
-      "src": "logo.svg",
-      "type": "image/svg+xml",
+      "src": "/socialverse-logo.jpg",
+      "type": "image/jpeg",
       "sizes": "192x192 512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#4f46e5",
-  "background_color": "#ffffff"
+  "theme_color": "#070B14",
+  "background_color": "#04070D"
 }

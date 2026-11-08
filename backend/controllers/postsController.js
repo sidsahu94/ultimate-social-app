@@ -601,7 +601,7 @@ exports.trending = async (req, res) => {
       posts = [
         {
           _id: 'post_showcase_1',
-          content: 'Elegance is not about being noticed, it is about being remembered. Welcome to Socialo. #Luxury #Obsidian #Minimalism',
+          content: 'Elegance is not about being noticed, it is about being remembered. Welcome to SocialVerse. #Luxury #Obsidian #Minimalism',
           images: ['https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop'],
           likesCount: 142,
           commentsCount: 28,
@@ -610,7 +610,7 @@ exports.trending = async (req, res) => {
         },
         {
           _id: 'post_showcase_2',
-          content: 'Where soundscapes converge with architecture. Testing our high-fidelity WebRTC studio audio. #AudioArt #CyberLuxe #Socialo',
+          content: 'Where soundscapes converge with architecture. Testing our high-fidelity WebRTC studio audio. #AudioArt #CyberLuxe #SocialVerse',
           images: ['https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop'],
           likesCount: 98,
           commentsCount: 17,
@@ -619,7 +619,7 @@ exports.trending = async (req, res) => {
         },
         {
           _id: 'post_showcase_3',
-          content: 'Exploring the intersection of decentralized liquidity, digital assets, and high design. #CryptoArt #Fintech #Socialo',
+          content: 'Exploring the intersection of decentralized liquidity, digital assets, and high design. #CryptoArt #Fintech #SocialVerse',
           images: ['https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop'],
           likesCount: 215,
           commentsCount: 34,
@@ -728,7 +728,7 @@ exports.aiCompose = async (req, res) => {
               {
                 parts: [
                   {
-                    text: `You are an elite creative copywriter for "Socialo", a luxury cinematic social media platform.
+                    text: `You are an elite creative copywriter for "SocialVerse", a luxury cinematic social media platform.
 Draft a high-engagement post caption in the tone: "${tone}".
 Topic/Prompt: "${prompt || 'everyday luxury moments and authentic connections'}".
 Format: 1-2 punchy sentences followed by 3 trending hashtags. Do not include quotes or conversational preamble.`
@@ -751,24 +751,24 @@ Format: 1-2 punchy sentences followed by 3 trending hashtags. Do not include quo
     const cleanPrompt = prompt ? prompt.trim() : 'luxury and creator connection';
     const presets = {
       obsidian: [
-        `Curating silence in a world full of noise. ${cleanPrompt} speaks for itself. #Obsidian #Socialo #Minimalism`,
-        `Shadows reveal what light obscures. Embracing ${cleanPrompt} at midnight. #Cinematic #DarkLuxury #Socialo`,
-        `Every detail intentional. ${cleanPrompt} redefined. #ObsidianLife #SocialoMoments #Aesthetic`
+        `Curating silence in a world full of noise. ${cleanPrompt} speaks for itself. #Obsidian #SocialVerse #Minimalism`,
+        `Shadows reveal what light obscures. Embracing ${cleanPrompt} at midnight. #Cinematic #DarkLuxury #SocialVerse`,
+        `Every detail intentional. ${cleanPrompt} redefined. #ObsidianLife #SocialVerseMoments #Aesthetic`
       ],
       champagne: [
-        `A golden afternoon framed by timeless elegance. Here’s to ${cleanPrompt} and the people who elevate it. #ChampagneHours #Socialo #Editorial`,
-        `Soft sunlight, cream linen, and ${cleanPrompt}. Life is best savored slowly. #Timeless #SocialoLuxury #ArtOfLiving`,
-        `The subtleties that turn an ordinary moment into art: ${cleanPrompt}. #EditorialVibes #Socialo #GoldenHour`
+        `A golden afternoon framed by timeless elegance. Here’s to ${cleanPrompt} and the people who elevate it. #ChampagneHours #SocialVerse #Editorial`,
+        `Soft sunlight, cream linen, and ${cleanPrompt}. Life is best savored slowly. #Timeless #SocialVerseLuxury #ArtOfLiving`,
+        `The subtleties that turn an ordinary moment into art: ${cleanPrompt}. #EditorialVibes #SocialVerse #GoldenHour`
       ],
       viral: [
-        `Stop scrolling. We need to talk about ${cleanPrompt}. Drop your thoughts below! 🔥🚀 #Viral #Socialo #TrendingNow`,
-        `POV: You finally unlocked ${cleanPrompt} and everything clicked. Who else relates? 💯✨ #CreatorLife #Socialo #Explore`,
-        `Don’t sleep on this. ${cleanPrompt} is changing the entire game. Tag someone who needs to see this! ⚡ #GameChanger #Socialo`
+        `Stop scrolling. We need to talk about ${cleanPrompt}. Drop your thoughts below! 🔥🚀 #Viral #SocialVerse #TrendingNow`,
+        `POV: You finally unlocked ${cleanPrompt} and everything clicked. Who else relates? 💯✨ #CreatorLife #SocialVerse #Explore`,
+        `Don’t sleep on this. ${cleanPrompt} is changing the entire game. Tag someone who needs to see this! ⚡ #GameChanger #SocialVerse`
       ],
       visionary: [
-        `Building at the intersection of intuition and intelligence. ${cleanPrompt} is just the beginning. #FutureForward #BuildInPublic #Socialo`,
-        `The future belongs to creators who craft with intention. Exploring ${cleanPrompt}. #NextGen #TechVision #Socialo`,
-        `Redefining digital connection through ${cleanPrompt}. Let’s build what’s next. #Visionary #SocialoNetwork #Innovation`
+        `Building at the intersection of intuition and intelligence. ${cleanPrompt} is just the beginning. #FutureForward #BuildInPublic #SocialVerse`,
+        `The future belongs to creators who craft with intention. Exploring ${cleanPrompt}. #NextGen #TechVision #SocialVerse`,
+        `Redefining digital connection through ${cleanPrompt}. Let’s build what’s next. #Visionary #SocialVerseNetwork #Innovation`
       ]
     };
 

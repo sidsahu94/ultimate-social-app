@@ -191,7 +191,7 @@ router.post(
 
 router.post(
   '/ai/compose',
-  protect,
+  optionalAuth,
   aiCompose
 );
 

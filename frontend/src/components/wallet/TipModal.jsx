@@ -8,7 +8,8 @@ import { FaGem, FaTimes, FaLock, FaCheckCircle } from 'react-icons/fa';
 
 const AMOUNTS = [10, 25, 50, 100, 250];
 
-export default function TipModal({ isOpen, onClose, recipient, onTipSuccess }) {
+export default function TipModal({ isOpen, onClose, recipient: propRecipient, recipientId, recipientName, onTipSuccess }) {
+  const recipient = propRecipient || (recipientId || recipientName ? { _id: recipientId, name: recipientName } : null);
   const { add: addToast } = useToast();
   const [selectedAmount, setSelectedAmount] = useState(50);
   const [pin, setPin] = useState('');
@@ -63,7 +64,19 @@ export default function TipModal({ isOpen, onClose, recipient, onTipSuccess }) {
         </button>
 
         {success ? (
-          <div className="py-8 text-center space-y-3">
+          <div className="relative py-8 text-center space-y-3 overflow-hidden">
+            {/* Celebratory Floating Gold Coin Rain */}
+            {[...Array(12)].map((_, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ y: -30, opacity: 0, x: (idx - 6) * 20, rotate: 0 }}
+                animate={{ y: 90, opacity: [0, 1, 0], rotate: 360 }}
+                transition={{ duration: 1.2, delay: idx * 0.08, ease: 'easeOut' }}
+                className="absolute top-0 text-xl text-[#F59E0B] pointer-events-none"
+              >
+                🪙
+              </motion.div>
+            ))}
             <FaCheckCircle className="mx-auto text-5xl text-[#55E6FF] animate-bounce" />
             <h3 className="font-display text-xl font-bold text-white">Tip Sent!</h3>
             <p className="text-xs text-[#A5A9BB]">
