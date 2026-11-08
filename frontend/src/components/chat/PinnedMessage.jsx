@@ -1,59 +1,71 @@
 // frontend/src/components/chat/PinnedMessage.jsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FaThumbtack, FaChevronDown, FaTimes } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
-export default function PinnedMessage({ messages, onUnpin }) {
+export default function PinnedMessage({ messages = [], onUnpin }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // If no pins, render nothing (takes 0 space)
-  if (!messages || messages.length === 0) return null;
+  const latest = useMemo(() => {
+    if (!messages.length) return null;
+    return messages[messages.length - 1];
+  }, [messages]);
 
-  const latest = messages[messages.length - 1];
+  if (!latest) return null;
 
   return (
-    <div className="w-full z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-b dark:border-gray-700 shadow-sm transition-all duration-300">
-      
-      {/* Collapsed View (Latest Pin) */}
-      <div 
-          className="flex items-center justify-between p-2 px-3 cursor-pointer text-xs h-10"
-          onClick={() => setIsOpen(!isOpen)}
+    <div className="w-full border-b border-[rgba(226,232,240,0.1)] bg-[#070B14]/90 backdrop-blur-md shadow-sm">
+      <button
+        type="button"
+        className="flex h-10 w-full items-center justify-between gap-3 px-3 text-left text-xs"
+        onClick={() => setIsOpen((v) => !v)}
       >
-          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold min-w-fit">
-              <FaThumbtack size={10} />
-              <span>Pinned</span>
-          </div>
-          
-          <div className="flex-1 mx-3 truncate text-gray-600 dark:text-gray-300 font-medium border-l-2 border-indigo-200 dark:border-indigo-900 pl-2">
-              {latest.content || 'Media Attachment'}
-          </div>
-          
-          <FaChevronDown className={`transition-transform text-gray-400 ${isOpen ? 'rotate-180' : ''}`} />
-      </div>
+        <div className="flex min-w-fit items-center gap-2 font-bold text-[#D4AF37]">
+          <FaThumbtack size={10} />
+          <span>Pinned</span>
+        </div>
 
-      {/* Expanded View (All Pins) */}
+        <div className="min-w-0 flex-1 truncate border-l-2 border-[#D4AF37]/30 pl-2 font-medium text-[#F8FAFC]">
+          {latest.content || 'Media attachment'}
+        </div>
+
+        <FaChevronDown className={`text-[#CBD5E1]/60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
       <AnimatePresence>
-          {isOpen && (
-              <motion.div 
-                  initial={{ height: 0 }} 
-                  animate={{ height: 'auto' }} 
-                  exit={{ height: 0 }} 
-                  className="overflow-hidden bg-gray-50 dark:bg-black/20 border-t dark:border-gray-700"
-              >
-                  <div className="max-h-32 overflow-y-auto custom-scrollbar">
-                    {messages.slice().reverse().map(m => (
-                        <div key={m._id} className="p-2 px-3 border-b dark:border-gray-800 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">
-                            <span className="text-xs truncate flex-1 text-gray-700 dark:text-gray-300">{m.content || 'Media'}</span>
-                            {onUnpin && (
-                                <button onClick={(e) => { e.stopPropagation(); onUnpin(m._id); }} className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition">
-                                    <FaTimes size={10} />
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                  </div>
-              </motion.div>
-          )}
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-[rgba(226,232,240,0.1)] bg-[#04070D]/95"
+          >
+            <div className="max-h-36 overflow-y-auto">
+              {messages.slice().reverse().map((m) => (
+                <div
+                  key={m._id}
+                  className="flex items-center justify-between gap-3 border-b border-[rgba(226,232,240,0.06)] px-3 py-2 transition hover:bg-white/[0.04]"
+                >
+                  <span className="min-w-0 flex-1 truncate text-xs text-[#F8FAFC]">
+                    {m.content || 'Media'}
+                  </span>
+                  {onUnpin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnpin(m._id);
+                      }}
+                      className="rounded-full p-1.5 text-[#CBD5E1]/50 transition hover:bg-white/[0.08] hover:text-[#10B981]"
+                    >
+                      <FaTimes size={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

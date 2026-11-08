@@ -29,8 +29,6 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
       fd.append('bio', bio);
       fd.append('location', location);
       if (avatar) fd.append('avatar', avatar);
-      
-      // 🔥 FIX: Backend expects 'coverPhoto', not 'coverImage'
       if (cover) fd.append('coverPhoto', cover); 
 
       const res = await API.put(`/users/${user._id}`, fd, {
@@ -49,30 +47,32 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+      <div className="w-full max-w-md rounded-[32px] overflow-hidden relative bg-[#070B14] backdrop-blur-2xl border border-white/10 shadow-[0_25px_80px_rgba(0,0,0,.85)]">
         
-        {/* 🔥 Cover Image Input */}
-        <div className="h-32 bg-gray-200 dark:bg-gray-700 relative group">
+        {/* Cover Image Input */}
+        <div className="h-40 bg-gradient-to-r from-[#052E24]/40 via-[#1D4ED8]/30 to-[#0F766E]/40 relative group">
             <img 
                 src={cover ? URL.createObjectURL(cover) : (user.coverPhoto || user.coverImage || '/default-cover.jpg')} 
-                className="w-full h-full object-cover opacity-80" 
+                className="w-full h-full object-cover opacity-75" 
+                alt="cover"
             />
-            <label className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 cursor-pointer transition">
+            <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 cursor-pointer transition">
                 <FaCamera className="text-white text-2xl" />
                 <input type="file" className="hidden" onChange={e => setCover(e.target.files[0])} accept="image/*" />
             </label>
-            <button onClick={onClose} className="absolute top-2 right-2 text-white bg-black/50 rounded-full p-1"><FaTimes/></button>
+            <button onClick={onClose} className="absolute top-3 right-3 text-[#CBD5E1] bg-black/60 hover:bg-black/80 rounded-full p-2 transition"><FaTimes size={12}/></button>
         </div>
 
         {/* Avatar Input */}
         <div className="px-6 relative">
-            <div className="-mt-12 w-24 h-24 rounded-full border-4 border-white dark:border-gray-900 overflow-hidden relative group bg-gray-300">
+            <div className="-mt-14 w-28 h-28 rounded-full border-4 border-[#070B14] overflow-hidden relative group bg-[#0A111E] shadow-xl">
                 <img 
                     src={avatar ? URL.createObjectURL(avatar) : user.avatar} 
                     className="w-full h-full object-cover" 
+                    alt="avatar"
                 />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 cursor-pointer transition">
                     <FaCamera className="text-white" />
                     <input type="file" className="hidden" onChange={e => setAvatar(e.target.files[0])} accept="image/*" />
                 </label>
@@ -80,11 +80,11 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
         </div>
 
         <form onSubmit={handleUpdate} className="p-6 space-y-4">
-            <input value={name} onChange={e => setName(e.target.value)} className="neu-input" placeholder="Name" />
-            <input value={location} onChange={e => setLocation(e.target.value)} className="neu-input" placeholder="Location" />
-            <textarea value={bio} onChange={e => setBio(e.target.value)} className="neu-input h-24 resize-none" placeholder="Bio" />
+            <input value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] placeholder-[#CBD5E1]/40 outline-none focus:border-[#00F2FE]/50 text-sm" placeholder="Name" />
+            <input value={location} onChange={e => setLocation(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] placeholder-[#CBD5E1]/40 outline-none focus:border-[#00F2FE]/50 text-sm" placeholder="Location" />
+            <textarea value={bio} onChange={e => setBio(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] placeholder-[#CBD5E1]/40 outline-none focus:border-[#00F2FE]/50 text-sm h-24 resize-none" placeholder="Bio" />
             
-            <button disabled={loading} className="btn-primary w-full flex justify-center">
+            <button disabled={loading} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white font-bold tracking-wide shadow-lg shadow-blue-900/40 hover:opacity-90 flex items-center justify-center gap-2 transition">
                 {loading ? <FaSpinner className="animate-spin" /> : 'Save Profile'}
             </button>
         </form>

@@ -1,12 +1,11 @@
 // frontend/src/components/layouts/Navbar.jsx
-import React, { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { logout } from "../../redux/slices/authSlice";
-import { useSocket } from "../../contexts/SocketContext";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { logout } from '../../redux/slices/authSlice';
+import { useSocket } from '../../contexts/SocketContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// Icons
 import {
   IoHome,
   IoHomeOutline,
@@ -26,106 +25,132 @@ import {
   IoLogOutOutline,
   IoClose,
   IoDownloadOutline,
-} from "react-icons/io5";
-import { FaFire } from "react-icons/fa";
+  IoGrid,
+  IoGridOutline,
+  IoBookmark,
+  IoBookmarkOutline,
+  IoWalletOutline,
+} from 'react-icons/io5';
+import { FaFire, FaSearch } from 'react-icons/fa';
 
-// Components
-import AppDrawer from "./AppDrawer";
-import ThemeToggle from "../ui/ThemeToggle";
-import UserAvatar from "../ui/UserAvatar";
-import LevelProgress from "../ui/LevelProgress";
-import usePWAInstall from "../../hooks/usePWAInstall";
+import AppDrawer from './AppDrawer';
+import StreakQuestsModal from '../gamification/StreakQuestsModal';
+import ThemeToggle from '../ui/ThemeToggle';
+import UserAvatar from '../ui/UserAvatar';
+import LevelProgress from '../ui/LevelProgress';
+import usePWAInstall from '../../hooks/usePWAInstall';
+import { scrollToTop } from '../../utils/scrollUtils';
 
-// ------------------ Desktop Nav Item ------------------
-const NavItem = ({
-  to,
-  iconActive,
-  iconInactive,
-  label,
-  active,
-  badge = 0,
-  color,
-}) => (
+const SocialoBrand = ({ isMobile }) => (
+  <div className="flex items-center gap-3 select-none">
+    <div
+      className={`relative overflow-hidden rounded-[14px] bg-[#070B14] border border-[rgba(0,242,254,0.18)] shadow-silverGlass ring-1 ring-white/10 shrink-0 ${
+        isMobile ? 'h-9 w-9' : 'h-10 w-10'
+      }`}
+    >
+      <img src="/socialo-logo.jpg" alt="Socialo" className="h-full w-full object-cover" />
+    </div>
+
+    <div className="flex flex-col leading-none">
+      <h1
+        className={`font-display font-bold tracking-tight text-[#F8FAFC] ${
+          isMobile ? 'text-lg' : 'text-2xl'
+        }`}
+      >
+        Socialo<span className="font-bold text-[#D4AF37]">.</span>
+      </h1>
+      {!isMobile && (
+        <span className="mt-1 text-[8.5px] font-semibold tracking-[0.2em] uppercase text-[#CBD5E1]/80">
+          AETHERIA NOIR • EMERALD & GOLD
+        </span>
+      )}
+    </div>
+  </div>
+);
+
+const NavItem = ({ to, iconActive, iconInactive, label, active, badge = 0, color = '' }) => (
   <Link
     to={to}
-    className={`relative flex items-center gap-4 rounded-[16px] px-4 py-3 my-1.5 transition-all duration-300 group
-      ${
-        active
-          ? "bg-[#E0E5EC] dark:bg-[#141517] shadow-neu-inset-light dark:shadow-neu-inset-dark"
-          : "hover:bg-white/40 dark:hover:bg-white/5"
-      }
-      ${color || ""}
-    `}
+    className={`relative my-1.5 flex items-center gap-4 rounded-[14px] px-4 py-3 transition-all duration-200 group ${
+      active
+        ? 'bg-gradient-to-r from-[#1D4ED8]/20 via-[#052E24]/15 to-[#00F2FE]/10 border border-[rgba(0,242,254,0.16)] text-[#F8FAFC] font-bold shadow-silverGlass'
+        : 'text-[#CBD5E1]/70 hover:bg-white/[0.04] hover:text-[#F8FAFC]'
+    } ${color}`}
   >
     <div
-      className={`relative text-2xl transition-all duration-300 ${
+      className={`relative text-2xl transition-all duration-200 ${
         active
-          ? "scale-110 text-transparent bg-clip-text bg-gradient-to-br from-primary to-secondary drop-shadow-lg"
-          : "text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200"
+          ? 'scale-105 text-[#00F2FE] drop-shadow-[0_0_8px_rgba(100,223,223,0.5)]'
+          : 'text-[#CBD5E1]/60 group-hover:text-[#F8FAFC]'
       }`}
     >
       {active ? iconActive : iconInactive}
-
       {badge > 0 && (
         <span className="absolute -top-1 -right-1 flex h-4 w-4">
-          <span className="animate-ping absolute inline-flex rounded-full h-full w-full bg-red-500 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-white border border-white dark:border-black text-[8px] items-center justify-center font-bold">
-            {badge > 9 ? "9+" : badge}
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#10B981] opacity-75" />
+          <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-[#052E24] text-[8px] font-bold text-white shadow-[0_0_8px_rgba(139,0,24,0.6)]">
+            {badge > 9 ? '9+' : badge}
           </span>
         </span>
       )}
     </div>
-
     <span
-      className={`font-semibold text-sm transition-all duration-300 ${
+      className={`text-sm transition-all duration-200 ${
         active
-          ? "text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-500"
-          : "text-gray-500 dark:text-gray-400"
+          ? 'font-bold text-[#F8FAFC]'
+          : 'font-medium'
       }`}
     >
       {label}
     </span>
-
-    {active && (
-      <motion.div
-        layoutId="active-nav"
-        className="absolute right-4 w-2 h-2 rounded-full bg-primary shadow-neon-blue"
-      />
-    )}
+    {active && <motion.div layoutId="active-nav" className="absolute right-4 h-2 w-2 rounded-full bg-[#00F2FE] shadow-[0_0_8px_#00F2FE]" />}
   </Link>
 );
 
-// ------------------ Mobile Nav Item ------------------
-const MobileNavItem = ({
-  to,
-  iconActive,
-  iconInactive,
-  active,
-  badge = 0,
-  isProfile,
-  user,
-  onClick,
-}) => {
+const MobileNavItem = ({ to, iconActive, iconInactive, active, badge = 0, label, isProfile, user, onClick }) => {
   if (isProfile) {
     return (
       <button
+        type="button"
         onClick={onClick}
-        className="relative flex items-center justify-center group"
+        className="relative flex flex-1 flex-col items-center justify-center py-1.5 transition-all duration-300 group"
       >
-        <div
-          className={`p-[2px] rounded-full transition-all duration-300 ${
+        {active && (
+          <motion.div
+            layoutId="activeTabGlowCapsule"
+            className="absolute inset-x-1 inset-y-0.5 z-0 rounded-xl border border-[rgba(0,242,254,0.2)] bg-gradient-to-r from-[#1D4ED8]/20 to-[#00F2FE]/15"
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+          />
+        )}
+        <motion.div
+          whileTap={{ scale: 0.88 }}
+          className={`relative z-10 flex flex-col items-center rounded-lg p-1.5 transition-colors ${
             active
-              ? "bg-gradient-to-br from-primary to-secondary shadow-neon-blue scale-110"
-              : "bg-transparent"
+              ? 'text-[#00F2FE]'
+              : 'text-[#CBD5E1]/60 group-hover:text-[#F8FAFC]'
           }`}
         >
-          <UserAvatar
-            src={user?.avatar}
-            name={user?.name}
-            className="w-8 h-8"
-            showStatus={false}
-          />
-        </div>
+          <div className={`rounded-full p-[2px] ${active ? 'bg-[#1D4ED8]/25 ring-1 ring-[#00F2FE] scale-110' : 'bg-transparent'}`}>
+            {user ? (
+              <UserAvatar src={user?.avatar} name={user?.name} className="h-6 w-6" showStatus={false} />
+            ) : (
+              <IoPersonOutline className="text-[24px]" />
+            )}
+          </div>
+          {badge > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#052E24] px-1 text-[9px] font-black text-white ring-2 ring-[#070B14] shadow-[0_0_8px_rgba(139,0,24,0.6)]">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </motion.div>
+        <span
+          className={`mt-0.5 text-[9px] font-medium uppercase tracking-wider transition-all z-10 ${
+            active ? 'scale-105 font-bold tracking-[0.18em] text-[#00F2FE]' : 'text-[#CBD5E1]/60'
+          }`}
+        >
+          {label}
+        </span>
+        {active && <motion.div layoutId="navbarLaserDot" className="absolute bottom-0 h-0.5 w-3 rounded-full bg-[#00F2FE] shadow-[0_0_8px_#00F2FE]" />}
       </button>
     );
   }
@@ -134,33 +159,42 @@ const MobileNavItem = ({
     <Link
       to={to}
       onClick={onClick}
-      className="flex flex-col items-center justify-center relative"
+      className="relative flex flex-1 flex-col items-center justify-center py-1.5 transition-all duration-300 group"
     >
-      <div
-        className={`text-2xl transition-all ${
-          active
-            ? "text-primary drop-shadow-[0_0_12px_rgba(41,121,255,.8)] -translate-y-1"
-            : "text-gray-400 dark:text-gray-500"
-        }`}
-      >
-        {active ? iconActive : iconInactive}
-
-        {badge > 0 && (
-          <span className="absolute -top-1.5 -right-2 h-2.5 w-2.5 bg-red-600 rounded-full border border-white dark:border-black" />
-        )}
-      </div>
-
       {active && (
         <motion.div
-          layoutId="mobile-nav-dot"
-          className="w-1.5 h-1.5 bg-primary rounded-full shadow-neon-blue absolute -bottom-2"
+          layoutId="activeTabGlowCapsule"
+          className="absolute inset-x-1 inset-y-0.5 z-0 rounded-xl border border-[rgba(0,242,254,0.2)] bg-gradient-to-r from-[#1D4ED8]/20 to-[#00F2FE]/15"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
         />
       )}
+      <motion.div
+        whileTap={{ scale: 0.88 }}
+        className={`relative z-10 flex flex-col items-center rounded-lg p-1.5 transition-colors ${
+          active
+            ? 'text-[#00F2FE]'
+            : 'text-[#CBD5E1]/60 group-hover:text-[#F8FAFC]'
+        }`}
+      >
+        <div className="text-[22px]">{active ? iconActive : iconInactive}</div>
+        {badge > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#052E24] px-1 text-[9px] font-black text-white ring-2 ring-[#070B14] shadow-[0_0_8px_rgba(139,0,24,0.6)]">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </motion.div>
+      <span
+        className={`mt-0.5 text-[9px] font-medium uppercase tracking-wider transition-all z-10 ${
+          active ? 'scale-105 font-bold tracking-[0.18em] text-[#00F2FE]' : 'text-[#CBD5E1]/60'
+        }`}
+      >
+        {label}
+      </span>
+      {active && <motion.div layoutId="navbarLaserDot" className="absolute bottom-0 h-0.5 w-3 rounded-full bg-[#00F2FE] shadow-[0_0_8px_#00F2FE]" />}
     </Link>
   );
 };
 
-// ------------------ MAIN NAVBAR ------------------
 export default function Navbar() {
   const { user } = useSelector((s) => s.auth);
   const dispatch = useDispatch();
@@ -169,13 +203,19 @@ export default function Navbar() {
   const { socket } = useSocket();
   const { isReady, installApp } = usePWAInstall();
 
-  // Notification Counters
   const [activityCount, setActivityCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
-
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Realtime listeners for notifications
+  const isImmersiveRoute =
+    location.pathname.match(/\/chat\/[a-zA-Z0-9]+/) ||
+    location.pathname.includes('/reels') ||
+    location.pathname.includes('/live/watch');
+
+  useEffect(() => {
+    setShowMobileMenu(false);
+  }, [location.pathname]);
+
   useEffect(() => {
     if (!socket || !user?._id) return;
 
@@ -185,321 +225,409 @@ export default function Navbar() {
       const chatId = payload.chatId || payload.room;
       if (!path.includes(chatId)) setMsgCount((x) => x + 1);
     };
-
     const clearNotifs = () => setActivityCount(0);
 
-    socket.on("notification", onNotif);
-    socket.on("receiveMessage", onMsg);
-    window.addEventListener("notificationsRead", clearNotifs);
+    socket.on('notification', onNotif);
+    socket.on('receiveMessage', onMsg);
+    window.addEventListener('notificationsRead', clearNotifs);
 
-    if (location.pathname === "/notifications") setActivityCount(0);
-    if (location.pathname === "/chat") setMsgCount(0);
+    if (location.pathname === '/notifications') setActivityCount(0);
+    if (location.pathname === '/chat') setMsgCount(0);
 
     return () => {
-      socket.off("notification", onNotif);
-      socket.off("receiveMessage", onMsg);
-      window.removeEventListener("notificationsRead", clearNotifs);
+      socket.off('notification', onNotif);
+      socket.off('receiveMessage', onMsg);
+      window.removeEventListener('notificationsRead', clearNotifs);
     };
   }, [socket, user, location.pathname]);
 
   const handleLogout = () => {
     socket?.disconnect();
     dispatch(logout());
-    navigate("/login");
+    navigate('/login');
   };
 
-  const openCreate = () =>
-    window.dispatchEvent(new CustomEvent("openCreatePost"));
+  const openCreate = () => window.dispatchEvent(new CustomEvent('openCreatePost'));
+  const isActive = (p) => location.pathname === p || (p !== '/' && location.pathname.startsWith(p));
 
-  const isActive = (p) =>
-    location.pathname === p || (p !== "/" && location.pathname.startsWith(p));
-
-  const desktopLinks = [
-    { to: "/", iconActive: <IoHome />, iconInactive: <IoHomeOutline />, label: "Home" },
-    { to: "/explore", iconActive: <IoCompass />, iconInactive: <IoCompassOutline />, label: "Explore" },
-    { to: "/reels", iconActive: <IoVideocam />, iconInactive: <IoVideocamOutline />, label: "Reels" },
-    { to: "/chat", iconActive: <IoChatbubbleEllipses />, iconInactive: <IoChatbubbleEllipsesOutline />, label: "Messages", badge: msgCount },
-    { to: "/notifications", iconActive: <IoHeart />, iconInactive: <IoHeartOutline />, label: "Activity", badge: activityCount },
-    { to: `/profile/${user?._id}`, iconActive: <IoPerson />, iconInactive: <IoPersonOutline />, label: "Profile" },
-  ];
+  const desktopLinks = user
+    ? [
+        { to: '/', iconActive: <IoHome />, iconInactive: <IoHomeOutline />, label: 'Home' },
+        { to: '/explore', iconActive: <IoCompass />, iconInactive: <IoCompassOutline />, label: 'Explore' },
+        { to: '/stories', iconActive: <FaFire />, iconInactive: <FaFire />, label: 'Stories' },
+        { to: '/reels', iconActive: <IoVideocam />, iconInactive: <IoVideocamOutline />, label: 'Reels' },
+        { to: '/live/list', iconActive: <IoVideocam />, iconInactive: <IoVideocamOutline />, label: 'Live' },
+        {
+          to: '/chat',
+          iconActive: <IoChatbubbleEllipses />,
+          iconInactive: <IoChatbubbleEllipsesOutline />,
+          label: 'Messages',
+          badge: msgCount,
+        },
+        {
+          to: '/notifications',
+          iconActive: <IoHeart />,
+          iconInactive: <IoHeartOutline />,
+          label: 'Activity',
+          badge: activityCount,
+        },
+        { to: '/saved', iconActive: <IoBookmark />, iconInactive: <IoBookmarkOutline />, label: 'Saved' },
+        { to: '/wallet', iconActive: <IoWalletOutline />, iconInactive: <IoWalletOutline />, label: 'Wallet' },
+        { to: '/command-center', iconActive: <IoGrid />, iconInactive: <IoGridOutline />, label: 'Command' },
+        { to: `/profile/${user._id}`, iconActive: <IoPerson />, iconInactive: <IoPersonOutline />, label: 'Profile' },
+      ]
+    : [
+        { to: '/welcome', iconActive: <IoHome />, iconInactive: <IoHomeOutline />, label: 'Welcome' },
+        { to: '/explore', iconActive: <IoCompass />, iconInactive: <IoCompassOutline />, label: 'Explore' },
+        { to: '/login', iconActive: <IoPerson />, iconInactive: <IoPersonOutline />, label: 'Log In' },
+      ];
 
   return (
     <>
-      {/* ======================= DESKTOP SIDEBAR ======================= */}
-      <aside className="hidden md:flex flex-col fixed left-0 top-0 h-screen w-[270px] bg-bg-light dark:bg-bg-dark border-r border-white/40 dark:border-white/5 z-50 shadow-neu-light dark:shadow-neu-dark">
+      {/* Desktop sidebar */}
+      <aside className="hidden h-screen w-[270px] flex-col border-r border-[rgba(0,242,254,0.12)] bg-[#070B14]/95 backdrop-blur-2xl transition-colors duration-300 md:fixed md:left-0 md:top-0 md:z-50 md:flex shadow-[4px_0_30px_rgba(0,0,0,0.6)]">
+        <div className="p-7 pb-4">
+          <SocialoBrand isMobile={false} />
 
-        {/* Logo + Streak */}
-        <div className="p-8 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-neon-blue">
-              <span className="font-black text-lg">S</span>
-            </div>
-
-            <div>
-              <h1 className="font-extrabold text-2xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-tight">
-                SocialApp
-              </h1>
-
+          {user ? (
+            <div className="mt-6">
+              <LevelProgress />
               {user?.streak?.count > 0 && (
-                <div className="flex items-center gap-1 text-[10px] text-orange-500 font-bold mt-1 animate-pulse">
-                  <FaFire /> {user.streak.count} Day Streak
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#D4AF37] animate-pulse">
+                  <FaFire className="text-[#10B981]" /> {user.streak.count} Day Streak
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="mt-4">
-            <LevelProgress />
-          </div>
+          ) : (
+            <div className="mt-4 text-xs font-semibold tracking-wide text-[#CBD5E1]/70">
+              People • Moments • Together
+            </div>
+          )}
         </div>
 
-        {/* NAVIGATION LIST */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-          <nav className="space-y-2">
+        <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('openCommandPalette'))}
+            className="mb-4 flex w-full items-center justify-between rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#04070D]/80 px-3.5 py-2.5 text-xs text-[#CBD5E1]/70 hover:border-[#00F2FE] hover:text-[#F8FAFC] transition shadow-inner group"
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <FaSearch size={12} className="text-[#00F2FE] group-hover:scale-110 transition-transform" />
+              <span>Search &amp; Jump...</span>
+            </span>
+            <kbd className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-[#CBD5E1]/60">
+              Ctrl+K
+            </kbd>
+          </button>
+          {user && (
+            <button
+              type="button"
+              onClick={() => setShowStreakModal(true)}
+              className="mb-3.5 flex w-full items-center justify-between rounded-xl border border-[rgba(212,175,55,0.3)] bg-gradient-to-r from-[#052E24]/25 via-[#070B14] to-[#D4AF37]/20 px-3.5 py-2.5 text-xs text-[#F8FAFC] hover:border-[#D4AF37] transition shadow-[0_0_20px_rgba(212,175,55,0.15)] group cursor-pointer"
+            >
+              <span className="flex items-center gap-2 font-bold">
+                <FaFire size={14} className="text-[#F4D49A] animate-pulse group-hover:scale-125 transition-transform" />
+                <span className="text-[#F7F7FC]">Daily Quests &amp; Streak</span>
+              </span>
+              <span className="rounded-full bg-[#052E24] px-2 py-0.5 font-mono text-[9px] font-black text-white shadow">
+                BOUNTIES
+              </span>
+            </button>
+          )}
+          <nav className="space-y-1.5">
             {desktopLinks.map((link) => (
               <NavItem key={link.label} {...link} active={isActive(link.to)} />
             ))}
 
-            {user?.role === "admin" && (
+            {user?.role === 'admin' && (
               <NavItem
                 to="/admin/dashboard"
                 iconActive={<IoShieldCheckmarkOutline />}
                 iconInactive={<IoShieldCheckmarkOutline />}
-                label="Admin"
-                color="text-red-500"
-                active={isActive("/admin")}
+                label="Architect Enclave"
+                color="text-[#00F2FE] bg-[#052E24]/15 border border-[#052E24]/30 shadow-[0_0_15px_rgba(139,0,24,0.3)]"
+                active={isActive('/admin')}
               />
             )}
           </nav>
 
-          {/* CREATE BUTTON */}
-          <button
-            onClick={openCreate}
-            className="btn-neon w-full mt-5 flex items-center justify-center gap-2"
-          >
-            <IoAddCircle className="text-2xl" />
-            Create
-          </button>
-
-          {/* PWA INSTALL */}
-          {isReady && (
+          {user && (
             <button
-              onClick={installApp}
-              className="mt-5 w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-500/40 hover:scale-[1.02] transition-all"
+              onClick={openCreate}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] py-3 font-display font-bold text-white shadow-sapphireGlow border border-[rgba(0,242,254,0.18)] transition-all hover:shadow-[0_4px_25px_rgba(29,78,216,0.5)] hover:scale-[1.01] active:scale-95"
             >
-              <IoDownloadOutline size={20} /> Install App
+              <IoAddCircle className="text-2xl text-white" /> Create
             </button>
           )}
 
-          {/* APP DRAWER */}
-          <div className="pt-6 mt-6 border-t border-white/30 dark:border-white/10">
-            <AppDrawer />
-          </div>
+          {isReady && (
+            <button
+              onClick={installApp}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#0F766E] to-[#00F2FE] py-2.5 font-bold text-white shadow-md transition-all hover:scale-[1.02]"
+            >
+              <IoDownloadOutline size={18} /> Install App
+            </button>
+          )}
+
+          {user && (
+            <div className="mt-6 border-t border-[rgba(0,242,254,0.1)] pt-5">
+              <AppDrawer />
+            </div>
+          )}
         </div>
 
-        {/* FOOTER OPTIONS */}
-        <div className="p-6 border-t border-white/20 dark:border-white/10">
-          <div className="flex justify-between items-center bg-white/40 dark:bg-black/20 p-4 rounded-xl shadow-neu-inset-light dark:shadow-neu-inset-dark">
+        <div className="border-t border-[rgba(0,242,254,0.1)] p-5">
+          <div className="flex items-center justify-between rounded-[20px] border border-[rgba(0,242,254,0.14)] bg-[#04070D]/85 p-3.5 shadow-silverGlass">
             <div className="flex gap-2">
               <Link
                 to="/settings"
-                className="p-2 rounded-full text-gray-600 hover:text-primary dark:text-gray-300 hover:bg-white/30"
+                className="rounded-full p-2 text-[#CBD5E1]/70 transition-colors hover:bg-white/[0.06] hover:text-white"
               >
                 <IoSettingsOutline size={20} />
               </Link>
 
-              <button
-                onClick={handleLogout}
-                className="p-2 rounded-full text-gray-600 hover:text-red-500 dark:text-gray-300 hover:bg-white/30"
-              >
-                <IoLogOutOutline size={22} />
-              </button>
+              {user ? (
+                <button
+                  onClick={handleLogout}
+                  className="rounded-full p-2 text-[#10B981] transition-colors hover:bg-[#052E24]/15 hover:text-red-400"
+                >
+                  <IoLogOutOutline size={22} />
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="rounded-full p-2 text-[#CBD5E1]/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  <IoPersonOutline size={22} />
+                </Link>
+              )}
             </div>
             <ThemeToggle />
           </div>
         </div>
       </aside>
 
-      {/* ======================= MOBILE TOP BAR ======================= */}
-      <nav className="md:hidden fixed top-4 left-4 right-4 h-[60px] bg-bg-light/90 dark:bg-bg-dark/90 backdrop-blur-xl border border-white/30 dark:border-white/10 rounded-2xl shadow-neu-light dark:shadow-neu-dark flex items-center justify-between px-4 z-50">
-
-        {/* Logo */}
-        <div
-          className="flex items-center gap-2 cursor-pointer"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center shadow-sm">
-            <span className="font-bold">S</span>
-          </div>
-
-          <div>
-            <h1 className="font-extrabold text-lg text-gray-900 dark:text-white">
-              Social
-            </h1>
-            {user?.streak?.count > 0 && (
-              <div className="flex items-center gap-1 text-[9px] text-orange-500">
-                <FaFire />
-                {user.streak.count}
-              </div>
-            )}
-          </div>
+      {/* Mobile top bar */}
+      <nav className="fixed left-4 right-4 top-4 z-40 flex h-[60px] items-center justify-between rounded-[20px] border border-[rgba(0,242,254,0.14)] bg-[#070B14]/90 px-4 shadow-silverGlass backdrop-blur-xl transition-colors duration-300 md:hidden">
+        <div onClick={() => scrollToTop()}>
+          <SocialoBrand isMobile={true} />
         </div>
-
-        {/* Notification icons */}
-        <div className="flex items-center gap-4">
-          <Link to="/notifications" className="relative text-gray-600 dark:text-gray-300">
-            <IoHeartOutline size={26} />
-            {activityCount > 0 && (
-              <span className="absolute -top-1 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-black"></span>
-            )}
-          </Link>
-
-          <Link to="/chat" className="relative text-gray-600 dark:text-gray-300">
-            <IoChatbubbleEllipsesOutline size={26} />
-            {msgCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1 rounded-full border border-white dark:border-black">
-                {msgCount}
-              </span>
-            )}
-          </Link>
-        </div>
+        {user && (
+          <div className="flex items-center gap-4">
+                        <button
+              type="button"
+              onClick={() => setShowStreakModal(true)}
+              className="flex items-center gap-1.5 rounded-full bg-[#052E24]/25 border border-[#052E24]/40 px-2.5 py-1 text-xs font-bold text-[#F4D49A]"
+            >
+              <FaFire size={12} className="animate-pulse" />
+              <span>Quests</span>
+            </button>
+            <Link to="/notifications" className="relative text-[#CBD5E1] hover:text-white transition-colors">
+              <IoHeartOutline size={26} />
+              {activityCount > 0 && (
+                <span className="absolute -top-1 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#070B14] bg-[#052E24]" />
+              )}
+            </Link>
+          </div>
+        )}
       </nav>
 
-      {/* ======================= MOBILE BOTTOM NAV ======================= */}
-      <nav className="md:hidden fixed bottom-5 left-4 right-4 h-[70px] bg-bg-light/90 dark:bg-bg-dark/90 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-[24px] shadow-neu-light dark:shadow-neu-dark grid grid-cols-5 items-center px-2 z-50">
-
-        <MobileNavItem
-          to="/"
-          active={location.pathname === "/"}
-          iconActive={<IoHome />}
-          iconInactive={<IoHomeOutline />}
-        />
-
-        <MobileNavItem
-          to="/explore"
-          active={location.pathname === "/explore"}
-          iconActive={<IoCompass />}
-          iconInactive={<IoCompassOutline />}
-        />
-
-        {/* Floating Create Button */}
-        <div className="flex justify-center -mt-8">
-          <button
-            onClick={openCreate}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-white shadow-neon-blue flex items-center justify-center transform active:scale-90 border-4 border-bg-light dark:border-bg-dark"
+      {/* Mobile bottom nav */}
+      <AnimatePresence>
+        {!isImmersiveRoute && (
+          <motion.nav
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none md:hidden"
           >
-            <IoAddCircle className="text-3xl" />
-          </button>
-        </div>
+            <div className="mx-4 mb-4 relative overflow-hidden rounded-[24px] border border-[rgba(0,242,254,0.16)] bg-[#070B14]/95 px-1 py-1 shadow-[0_12px_40px_rgba(0,0,0,0.8)] backdrop-blur-xl pointer-events-auto">
+              <div className="relative z-10 flex w-full items-center justify-between">
+                <MobileNavItem
+                  to={user ? '/' : '/welcome'}
+                  active={location.pathname === '/' || location.pathname === '/welcome'}
+                  iconActive={<IoHome />}
+                  iconInactive={<IoHomeOutline />}
+                  label="Home"
+                />
+                <MobileNavItem
+                  to="/explore"
+                  active={location.pathname === '/explore'}
+                  iconActive={<IoCompass />}
+                  iconInactive={<IoCompassOutline />}
+                  label="Explore"
+                />
+                <div className="relative -top-6 flex w-16 justify-center px-2">
+                  <button
+                    onClick={user ? openCreate : () => navigate('/login')}
+                    className={`absolute z-20 flex h-[54px] w-[54px] transform items-center justify-center rounded-full border-[3px] border-[#070B14] text-white transition-all hover:scale-105 active:scale-90 ${
+                      user
+                        ? 'bg-gradient-to-tr from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white shadow-[0_0_20px_rgba(29,78,216,0.6)]'
+                        : 'bg-[#6b7280] shadow-md'
+                    }`}
+                  >
+                    {user ? <IoAddCircle className="text-[32px] text-white" /> : <IoPersonOutline className="text-[26px]" />}
+                  </button>
+                </div>
+                <MobileNavItem
+                  to={user ? '/chat' : '/login'}
+                  active={location.pathname.startsWith('/chat')}
+                  iconActive={<IoChatbubbleEllipses />}
+                  iconInactive={<IoChatbubbleEllipsesOutline />}
+                  badge={msgCount}
+                  label={user ? 'Chats' : 'Log In'}
+                />
+                <MobileNavItem
+                  isProfile
+                  user={user}
+                  active={showMobileMenu}
+                  onClick={() => setShowMobileMenu(true)}
+                  label="Menu"
+                />
+              </div>
+            </div>
+            <div className="h-[env(safe-area-inset-bottom)] pointer-events-auto" />
+          </motion.nav>
+        )}
+      </AnimatePresence>
 
-        <MobileNavItem
-          to="/reels"
-          active={location.pathname === "/reels"}
-          iconActive={<IoVideocam />}
-          iconInactive={<IoVideocamOutline />}
-        />
-
-        <MobileNavItem
-          isProfile
-          user={user}
-          active={showMobileMenu}
-          onClick={() => setShowMobileMenu(true)}
-        />
-      </nav>
-
-      {/* ======================= MOBILE MENU DRAWER ======================= */}
+      {/* Mobile drawer */}
       <AnimatePresence>
         {showMobileMenu && (
           <motion.div
-            initial={{ x: "100%" }}
+            initial={{ x: '100%' }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 bg-bg-light dark:bg-bg-dark p-6 md:hidden z-[60] overflow-y-auto"
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[60] overflow-y-auto bg-[#04070D]/98 p-6 md:hidden text-[#F8FAFC] backdrop-blur-2xl"
           >
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold dark:text-white">Menu</h2>
+            <div className="mb-8 flex items-center justify-between">
+              <h2 className="text-2xl font-bold font-display text-[#F8FAFC]">Menu</h2>
               <button
                 onClick={() => setShowMobileMenu(false)}
-                className="p-3 rounded-full bg-bg-light dark:bg-bg-dark shadow-neu-light dark:shadow-neu-dark"
+                className="rounded-full bg-white/[0.06] p-3 text-[#CBD5E1] hover:text-white"
               >
                 <IoClose size={28} />
               </button>
             </div>
 
-            {/* Profile Header */}
-            <Link
-              to={`/profile/${user?._id}`}
-              onClick={() => setShowMobileMenu(false)}
-              className="neu-card flex items-center gap-4 !p-4 mb-8 rounded-2xl"
-            >
-              <div className="p-1 rounded-full bg-gradient-to-tr from-primary to-secondary shadow-neon-blue">
-                <UserAvatar
-                  src={user?.avatar}
-                  name={user?.name}
-                  className="w-14 h-14 border-2 border-bg-light dark:border-bg-dark"
-                />
-              </div>
-
-              <div>
-                <div className="font-bold text-lg">{user?.name}</div>
-                <div className="text-primary text-sm">View Profile</div>
-                <div className="mt-2 w-32">
-                  <LevelProgress />
+            {user ? (
+              <Link
+                to={`/profile/${user._id}`}
+                onClick={() => setShowMobileMenu(false)}
+                className="mb-8 flex items-center gap-4 rounded-2xl border border-[rgba(0,242,254,0.14)] bg-[#070B14] p-4 shadow-silverGlass"
+              >
+                <div className="rounded-full bg-[#1D4ED8]/20 p-1 ring-1 ring-[#1D4ED8]/40">
+                  <UserAvatar src={user.avatar} name={user.name} className="h-14 w-14" />
                 </div>
+                <div>
+                  <div className="text-lg font-bold text-[#F8FAFC]">{user.name}</div>
+                  <div className="text-sm font-medium text-[#00F2FE]">View Profile</div>
+                  <div className="mt-2 w-32">
+                    <LevelProgress />
+                  </div>
+                </div>
+              </Link>
+            ) : (
+              <div className="mb-8 flex flex-col items-center gap-4 rounded-2xl border border-[rgba(0,242,254,0.14)] bg-[#070B14] p-6 shadow-silverGlass">
+                <h3 className="text-xl font-bold text-[#F8FAFC]">Welcome</h3>
+                <Link
+                  to="/login"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="w-full rounded-xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] py-3 text-center font-bold text-white shadow-sapphireGlow"
+                >
+                  Log In or Sign Up
+                </Link>
               </div>
-            </Link>
+            )}
 
-            {/* Quick Items */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="mb-8 grid grid-cols-2 gap-4">
+              <Link
+                to="/stories"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-[#052E24]/50 transition-colors"
+              >
+                <FaFire className="text-2xl text-[#10B981]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Stories</span>
+              </Link>
+              <Link
+                to="/live/list"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-[#00F2FE]/50 transition-colors"
+              >
+                <IoVideocamOutline className="text-2xl text-[#00F2FE]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Live</span>
+              </Link>
+              <Link
+                to="/wallet"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-[#D4AF37]/50 transition-colors"
+              >
+                <IoWalletOutline className="text-2xl text-[#D4AF37]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Wallet</span>
+              </Link>
+              <Link
+                to="/command-center"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-[#1D4ED8]/50 transition-colors"
+              >
+                <IoGridOutline className="text-2xl text-[#1D4ED8]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Command</span>
+              </Link>
               <Link
                 to="/settings"
                 onClick={() => setShowMobileMenu(false)}
-                className="neu-card flex flex-col items-center gap-2 !p-4"
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-white/30 transition-colors"
               >
-                <IoSettingsOutline className="text-2xl text-blue-500" />
-                <span className="font-bold text-sm">Settings</span>
+                <IoSettingsOutline className="text-2xl text-[#CBD5E1]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Settings</span>
+              </Link>
+              <Link
+                to="/saved"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-center gap-2 rounded-xl border border-[rgba(0,242,254,0.12)] bg-[#070B14] p-4 hover:border-[#0F766E]/50 transition-colors"
+              >
+                <IoBookmarkOutline className="text-2xl text-[#0F766E]" />
+                <span className="text-sm font-bold text-[#F8FAFC]">Saved</span>
               </Link>
 
-              {user?.role === "admin" && (
+              {user?.role === 'admin' && (
                 <Link
                   to="/admin/dashboard"
                   onClick={() => setShowMobileMenu(false)}
-                  className="neu-card flex flex-col items-center gap-2 !p-4"
+                  className="col-span-2 flex flex-col items-center gap-2 rounded-xl border border-[#052E24]/40 bg-[#052E24]/15 p-4 shadow-sm"
                 >
-                  <IoShieldCheckmarkOutline className="text-2xl text-red-500" />
-                  <span className="font-bold text-sm text-red-500">Admin</span>
+                  <IoShieldCheckmarkOutline className="text-2xl text-[#10B981]" />
+                  <span className="text-sm font-bold text-[#F4D49A]">Admin Controls</span>
                 </Link>
               )}
             </div>
 
-            {/* Install App */}
             {isReady && (
               <button
                 onClick={installApp}
-                className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold shadow-lg"
+                className="mb-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0F766E] to-[#00F2FE] py-3 font-bold text-white shadow-md"
               >
-                <IoDownloadOutline size={20} className="inline mr-2" />
-                Install App
+                <IoDownloadOutline size={20} /> Install App
               </button>
             )}
 
-            {/* App Drawer */}
-            <div className="mt-8">
-              <AppDrawer />
-            </div>
+            {user && (
+              <div className="mt-8">
+                <AppDrawer onItemClick={() => setShowMobileMenu(false)} />
+              </div>
+            )}
 
-            {/* Bottom Actions */}
-            <div className="mt-10 border-t border-white/20 dark:border-white/10 pt-4 flex justify-between items-center">
-              <button
-                onClick={handleLogout}
-                className="text-red-500 flex items-center gap-2 font-bold px-4 py-2 hover:bg-red-100/20 dark:hover:bg-red-900/20 rounded-xl"
-              >
-                <IoLogOutOutline size={20} />
-                Logout
-              </button>
-
+            <div className="mt-10 flex items-center justify-between border-t border-[rgba(0,242,254,0.1)] pt-4">
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-[#10B981] transition-colors hover:bg-[#052E24]/15"
+                >
+                  <IoLogOutOutline size={20} /> Logout
+                </button>
+              )}
               <ThemeToggle />
             </div>
           </motion.div>

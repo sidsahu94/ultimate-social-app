@@ -1,15 +1,38 @@
-// backend/models/Transaction.js
 const mongoose = require('mongoose');
 
-const TransactionSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['credit', 'debit'], required: true },
-  amount: { type: Number, required: true },
-  description: String,
-  status: { type: String, enum: ['pending', 'success', 'failed'], default: 'success' },
-  
-  // 🔥 NEW: Idempotency Key to prevent double-spending on network retries
-  idempotencyKey: { type: String, unique: true, sparse: true, index: true }
+const transactionSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  type: {
+    type: String,
+    enum: ['credit', 'debit'],
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true,
+    validate: {
+      validator: function(amountValue) {
+        return amountValue > 0 && Number.isInteger(amountValue);
+      },
+      message: 'Transaction balance increments must represent integer values using localized lowest sub-units.'
+    }
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxLength: 300
+  },
+  idempotencyKey: {
+    type: String,
+    required: true,
+    unique: true, // Strict database key uniqueness enforcement mapping rule
+    default: () => require('crypto').randomUUID()
+  }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+module.exports = mongoose.model('Transaction', transactionSchema);

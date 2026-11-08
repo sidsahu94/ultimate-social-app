@@ -11,6 +11,10 @@ const upload = require('../utils/multer');
 
 // Get own profile
 router.get('/me', protect, userController.getMe);
+router.get('/quests', protect, userController.getDailyQuests);
+router.post('/quests/:id/claim', protect, userController.claimDailyQuest);
+router.get('/passkey/register-options', protect, userController.passkeyRegisterOptions);
+router.post('/passkey/register-verify', protect, userController.passkeyRegisterVerify);
 
 // Delete own account
 router.delete('/me', protect, userController.deleteAccount);

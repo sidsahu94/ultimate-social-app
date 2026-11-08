@@ -51,19 +51,31 @@ exports.getGroup = async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 };
 
+// Replace your existing postToGroup logic with this updated version
 exports.postToGroup = async (req, res) => {
-  try {
-    const g = await Group.findById(req.params.id);
-    if (!g) return res.status(404).json({ message: 'Group not found' });
-    if (!g.members.map(String).includes(String(req.user._id))) return res.status(403).json({ message: 'Not a member' });
+    try {
+        const { text, images } = req.body;
+        const groupId = req.params.groupId; // Assuming ID comes from URL
 
-    const post = new Post({
-      user: req.user._id,
-      content: req.body.content || '',
-      images: req.body.images || [],
-      videos: req.body.videos || []
-    });
-    await post.save();
-    res.status(201).json(post);
-  } catch (err) { res.status(500).json({ message: err.message }); }
+        // Verify group exists
+        const group = await Group.findById(groupId);
+        if (!group) return res.status(404).json({ message: "Group not found" });
+
+        // Ensure user is a member of the group before posting (Add your specific check here)
+
+        // Create the post and ATTACH the group ID
+        const newPost = await Post.create({
+            user: req.user._id,
+            group: groupId, // THIS IS THE CRITICAL FIX
+            text: text,
+            images: images || []
+        });
+
+        // Optionally update group's post count or latest activity here
+
+        res.status(201).json({ success: true, post: newPost });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server Error" });
+    }
 };

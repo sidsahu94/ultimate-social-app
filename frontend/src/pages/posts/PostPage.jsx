@@ -23,7 +23,7 @@ export default function PostPage() {
       }
       try {
         const res = await API.get(`/posts/${id}`).catch(() => API.get(`/post/${id}`));
-        setPost(res.data);
+        setPost(res.data?.data || res.data);
 
         // 🔥 FIX: Auto-open comments if query param exists
         if (searchParams.get('comments') === 'true') {
@@ -46,7 +46,14 @@ export default function PostPage() {
   return (
     <div className="max-w-3xl mx-auto p-4">
       {loading ? <SkeletonPost /> : (
-        post ? <PostCard post={post} /> : <div className="card p-6 text-center text-gray-500">Post not found</div>
+        post ? (
+          <PostCard post={post} />
+        ) : (
+          <div className="rounded-[24px] border border-white/10 bg-[#070B14]/80 p-12 text-center text-[#CBD5E1]/60 backdrop-blur-xl shadow-silverGlass">
+            <p className="font-semibold text-sm">Post not found</p>
+            <p className="text-xs text-[#CBD5E1]/40 mt-1">This piece may have been removed or is no longer accessible.</p>
+          </div>
+        )
       )}
     </div>
   );

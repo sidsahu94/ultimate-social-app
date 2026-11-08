@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import API from '../../services/api';
 import { FaEdit, FaTrash, FaStickyNote } from 'react-icons/fa';
 import { useToast } from '../../components/ui/ToastProvider';
+import Spinner from '../../components/common/Spinner';
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState([]);
@@ -13,9 +14,9 @@ export default function DraftsPage() {
 
   const loadDrafts = async () => {
     try {
-      // Uses the dedicated endpoint we added to backend/routes/posts.js
       const res = await API.get('/posts/drafts');
-      setDrafts(res.data || []);
+      const payload = res.data?.data || res.data;
+      setDrafts(Array.isArray(payload) ? payload : []);
     } catch (e) {
       console.error(e);
       add("Failed to load drafts", { type: 'error' });
@@ -36,53 +37,59 @@ export default function DraftsPage() {
   };
 
   const handlePublish = (draft) => {
-      // Trigger the CreatePostModal with the draft's data to allow editing/publishing
       window.dispatchEvent(new CustomEvent('openCreatePost', { 
           detail: { 
               content: draft.content, 
               _id: draft._id, 
-              isDraft: true // Flag to tell the modal this is an existing draft
+              isDraft: true
           } 
       }));
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800 dark:text-white">
-        <FaStickyNote className="text-yellow-500" /> Drafts
-      </h1>
+    <div className="max-w-2xl mx-auto p-4 md:p-6 pb-24">
+      <div className="mb-6 pb-4 border-b border-white/10 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#F4D49A] mb-1">
+            <FaStickyNote /> Working Studio
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black text-[#F7F7FC] tracking-tight font-display">
+            Unpublished Drafts<span className="text-[#00F2FE]">.</span>
+          </h1>
+        </div>
+      </div>
 
       {loading ? (
-        <div className="text-center p-10 text-gray-500">Loading...</div>
+        <div className="p-12 flex justify-center"><Spinner /></div>
       ) : (
         <div className="space-y-4">
             {drafts.length === 0 && (
-                <div className="text-gray-500 text-center py-10 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                    No drafts saved.
+                <div className="text-[#CBD5E1] text-center py-16 bg-[#070B14]/40 rounded-3xl border border-white/10 backdrop-blur-xl text-xs">
+                    No drafts saved in your queue.
                 </div>
             )}
             
             {drafts.map(draft => (
-                <div key={draft._id} className="card p-4 flex justify-between items-start bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-xl shadow-sm transition hover:shadow-md">
+                <div key={draft._id} className="p-5 flex justify-between items-start bg-[#070B14]/90 border border-white/10 rounded-3xl shadow-xl backdrop-blur-xl transition hover:border-white/20">
                     <div className="flex-1 pr-4">
-                        <p className="text-gray-800 dark:text-gray-200 font-medium whitespace-pre-wrap line-clamp-2">
+                        <p className="text-[#F7F7FC] font-medium text-sm whitespace-pre-wrap line-clamp-3 leading-relaxed">
                             {draft.content || "Untitled Draft"}
                         </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            Last edited: {new Date(draft.updatedAt).toLocaleString()}
+                        <div className="text-[11px] text-[#A5A9BB] mt-2">
+                            Last edited: {new Date(draft.updatedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
                         </div>
                     </div>
                     <div className="flex gap-2">
                         <button 
                             onClick={() => handlePublish(draft)} 
-                            className="p-2 bg-white dark:bg-gray-800 rounded-full text-indigo-600 shadow-sm border border-gray-200 dark:border-gray-700 hover:text-indigo-700 hover:shadow-md transition"
+                            className="p-2.5 bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] rounded-2xl text-white shadow-md hover:opacity-95 transition text-xs"
                             title="Edit / Publish"
                         >
                             <FaEdit />
                         </button>
                         <button 
                             onClick={() => handleDelete(draft._id)} 
-                            className="p-2 bg-white dark:bg-gray-800 rounded-full text-red-500 shadow-sm border border-gray-200 dark:border-gray-700 hover:text-red-700 hover:shadow-md transition"
+                            className="p-2.5 bg-[#052E24]/20 border border-[#052E24]/30 rounded-2xl text-[#F87171] hover:bg-[#052E24]/40 transition text-xs"
                             title="Delete"
                         >
                             <FaTrash />

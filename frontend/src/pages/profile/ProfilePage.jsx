@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 
 import API from "../../services/api";
 
-import PostGrid from "../../components/profile/PostGrid";
 import FollowButton from "../../components/profile/FollowButton";
 import FollowRequestButton from "../../components/profile/FollowRequestButton";
 import ProfileEditModal from "../../components/profile/ProfileEditModal";
@@ -14,6 +13,7 @@ import CreatePostModal from "../../components/posts/CreatePostModal";
 
 import Lightbox from "../../components/ui/Lightbox";
 import UserAvatar from "../../components/ui/UserAvatar";
+import { getImageUrl } from "../../utils/imageUtils";
 
 import ProfileHighlights from "../../components/profile/ProfileHighlights";
 import ProfileCompletion from "../../components/profile/ProfileCompletion";
@@ -148,148 +148,149 @@ export default function ProfilePage() {
     toast("Profile link copied!", { type: "success" });
   };
 
+  const renderPremiumGrid = (postArray) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6">
+      {postArray.map((post) => (
+        <div 
+          key={post._id} 
+          onClick={() => navigate(`/post/${post._id}`)}
+          className="relative group aspect-square rounded-2xl overflow-hidden bg-[#070B14]/90 border border-white/10 cursor-pointer shadow-xl hover:border-white/25 hover:shadow-[0_8px_30px_rgba(29,78,216,0.2)] transition-all duration-300 backdrop-blur-xl"
+        >
+          {post.images?.[0] ? (
+            <img src={getImageUrl(post.images[0], 'feed')} alt="Post" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          ) : post.videos?.[0] ? (
+            <video src={getImageUrl(post.videos[0])} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" muted loop playsInline onMouseEnter={e => e.target.play()} onMouseLeave={e => e.target.pause()} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center p-4 bg-[#171A26]/80 transition-transform duration-700 group-hover:scale-105">
+              <p className="text-xs md:text-sm line-clamp-4 text-[#CBD5E1] text-center font-medium leading-relaxed">{post.content}</p>
+            </div>
+          )}
+          
+          {/* Cinematic Hover Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center opacity-0 backdrop-blur-[2px]">
+            <div className="flex gap-6 text-[#F7F7FC] font-bold text-base drop-shadow-md transform translate-y-3 group-hover:translate-y-0 transition-all duration-300">
+              <span className="flex items-center gap-1.5 text-[#FF6B8A]">❤️ {post.likes?.length || 0}</span>
+              <span className="flex items-center gap-1.5 text-[#00F2FE]">💬 {post.comments?.length || 0}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   if (loading)
     return (
-      <div className="text-center p-10 text-slate-500 dark:text-slate-400">
+      <div className="text-center p-12 text-[#CBD5E1] bg-[#070B14]/40 rounded-3xl border border-white/10 backdrop-blur-xl max-w-4xl mx-auto my-8">
         Loading profile...
       </div>
     );
 
   if (!user)
     return (
-      <div className="text-center p-10 text-slate-500">Profile not found.</div>
+      <div className="text-center p-12 text-[#CBD5E1] bg-[#070B14]/40 rounded-3xl border border-white/10 backdrop-blur-xl max-w-4xl mx-auto my-8">
+        Profile not found.
+      </div>
     );
 
   return (
-    <>
-      {/* HEADER COVER */}
-      <div className="relative h-52 md:h-64 rounded-b-3xl overflow-hidden shadow-lg bg-gray-300 dark:bg-gray-800 mb-24">
-        <img
-          src={user.coverPhoto || "/default-cover.jpg"}
-          alt="cover"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+    <div className="px-4 md:px-8 py-6 pb-24">
+      
+      {/* PREMIUM PROFILE HEADER */}
+      <div className="relative w-full rounded-[28px] p-8 lg:p-12 mb-8 overflow-hidden bg-[#171A26]/85 backdrop-blur-3xl border border-[#292D40] shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-500">
+        
+        {/* Ambient Background Glow inside the header */}
+        <div className="absolute top-0 right-0 w-72 h-72 bg-[#6558F5]/14 blur-[110px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-60 h-60 bg-[#55E6FF]/08 blur-[90px] rounded-full pointer-events-none translate-y-1/2 -translate-x-1/2" />
 
-        {/* AVATAR */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="absolute -bottom-20 left-5 md:left-10 cursor-pointer"
-          onClick={() => setViewAvatar(true)}
-        >
-          <div className="p-[4px] rounded-full bg-gradient-to-br from-primary via-primary-glow to-secondary shadow-neon-blue">
-            <UserAvatar
-              src={user.avatar}
-              name={user.name}
-              className="w-36 h-36 border-4 border-white dark:border-bg-dark rounded-full"
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
+          
+          {/* Avatar with Animated Glow Ring */}
+          <div className="relative group cursor-pointer" onClick={() => setViewAvatar(true)}>
+            <div className="absolute -inset-1 bg-gradient-to-tr from-[#6558F5] via-[#9B6DFF] to-[#FF6B8A] rounded-full opacity-70 group-hover:opacity-100 blur-md transition-opacity duration-500" />
+            <img 
+              src={getImageUrl(user.avatar, 'avatar')} 
+              alt="Profile" 
+              className="relative w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-[3px] border-[#101321] shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
             />
           </div>
-        </motion.div>
-      </div>
 
-      {/* USER DETAILS */}
-      <div className="px-5 md:px-10 mt-8">
-        <div className="flex flex-col md:flex-row justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold">{user.name}</h1>
-              {user.isVerified && (
-                <FaCheckCircle className="text-primary-glow text-xl" />
-              )}
+          {/* User Info & Glass Stats */}
+          <div className="flex flex-col items-center md:items-start flex-1 w-full">
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-[#F7F7FC]">
+                {user.name}
+              </h1>
+              {user.isVerified && <FaCheckCircle className="text-[#55E6FF] text-xl" />}
             </div>
+            <p className="text-[#A5A9BB] font-medium tracking-wide mb-3 text-sm">
+              @{user.username || 'user'}
+            </p>
 
-            <p className="text-slate-400 text-sm">@{user.email?.split("@")[0]}</p>
-
-            {/* FOLLOW/POST COUNTS */}
-            <div className="flex gap-6 mt-4 text-slate-600 dark:text-slate-300">
-              <button
-                onClick={() => navigate(`/profile/${id}?tab=posts`)}
-                className="hover:text-primary smooth"
-              >
-                <span className="font-bold text-xl">{posts.length}</span> Posts
-              </button>
-              <button
-                onClick={() => navigate(`/profile/${id}?tab=followers`)}
-                className="hover:text-primary smooth"
-              >
-                <span className="font-bold text-xl">{followers.length}</span>{" "}
-                Followers
-              </button>
-              <button
-                onClick={() => navigate(`/profile/${id}?tab=following`)}
-                className="hover:text-primary smooth"
-              >
-                <span className="font-bold text-xl">{following.length}</span>{" "}
-                Following
-              </button>
-            </div>
-
-            <p className="mt-4 max-w-xl text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+            <p className="max-w-xl text-center md:text-left text-[#F7F7FC]/90 mb-5 whitespace-pre-line leading-relaxed text-sm">
               {user.bio || "No bio available."}
             </p>
 
-            {/* SOCIALS */}
-            <div className="flex gap-3 mt-4 flex-wrap">
+            {/* Social Links */}
+            <div className="flex gap-2.5 mb-6 flex-wrap justify-center md:justify-start">
               {user.socialLinks?.twitter && (
-                <a
-                  href={user.socialLinks.twitter}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-2 rounded-xl text-blue-500 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 smooth"
-                >
+                <a href={user.socialLinks.twitter} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#55E6FF] bg-[#101321] border border-[#292D40] hover:border-[#55E6FF]/50 transition-colors shadow-sm">
                   <FaTwitter />
                 </a>
               )}
-
               {user.socialLinks?.instagram && (
-                <a
-                  href={user.socialLinks.instagram}
-                  className="p-2 rounded-xl text-pink-500 bg-pink-100 dark:bg-pink-900/20 hover:bg-pink-200 smooth"
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href={user.socialLinks.instagram} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#FF6B8A] bg-[#101321] border border-[#292D40] hover:border-[#FF6B8A]/50 transition-colors shadow-sm">
                   <FaInstagram />
                 </a>
               )}
-
               {user.socialLinks?.linkedin && (
-                <a
-                  href={user.socialLinks.linkedin}
-                  className="p-2 rounded-xl text-blue-700 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 smooth"
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href={user.socialLinks.linkedin} target="_blank" rel="noreferrer" className="p-2.5 rounded-full text-[#6558F5] bg-[#101321] border border-[#292D40] hover:border-[#6558F5]/50 transition-colors shadow-sm">
                   <FaLinkedin />
                 </a>
               )}
             </div>
-          </div>
 
-          {/* ACTION BUTTONS */}
-          <div className="flex gap-3 h-full">
+            {/* Floating Glass Statistic Cards */}
+            <div className="flex gap-3.5 w-full md:w-auto">
+              {[
+                { label: 'Posts', value: user.totalPosts || posts.length || 0 },
+                { label: 'Followers', value: followers.length || 0 },
+                { label: 'Following', value: following.length || 0 },
+              ].map((stat, idx) => (
+                <div key={idx} className="flex-1 md:flex-none flex flex-col items-center justify-center px-6 py-3 rounded-[18px] bg-[#101321] border border-[#292D40] shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-[#6558F5]/40">
+                  <span className="text-xl md:text-2xl font-bold font-display text-[#F7F7FC] mb-0.5">
+                    {stat.value}
+                  </span>
+                  <span className="text-[10px] text-[#A5A9BB] uppercase tracking-wider font-semibold">
+                    {stat.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Action Buttons (Edit Profile / Follow / Share / QR) */}
+          <div className="mt-6 md:mt-0 flex gap-2.5 h-full items-center">
             {isMe ? (
-              <button
-                onClick={() => setEditOpen(true)}
-                className="px-6 py-3 rounded-xl border smooth hover:bg-white/50 dark:hover:bg-white/10"
-              >
+              <button onClick={() => setEditOpen(true)} className="px-8 py-3 rounded-full bg-[#6558F5] text-white font-semibold shadow-[0_0_20px_rgba(101,88,245,0.4)] hover:shadow-[0_0_30px_rgba(101,88,245,0.6)] hover:bg-[#5548e6] transition-all duration-300 transform hover:-translate-y-0.5 cursor-pointer">
                 Edit Profile
               </button>
             ) : (
-              <FollowButton userId={id} />
+              <div className="flex items-center">
+                <FollowButton userId={id} />
+              </div>
             )}
-
+            
             <button
               onClick={copyProfileLink}
-              className="p-3 rounded-xl border smooth hover:bg-white/50 dark:hover:bg-white/10"
+              className="p-3.5 rounded-full border border-[#292D40] bg-[#101321] text-[#F7F7FC] hover:text-[#55E6FF] hover:border-[#55E6FF]/50 shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
+              title="Share Profile"
             >
               <FaShare />
             </button>
-
             <button
               onClick={() => setQrOpen(true)}
-              className="p-3 rounded-xl border smooth hover:bg-white/50 dark:hover:bg-white/10"
+              className="p-3.5 rounded-full border border-[#292D40] bg-[#101321] text-[#F7F7FC] hover:text-[#55E6FF] hover:border-[#55E6FF]/50 shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
+              title="QR Code"
             >
               <FaQrcode />
             </button>
@@ -302,44 +303,43 @@ export default function ProfilePage() {
 
       <ProfileHighlights isMe={isMe} userId={id} />
 
-      {/* TABS */}
-      <div className="mt-8 px-5 md:px-10 border-b border-white/20 dark:border-white/10 flex gap-8 overflow-x-auto no-scrollbar">
-        {["posts", "followers", "following", ...(isMe ? ["saved"] : [])].map(
-          (t) => (
+      {/* FLOATING PILL TABS */}
+      <div className="flex justify-center mb-8 mt-8">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-full bg-[#101321] border border-[#292D40] shadow-md overflow-x-auto no-scrollbar">
+          {["posts", "followers", "following", ...(isMe ? ["saved"] : [])].map((t) => (
             <button
               key={t}
               onClick={() => navigate(`/profile/${id}?tab=${t}`)}
-              className={`py-4 text-sm font-bold relative smooth ${
-                tab === t
-                  ? "text-primary"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
+              className="relative px-6 py-2.5 rounded-full text-xs font-semibold tracking-wide transition-colors duration-300 capitalize cursor-pointer"
             >
-              {t}
               {tab === t && (
                 <motion.div
-                  layoutId="profile-tab-underline"
-                  className="h-[3px] bg-primary rounded-full absolute left-0 right-0 bottom-0 shadow-neon-blue"
+                  layoutId="profile-tab-indicator"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#6558F5] to-[#9B6DFF] shadow-[0_0_15px_rgba(101,88,245,0.4)]"
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 />
               )}
+              <span className={`relative z-10 ${tab === t ? 'text-white' : 'text-[#A5A9BB] hover:text-white'}`}>
+                {t}
+              </span>
             </button>
-          )
-        )}
+          ))}
+        </div>
       </div>
 
       {/* CONTENT */}
-      <div className="px-5 md:px-10 py-8 min-h-[300px]">
+      <div className="min-h-[300px]">
         {tab === "posts" && !isPrivateError && (
           <>
             {posts.length > 0 ? (
-              <PostGrid posts={posts} />
+              renderPremiumGrid(posts)
             ) : (
-              <div className="text-center text-slate-400 py-10 border-2 border-dashed rounded-xl">
+              <div className="text-center text-[#A5A9BB] py-14 border-2 border-dashed border-[#292D40] rounded-[24px]">
                 No posts yet.
                 {isMe && (
                   <button
                     onClick={() => setCreatePostOpen(true)}
-                    className="block mt-3 text-primary hover:underline"
+                    className="block mt-3 mx-auto text-[#55E6FF] hover:underline font-semibold text-sm cursor-pointer"
                   >
                     Create your first post
                   </button>
@@ -353,38 +353,38 @@ export default function ProfilePage() {
 
             {postsLoading && (
               <div className="text-center pt-6">
-                <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="w-7 h-7 border-2 border-[#6558F5] border-t-transparent rounded-full animate-spin mx-auto" />
               </div>
             )}
           </>
         )}
 
         {isPrivateError && tab === "posts" && (
-          <div className="flex flex-col items-center justify-center py-20 border rounded-3xl bg-white/40 dark:bg-black/20">
-            <FaLock className="text-4xl text-gray-500 mb-4" />
-            <p className="text-xl font-bold">This Account Is Private</p>
-            <p className="text-sm text-slate-400">
+          <div className="flex flex-col items-center justify-center py-20 border border-[#292D40] rounded-[24px] bg-[#171A26]/80 backdrop-blur-md">
+            <FaLock className="text-4xl text-[#A5A9BB] mb-4" />
+            <p className="text-xl font-bold font-display text-[#F7F7FC]">This Account Is Private</p>
+            <p className="text-sm text-[#A5A9BB] mt-2">
               Follow this user to view posts.
             </p>
           </div>
         )}
 
         {tab === "followers" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {followers.length > 0 ? (
               followers.map((u) => (
                 <div
                   key={u._id}
-                  className="neu-card flex items-center gap-3 p-3 bg-white dark:bg-bg-dark"
+                  className="flex items-center gap-4 p-4 rounded-[20px] bg-[#171A26] border border-[#292D40] shadow-sm hover:border-[#6558F5]/40 transition"
                 >
                   <UserAvatar
                     src={u.avatar}
                     name={u.name}
-                    className="w-12 h-12"
+                    className="w-12 h-12 cursor-pointer transition-transform hover:scale-105"
                     onClick={() => navigate(`/profile/${u._id}`)}
                   />
                   <div
-                    className="flex-1 font-medium cursor-pointer"
+                    className="flex-1 font-medium cursor-pointer text-[#F7F7FC] truncate text-sm"
                     onClick={() => navigate(`/profile/${u._id}`)}
                   >
                     {u.name}
@@ -396,27 +396,27 @@ export default function ProfilePage() {
                 </div>
               ))
             ) : (
-              <p className="text-center text-slate-400">No followers yet.</p>
+              <p className="text-center text-[#A5A9BB] col-span-full py-10">No followers yet.</p>
             )}
           </div>
         )}
 
         {tab === "following" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {following.length > 0 ? (
               following.map((u) => (
                 <div
                   key={u._id}
-                  className="neu-card flex items-center gap-3 p-3"
+                  className="flex items-center gap-4 p-4 rounded-[20px] bg-[#171A26] border border-[#292D40] shadow-sm hover:border-[#6558F5]/40 transition"
                 >
                   <UserAvatar
                     src={u.avatar}
                     name={u.name}
-                    className="w-12 h-12"
+                    className="w-12 h-12 cursor-pointer transition-transform hover:scale-105"
                     onClick={() => navigate(`/profile/${u._id}`)}
                   />
                   <div
-                    className="flex-1 font-medium cursor-pointer"
+                    className="flex-1 font-medium cursor-pointer text-[#F7F7FC] truncate text-sm"
                     onClick={() => navigate(`/profile/${u._id}`)}
                   >
                     {u.name}
@@ -425,13 +425,21 @@ export default function ProfilePage() {
                 </div>
               ))
             ) : (
-              <p className="text-center text-slate-400">No following yet.</p>
+              <p className="text-center text-[#A5A9BB] col-span-full py-10">No following yet.</p>
             )}
           </div>
         )}
 
         {tab === "saved" && isMe && (
-          <PostGrid posts={savedPosts} />
+           <>
+             {savedPosts.length > 0 ? (
+                renderPremiumGrid(savedPosts)
+             ) : (
+               <div className="text-center text-[#A5A9BB] py-14 border-2 border-dashed border-[#292D40] rounded-[24px]">
+                 No saved posts yet.
+               </div>
+             )}
+           </>
         )}
       </div>
 
@@ -458,11 +466,11 @@ export default function ProfilePage() {
       {/* QR MODAL */}
       {qrOpen && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center px-6"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center px-6 transition-opacity"
           onClick={() => setQrOpen(false)}
         >
           <div
-            className="bg-white dark:bg-bg-dark p-6 rounded-2xl shadow-xl smooth"
+            className="bg-[#070B14]/95 p-6 rounded-3xl shadow-2xl border border-white/15 backdrop-blur-2xl transform transition-transform"
             onClick={(e) => e.stopPropagation()}
           >
             <MyQR />
@@ -472,10 +480,10 @@ export default function ProfilePage() {
 
       {/* QR SCANNER */}
       {qrScannerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-bg-dark rounded-xl p-4 relative">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#070B14]/95 rounded-3xl p-5 relative shadow-2xl border border-white/15 backdrop-blur-2xl">
             <button
-              className="absolute top-2 right-2 p-2 bg-black/40 text-white rounded-full"
+              className="absolute top-4 right-4 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 transition-colors z-10"
               onClick={() => setQrScannerOpen(false)}
             >
               <FaTimes />
@@ -484,6 +492,6 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

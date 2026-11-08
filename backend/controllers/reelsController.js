@@ -1,8 +1,11 @@
 // backend/controllers/reelsController.js
 const Reel = require('../models/Reel');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 const fs = require('fs');
 const path = require('path');
 const cloudinaryUtil = require('../utils/cloudinary');
+const { deleteFile } = require('../utils/cloudinary');
 
 // ---------------- SAFE UPLOAD ----------------
 const safeUpload = async (filePath) => {
@@ -12,12 +15,11 @@ const safeUpload = async (filePath) => {
       'social_reels',
       { resource_type: 'video' }
     );
+    try { fs.unlinkSync(filePath); } catch {}
     return r.secure_url;
   } catch (e) {
     console.error('Reel upload error', e);
     return `/uploads/${path.basename(filePath)}`;
-  } finally {
-    try { fs.unlinkSync(filePath); } catch {}
   }
 };
 
@@ -63,6 +65,49 @@ exports.feed = async (req, res) => {
         : false,
     }));
 
+    
+    if (!reelsWithMeta || reelsWithMeta.length === 0) {
+      const demoReels = [
+        {
+          _id: 'demo1',
+          videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/dog.mp4',
+          posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/dog.jpg',
+          caption: 'Golden hours & cinematic freedom ✨🐕 #SocialoMoments #CinematicNoir',
+          user: { name: 'Elena Rostova', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
+          likes: ['user1', 'user2', 'user3'],
+          comments: [1, 2]
+        },
+        {
+          _id: 'demo2',
+          videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/sea_turtle.mp4',
+          posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/sea_turtle.jpg',
+          caption: 'Azure currents & deep tranquility 🌊🐢 #OceanDrift #NatureArt',
+          user: { name: 'Kai Sterling', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' },
+          likes: ['user1'],
+          comments: []
+        },
+        {
+          _id: 'demo3',
+          videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/elephants.mp4',
+          posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/elephants.jpg',
+          caption: 'Serengeti sovereigns under dusk 🐘🌅 #Wildlife #MajesticEarth',
+          user: { name: 'Aria Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80' },
+          likes: ['user1', 'user2'],
+          comments: [1]
+        },
+        {
+          _id: 'demo4',
+          videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/samples/cld-sample-video.mp4',
+          posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/samples/cld-sample-video.jpg',
+          caption: 'Precision cadence & fluid motion ⚡🏎️ #SpeedCraft #NoirVision',
+          user: { name: 'Marcus Thorne', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80' },
+          likes: ['user1', 'user2', 'user3', 'user4'],
+          comments: [1, 2, 3]
+        }
+      ];
+      return res.json(demoReels);
+    }
+
     res.json(reelsWithMeta);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -97,22 +142,99 @@ exports.likeReel = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
-// ... existing imports
 
 // ---------------- INCREMENT VIEW ----------------
 exports.viewReel = async (req, res) => {
   try {
     const { id } = req.params;
-    // $inc is atomic and efficient
     await Reel.findByIdAndUpdate(id, { $inc: { views: 1 } });
     res.json({ success: true });
   } catch (err) {
-    // Fail silently for analytics
     res.status(200).json({ success: false }); 
   }
 };
-// 🔥 NEW: Delete Reel
 
+// ---------------- TIP REEL CREATOR ----------------
+exports.tipReel = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const amount = Math.max(1, Math.floor(Number(req.body.amount || 10)));
+    const userId = req.user._id;
+
+    let reel = null;
+    if (!String(id).startsWith('demo')) {
+      reel = await Reel.findById(id).populate('user', 'name avatar');
+    }
+
+    const creatorId = reel?.user?._id || reel?.user;
+    if (creatorId && String(creatorId) === String(userId)) {
+      return res.status(400).json({ success: false, message: 'Cannot tip your own reel' });
+    }
+
+    const sender = await User.findById(userId);
+    const senderBalance = Number(sender?.wallet?.balance || 0);
+    if (senderBalance < amount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient Treasury coins (${senderBalance} coins available). Claim your daily bonus in Wallet!`
+      });
+    }
+
+    // Debit sender
+    const updatedSender = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { 'wallet.balance': -amount, 'wallet.totalSent': amount } },
+      { new: true }
+    );
+
+    // Credit creator if not demo
+    let creatorName = reel?.user?.name || 'Creator';
+    if (creatorId) {
+      const updatedCreator = await User.findByIdAndUpdate(
+        creatorId,
+        { $inc: { 'wallet.balance': amount, 'wallet.totalReceived': amount } },
+        { new: true }
+      );
+
+      const io = req.app.get('io') || global.io;
+      if (io) {
+        io.to(String(creatorId)).emit('wallet:update', {
+          balance: updatedCreator.wallet.balance,
+          amount,
+          message: `${sender.name} tipped you ${amount} coins on your reel! 💎`
+        });
+      }
+    }
+
+    const txKey = `reeltip:${userId}:${id}:${Date.now()}`;
+    await Transaction.create([
+      {
+        user: userId,
+        type: 'debit',
+        amount,
+        description: `Tipped ${creatorName} on reel`,
+        idempotencyKey: txKey
+      }
+    ]).catch(e => console.warn('Tip tx log error:', e.message));
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.to(String(userId)).emit('wallet:update', { balance: updatedSender.wallet.balance });
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully tipped ${amount} coins to ${creatorName}!`,
+      balance: updatedSender.wallet.balance,
+      amount
+    });
+  } catch (err) {
+    console.error('tipReel err', err);
+    res.status(500).json({ success: false, message: 'Server error during tip' });
+  }
+};
+
+// ---------------- DELETE REEL ----------------
 exports.deleteReel = async (req, res) => {
   try {
     const reel = await Reel.findById(req.params.id);
@@ -123,11 +245,8 @@ exports.deleteReel = async (req, res) => {
         return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    // 🔥 FIX: Actually delete the file from Cloudinary
     if (reel.videoUrl) {
-        // utils/cloudinary.js needs to export deleteFile for this to work
-        const { deleteFile } = require('../utils/cloudinary'); 
-        await deleteFile(reel.videoUrl);
+        await deleteFile(reel.videoUrl).catch(() => {});
     }
 
     await Reel.findByIdAndDelete(req.params.id);

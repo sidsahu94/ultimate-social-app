@@ -38,6 +38,7 @@
     "metascraper-title": "^5.49.5",
     "mime-types": "^3.0.1",
     "mongodb": "4.1",
+    "mongodb-memory-server": "^11.3.0",
     "mongoose": "^8.20.2",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
@@ -52,8 +53,10 @@
     "twilio": "^5.11.2",
     "uuid": "^13.0.0",
     "web-push": "^3.6.7",
+    "winston": "^3.19.0",
     "xss-clean": "^0.1.4",
-    "yahoo-finance2": "^3.11.2"
+    "yahoo-finance2": "^3.11.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

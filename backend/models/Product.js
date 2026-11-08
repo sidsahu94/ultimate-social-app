@@ -1,16 +1,20 @@
+
 // backend/models/Product.js
 const mongoose = require('mongoose');
 
 const ProductSchema = new mongoose.Schema({
-  owner: { type:mongoose.Schema.Types.ObjectId, ref:'User' },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   title: String,
   price: Number,
   image: String,
   desc: String,
   tags: [String],
-  stock: { type:Number, default:1 }
-}, { timestamps:true });
+  stock: { type: Number, default: 1 }
+}, { timestamps: true });
 
-ProductSchema.index({ title:'text', tags:1 });
+// 🔥 FIX: Separate the indexes. 
+// You cannot mix 'text' and 'array' in a single compound index in MongoDB.
+ProductSchema.index({ title: 'text' });
+ProductSchema.index({ tags: 1 });
 
 module.exports = mongoose.model('Product', ProductSchema);

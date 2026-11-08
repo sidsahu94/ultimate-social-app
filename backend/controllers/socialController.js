@@ -30,20 +30,33 @@ exports.badges = async (req,res)=>{
   res.json({ badges:[...badges] });
 };
 
-exports.memories = async (req,res)=>{
-  const now = new Date();
-  const month = now.getMonth();
-  const date = now.getDate();
-  const posts = await Post.find({ user: req.user._id }).lean();
-  const memories = posts.filter(p => {
-    const d = new Date(p.createdAt);
-    return d.getMonth()===month && d.getDate()===date && d.getFullYear() < now.getFullYear();
-  });
-  res.json(memories);
+exports.memories = async (req, res) => {
+    try {
+        const now = new Date();
+        const month = now.getMonth() + 1; // MongoDB months map 1-12
+        const date = now.getDate();
+        const currentYear = now.getFullYear();
+
+        const memories = await Post.find({
+            user: req.user._id,
+            $expr: {
+                $and: [
+                    { $eq: [{ $month: '$createdAt' }, month] },
+                    { $eq: [{ $dayOfMonth: '$createdAt' }, date] },
+                    { $lt: [{ $year: '$createdAt' }, currentYear] }
+                ]
+            }
+        }).sort({ createdAt: -1 }).populate('user', 'name username avatar');
+
+        res.json({ success: true, data: memories });
+    } catch (error) {
+        console.error("Memories Error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch memories" });
+    }
 };
 
 exports.linkNft = async (req,res)=>{
-  const { nftUrl } = req.body; // simple proof for demo
+  const { nftUrl } = req.body;
   await User.findByIdAndUpdate(req.user._id, { nftPfpUrl:nftUrl });
   res.json({ ok:true, nftPfpUrl:nftUrl });
 };

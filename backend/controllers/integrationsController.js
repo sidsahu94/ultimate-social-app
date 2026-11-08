@@ -6,7 +6,7 @@ const axios = require('axios');
 let marketCache = { data: null, lastFetch: 0 };
 const CACHE_DURATION = 60 * 1000; // 1 Minute Cache
 
-// --- MOCK DATA (Fallback if API fails) ---
+// --- MOCK DATA (Fallback) ---
 const MOCK_MARKET_DATA = {
     rates: { USD: 1, INR: 83.50, EUR: 0.92, GBP: 0.79, JPY: 150.0 },
     metals: [
@@ -21,7 +21,6 @@ const MOCK_MARKET_DATA = {
         { name: 'Brent Crude', unit: 'Barrel', price: 82.10, change: 1.1 },
         { name: 'Natural Gas', unit: 'MMBtu', price: 1.80, change: -2.5 }
     ],
-    // 🔥 NEW: Crypto Fallback
     crypto: [
         { name: 'Bitcoin', symbol: 'BTC', type: 'crypto', unit: 'USD', price: 65000.00, change: 1.5 },
         { name: 'Ethereum', symbol: 'ETH', type: 'crypto', unit: 'USD', price: 3500.00, change: 0.8 }
@@ -29,11 +28,40 @@ const MOCK_MARKET_DATA = {
 };
 
 // --- NEWS CONTROLLER ---
+const FALLBACK_NEWS = [
+  {
+    title: 'The Evolution of Spatial Audio in Digital Creativity',
+    link: 'https://news.ycombinator.com',
+    image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+    source: 'TechChronicle',
+    date: new Date().toISOString(),
+    description: 'How spatialized WebRTC soundscapes and binaural synthesis are transforming virtual social spaces for creators globally.'
+  },
+  {
+    title: 'Next-Gen Neural Interfaces and Micro-Interactions in UI Design',
+    link: 'https://techcrunch.com',
+    image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80',
+    source: 'DesignForge',
+    date: new Date(Date.now() - 3600000).toISOString(),
+    description: 'Exploring how quantum blur, specular glass surfaces, and responsive haptics define the future of high-luxury social platforms.'
+  },
+  {
+    title: 'Decentralized Creator Economies Surpass Traditional Social Ad Networks',
+    link: 'https://bloomberg.com',
+    image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80',
+    source: 'GlobalMarkets',
+    date: new Date(Date.now() - 7200000).toISOString(),
+    description: 'Direct peer-to-peer tip envelopes, tokenized creator badges, and zero-knowledge wallets lead unprecedented creator monetization growth.'
+  }
+];
+
 exports.getNews = async (req, res) => {
   try {
     const { country = 'in', q } = req.query;
+    // Fallback if API key missing
+    if (!process.env.NEWSDATA_API_KEY) return res.json(FALLBACK_NEWS);
+
     const url = `https://newsdata.io/api/1/news?apikey=${process.env.NEWSDATA_API_KEY}&country=${country}&q=${q || 'top'}&language=en`;
-    
     const response = await axios.get(url);
     
     if (!response.data || !response.data.results) throw new Error("No news data");
@@ -49,11 +77,11 @@ exports.getNews = async (req, res) => {
     res.json(articles);
   } catch (err) {
     console.error("News API Error (Returning Empty):", err.message);
-    res.json([]); 
+    res.json(FALLBACK_NEWS); 
   }
 };
 
-// --- MARKETS CONTROLLER (Bulletproof) ---
+// --- MARKETS CONTROLLER ---
 exports.getMarkets = async (req, res) => {
   try {
     const now = Date.now();
@@ -67,12 +95,12 @@ exports.getMarkets = async (req, res) => {
     let forex = [];
     
     try {
-        yahooFinance.suppressNotices(['yahooSurvey']); 
+        // 🔥 FIX: Removed deprecated suppressNotices call
         
         results = await yahooFinance.quote([
             'GC=F', 'SI=F', 'HG=F', 'PL=F', 'PA=F', // Metals
             'CL=F', 'BZ=F', 'NG=F',                 // Energy
-            'BTC-USD', 'ETH-USD'                    // 🔥 NEW: Crypto
+            'BTC-USD', 'ETH-USD'                    // Crypto
         ]);
         
         forex = await yahooFinance.quote(['INR=X', 'EUR=X', 'GBP=X', 'JPY=X']);
@@ -144,7 +172,6 @@ exports.getMarkets = async (req, res) => {
           change: get('NG=F').regularMarketChangePercent || 0
         }
       ],
-      // 🔥 NEW: Crypto Section
       crypto: [
         { 
           name: 'Bitcoin', symbol: 'BTC', type: 'crypto', unit: 'USD',
@@ -168,22 +195,15 @@ exports.getMarkets = async (req, res) => {
   }
 };
 
-
-// 🔥 NEW: Get TURN Credentials via Metered
 exports.getTurnCredentials = async (req, res) => {
   try {
     const { METERED_DOMAIN, METERED_API_KEY } = process.env;
+    if (!METERED_DOMAIN) throw new Error("No Metered Config");
 
-    // Use the specific endpoint from your snippet
     const url = `https://${METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
-    
     const response = await axios.get(url);
-    
-    // Send the array of ICE servers back to the frontend
     res.json(response.data); 
   } catch (err) {
-    console.error("TURN Fetch Error:", err.message);
-    // Fallback to free public STUN servers if Metered fails
     res.json([
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:global.stun.twilio.com:3478' }

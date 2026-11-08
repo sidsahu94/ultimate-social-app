@@ -1,55 +1,258 @@
 // backend/routes/posts.js
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+
 const postsController = require('../controllers/postsController');
 const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const validateContent = require('../middleware/validateContent');
+const upload = require('../utils/multer');
 
-const upload = multer({
-  dest: path.join(__dirname, '..', 'uploads'),
-  limits: { fileSize: 50 * 1024 * 1024 }
-});
+// ==========================================
+// SAFE FALLBACK HANDLER
+// ==========================================
 
-// Public Feeds
-router.get('/feed', optionalAuth, postsController.getFeed);
-router.get('/trending', optionalAuth, postsController.trending);
-router.get('/search', optionalAuth, postsController.searchPosts);
+const notImplemented = (name) => {
+  return (req, res) => {
+    return res.status(501).json({
+      success: false,
+      message: `${name} controller not implemented`
+    });
+  };
+};
 
-// 🔥 NEW: Drafts Route (Must come before /:id to avoid collision)
-router.get('/drafts', protect, postsController.getDrafts);
+// ==========================================
+// CONTROLLER SAFETY
+// ==========================================
 
-// Scheduled Posts
-router.get('/scheduled', protect, postsController.getScheduledPosts);
-router.post('/scheduled', protect, upload.any(), validateContent, postsController.schedulePost);
+const getFeed =
+  postsController.getFeed ||
+  notImplemented('getFeed');
 
-// Post CRUD
-router.post('/', protect, upload.any(), validateContent, postsController.createPost);
-router.get('/:postId', protect, postsController.getPostById);
+const trending =
+  postsController.trending ||
+  notImplemented('trending');
 
-// Fallbacks for Single Post Fetch (to catch frontend variations)
-router.get('/post/:id', protect, postsController.getPostById);
-router.get('/posts/post/:id', protect, postsController.getPostById);
+const searchPosts =
+  postsController.searchPosts ||
+  notImplemented('searchPosts');
 
-// 🔥 NEW: View Counting
-router.post('/:id/view', optionalAuth, postsController.viewPost);
+const getDrafts =
+  postsController.getDrafts ||
+  notImplemented('getDrafts');
 
-// Interactions
-router.put('/like/:postId', protect, postsController.likePost);
-router.post('/:postId/react', protect, postsController.reactPost);
+const getScheduledPosts =
+  postsController.getScheduledPosts ||
+  notImplemented('getScheduledPosts');
 
-// Bookmarks
-router.post('/:postId/bookmark', protect, postsController.toggleBookmark);
-router.get('/bookmarks/me', protect, postsController.getBookmarks);
+const schedulePost =
+  postsController.schedulePost ||
+  notImplemented('schedulePost');
 
-// User Posts (Profile)
-router.get('/user/:id', optionalAuth, postsController.getPostsByUser);
-router.put('/:id', protect, upload.any(), validateContent, postsController.updatePost);
-router.delete('/:id', protect, postsController.deletePost);
-router.get('/:id/likes', protect, postsController.getPostLikes);
+const unlockPost = postsController.unlockPost || notImplemented("unlockPost");
 
-// Utilities
-router.post('/unfurl', postsController.unfurlLink);
+const createPost =
+  postsController.createPost ||
+  notImplemented('createPost');
+
+const getPostById =
+  postsController.getPostById ||
+  notImplemented('getPostById');
+
+const viewPost =
+  postsController.viewPost ||
+  notImplemented('viewPost');
+
+const likePost =
+  postsController.likePost ||
+  notImplemented('likePost');
+
+const reactPost =
+  postsController.reactPost ||
+  notImplemented('reactPost');
+
+const toggleBookmark =
+  postsController.toggleBookmark ||
+  notImplemented('toggleBookmark');
+
+const getBookmarks =
+  postsController.getBookmarks ||
+  notImplemented('getBookmarks');
+
+const getPostsByUser =
+  postsController.getPostsByUser ||
+  notImplemented('getPostsByUser');
+
+const updatePost =
+  postsController.updatePost ||
+  notImplemented('updatePost');
+
+const deletePost =
+  postsController.deletePost ||
+  notImplemented('deletePost');
+
+const getPostLikes =
+  postsController.getPostLikes ||
+  notImplemented('getPostLikes');
+
+const aiCompose =
+  postsController.aiCompose ||
+  notImplemented('aiCompose');
+
+const unfurlLink =
+  postsController.unfurlLink ||
+  notImplemented('unfurlLink');
+
+// ==========================================
+// PUBLIC FEEDS
+// ==========================================
+
+router.get('/feed', optionalAuth, getFeed);
+
+router.get('/trending', optionalAuth, trending);
+
+router.get('/search', optionalAuth, searchPosts);
+
+// ==========================================
+// DRAFTS
+// ==========================================
+
+router.get('/drafts', protect, getDrafts);
+
+// ==========================================
+// SCHEDULED POSTS
+// ==========================================
+
+router.get(
+  '/scheduled',
+  protect,
+  getScheduledPosts
+);
+
+router.post(
+  '/scheduled',
+  protect,
+  upload.any(),
+  validateContent,
+  schedulePost
+);
+
+// ==========================================
+// BOOKMARKS & USER POSTS (Static & Sub-path Routes FIRST)
+// ==========================================
+
+router.get(
+  ['/bookmarks/me', '/bookmarks'],
+  protect,
+  getBookmarks
+);
+
+router.post(
+  '/:postId/bookmark',
+  protect,
+  toggleBookmark
+);
+
+router.get(
+  '/user/:id',
+  optionalAuth,
+  getPostsByUser
+);
+
+// ==========================================
+// VIEWS & INTERACTIONS
+// ==========================================
+
+router.post(
+  '/:id/view',
+  optionalAuth,
+  viewPost
+);
+
+router.put(
+  '/like/:postId',
+  protect,
+  likePost
+);
+
+router.post(
+  '/:postId/react',
+  protect,
+  reactPost
+);
+
+router.post(
+  '/:id/unlock',
+  protect,
+  unlockPost
+);
+
+router.post(
+  '/ai/compose',
+  protect,
+  aiCompose
+);
+
+// ==========================================
+// POST CRUD & DYNAMIC ID (Must be after specific sub-routes)
+// ==========================================
+
+router.post(
+  '/',
+  protect,
+  upload.any(),
+  validateContent,
+  createPost
+);
+
+router.get(
+  '/:postId',
+  optionalAuth,
+  getPostById
+);
+
+// Fallbacks
+router.get(
+  '/post/:id',
+  optionalAuth,
+  getPostById
+);
+
+router.get(
+  '/posts/post/:id',
+  optionalAuth,
+  getPostById
+);
+
+router.put(
+  '/:id',
+  protect,
+  upload.any(),
+  validateContent,
+  updatePost
+);
+
+router.delete(
+  '/:id',
+  protect,
+  deletePost
+);
+
+router.get(
+  '/:id/likes',
+  protect,
+  getPostLikes
+);
+
+// ==========================================
+// UTILITIES
+// ==========================================
+
+router.post(
+  '/unfurl',
+  unfurlLink
+);
 
 module.exports = router;

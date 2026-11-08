@@ -22,7 +22,7 @@ function proxiedUrl(url) {
 const LazyImage = ({ src, alt = '', className = '', style = {}, placeholder, onClick = () => {} }) => {
   const [visible, setVisible] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false); // 🔥 NEW: Track errors
+  const [error, setError] = useState(false);
   const imgRef = useRef();
 
   useEffect(() => {
@@ -39,21 +39,21 @@ const LazyImage = ({ src, alt = '', className = '', style = {}, placeholder, onC
     return () => observer.disconnect();
   }, []);
 
-  const finalSrc = error ? '/fallback-image.png' : proxiedUrl(src); // 🔥 Fallback logic
+  const finalSrc = error ? '/fallback-image.png' : proxiedUrl(src);
 
   return (
-    <div ref={imgRef} className={`relative overflow-hidden bg-gray-100 dark:bg-gray-800 ${className}`} style={style} onClick={onClick}>
+    <div ref={imgRef} className={`relative overflow-hidden bg-[#070B14] ${className}`} style={style} onClick={onClick}>
       
       {/* Placeholder / Skeleton */}
       {(!loaded && !error) && (
-        <div className="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse bg-gray-200 dark:bg-gray-700">
-            {placeholder || <FaImage className="opacity-20 text-2xl" />}
+        <div className="absolute inset-0 flex items-center justify-center text-[#CBD5E1]/30 animate-pulse bg-[#0A111E]">
+            {placeholder || <FaImage className="opacity-30 text-2xl" />}
         </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#070B14] text-[#CBD5E1]/40">
             <FaImage className="mb-1 opacity-50" />
             <span className="text-[10px]">Failed to load</span>
         </div>
@@ -65,7 +65,7 @@ const LazyImage = ({ src, alt = '', className = '', style = {}, placeholder, onC
           src={finalSrc} 
           alt={alt} 
           onLoad={() => setLoaded(true)}
-          onError={() => { setError(true); setLoaded(true); }} // 🔥 Handle error
+          onError={() => { setError(true); setLoaded(true); }}
           className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         />
       )}

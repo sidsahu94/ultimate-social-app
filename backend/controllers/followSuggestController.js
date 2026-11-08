@@ -1,49 +1,65 @@
 // backend/controllers/followSuggestController.js
 const User = require('../models/User');
 
+const suggestCache = new Map();
+
 exports.suggest = async (req, res) => {
   try {
-      const meId = req.user._id;
-      
-      // 1. Get my data safely
-      const me = await User.findById(meId).select('following blockedUsers').lean();
-      
-      // If user deleted or DB corrupted, return empty list instead of crashing
-      if (!me) return res.json([]); 
+    const meId = req.user._id;
+    const cacheKey = String(meId);
+    const cached = suggestCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return res.json(cached.data);
+    }
 
-      const following = new Set((me.following || []).map(String));
-      const blocked = new Set((me.blockedUsers || []).map(String));
-      
-      const pool = new Set();
+    const me = await User.findById(meId).select('following blockedUsers').lean();
+    if (!me) return res.json([]);
 
-      // 2. Get Popular Users
-      const popular = await User.find({ _id: { $ne: meId } }) // Exclude self in DB query
-        .sort({ 'followers.length': -1 })
-        .limit(50)
-        .select('_id followers');
+    const following = new Set((me.following || []).map(String));
+    const blocked = new Set((me.blockedUsers || []).map(String));
 
-      popular.forEach(u => {
-          const uid = String(u._id);
-          // Filter: Not already following, Not blocked
-          if (!following.has(uid) && !blocked.has(uid)) {
-              pool.add(uid);
-          }
-      });
+    const popular = await User.aggregate([
+      { $match: { _id: { $ne: meId }, isDeleted: { $ne: true } } },
+      {
+        $addFields: {
+          followerCount: { $size: { $ifNull: ['$followers', []] } },
+        },
+      },
+      { $sort: { followerCount: -1, createdAt: -1 } },
+      { $limit: 50 },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          avatar: 1,
+          followers: 1,
+          followerCount: 1,
+        },
+      },
+    ]);
 
-      // 3. Fetch details
-      if (pool.size === 0) return res.json([]); // Return empty array if no candidates
+    const pool = [];
+    for (const u of popular) {
+      const uid = String(u._id);
+      if (!following.has(uid) && !blocked.has(uid)) {
+        pool.push(uid);
+      }
+    }
 
-      const candidates = await User.find({ _id: { $in: Array.from(pool) } })
-        .select('name avatar followers')
-        .limit(20)
-        .lean();
+    if (pool.length === 0) return res.json([]);
 
-      candidates.sort((a,b)=> (b.followers?.length||0) - (a.followers?.length||0));
-      
-      res.json(candidates);
+    const candidates = await User.find({ _id: { $in: pool } })
+      .select('name avatar followers')
+      .lean();
+
+    candidates.sort((a, b) => (b.followers?.length || 0) - (a.followers?.length || 0));
+
+    const result = candidates.slice(0, 20);
+    suggestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+    res.json(result);
   } catch (err) {
-      console.error('Suggest error:', err);
-      // Return empty array on error so frontend .map() doesn't break
-      res.status(500).json([]); 
+    console.error('Follow suggest error:', err);
+    res.status(500).json({ message: 'Error retrieving suggestions' });
   }
 };

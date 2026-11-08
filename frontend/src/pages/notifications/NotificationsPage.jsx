@@ -8,25 +8,21 @@ import { Link } from "react-router-dom";
 import Spinner from "../../components/common/Spinner";
 import { useSelector } from "react-redux";
 import { FaBell, FaCircle, FaCheckDouble } from 'react-icons/fa';
+import UserAvatar from "../../components/ui/UserAvatar";
 
 // Helper to determine the link based on notification type
 const getNotificationLink = (n) => {
-    // If backend provides a direct link entity
     if (n.data?.link) return n.data.link;
 
     switch (n.type) {
         case 'like':
-            // Go to specific post
             return n.data?.postId ? `/post/${n.data.postId}` : null;
         case 'comment':
         case 'mention':
-            // 🔥 FIX: Add ?comments=true parameter so comments open automatically
             return n.data?.postId ? `/post/${n.data.postId}?comments=true` : null;
         case 'follow':
-            // Go to the profile of the person who followed
             return n.actor?._id ? `/profile/${n.actor._id}` : null;
         case 'message':
-            // Go to chat (or specific chat if ID available)
             return n.data?.chatId ? `/chat/${n.data.chatId}` : '/chat';
         case 'wallet':
         case 'system':
@@ -48,7 +44,7 @@ export default function NotificationsPage() {
         setLoading(true);
         try {
             const r = await API.get('/notifications');
-            setItems(r.data || []);
+            setItems(Array.isArray(r.data) ? r.data : (r.data?.data || []));
         } catch (e) { 
             addToast('Unable to load notifications', { type: 'error' }); 
         } finally {
@@ -60,18 +56,16 @@ export default function NotificationsPage() {
         if (!myId) return; 
         load();
         
-        // Listen for incoming notifications live
         const onNotif = (payload) => {
             setItems(prev => {
-                // Prevent duplicate addition by ID
-                if (prev.find(n => n._id === payload._id)) return prev;
-                return [payload, ...prev].slice(0, 100);
+                const safePrev = Array.isArray(prev) ? prev : [];
+                if (safePrev.find(n => n._id === payload._id)) return safePrev;
+                return [payload, ...safePrev].slice(0, 100);
             });
         };
         
         socket.on('notification', onNotif);
         
-        // Re-join personal room to ensure we get messages
         if (socket.connected) {
             socket.emit('joinRoom', { room: myId });
         }
@@ -81,16 +75,16 @@ export default function NotificationsPage() {
         };
     }, [myId]);
 
-    // 🔥 Mark single item as read (optimistic update)
     const markSingleRead = async (id) => {
-        // Prevent API call if already read
-        const target = items.find(i => i._id === id);
+        const safeItems = Array.isArray(items) ? items : [];
+        const target = safeItems.find(i => i._id === id);
         if (target && target.isRead) return;
 
-        // Optimistic UI Update
-        setItems(prev => prev.map(i => i._id === id ? { ...i, isRead: true } : i));
+        setItems(prev => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            return safePrev.map(i => i._id === id ? { ...i, isRead: true } : i);
+        });
         
-        // Dispatch event to update Navbar badge
         window.dispatchEvent(new Event('notificationsRead')); 
 
         try {
@@ -100,11 +94,12 @@ export default function NotificationsPage() {
         }
     };
 
-    // 🔥 Mark All Read Handler
     const handleMarkAllRead = async () => {
-        // Optimistic UI Update
-        setItems(prev => prev.map(n => ({ ...n, isRead: true })));
-        window.dispatchEvent(new Event('notificationsRead')); // Clear navbar badge
+        setItems(prev => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            return safePrev.map(n => ({ ...n, isRead: true }));
+        });
+        window.dispatchEvent(new Event('notificationsRead'));
         
         try {
             await API.put('/notifications/mark-read');
@@ -116,124 +111,144 @@ export default function NotificationsPage() {
 
     if (loading) return <div className="flex justify-center items-center h-[50vh]"><Spinner /></div>;
 
+    const safeItemsToRender = Array.isArray(items) ? items : [];
+
     return (
-        <div className="max-w-4xl mx-auto p-4">
-            <div className="card p-4 min-h-[80vh] bg-white dark:bg-gray-900 border dark:border-gray-800 shadow-xl rounded-3xl">
-                
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6 border-b dark:border-gray-800 pb-4 px-2">
-                    <h3 className="font-bold text-2xl flex items-center gap-3 text-gray-800 dark:text-white">
-                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400">
-                            <FaBell />
-                        </div>
-                        Activity
-                    </h3>
-                    <div className="flex gap-4 items-center">
-                        <button 
-                            onClick={handleMarkAllRead}
-                            className="text-sm flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-3 py-2 rounded-xl transition font-medium"
-                        >
-                            <FaCheckDouble /> Mark all read
-                        </button>
-                        <button onClick={load} className="text-sm text-gray-500 font-medium hover:text-gray-700 dark:hover:text-gray-300 transition">Refresh</button>
-                    </div>
-                </div>
-                
-                <div className="space-y-2">
-                    <AnimatePresence initial={false}>
-                        {items.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                                    <FaBell className="text-4xl opacity-20" />
-                                </div>
-                                <p className="font-medium">No notifications yet.</p>
+        <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 min-h-screen">
+            
+            {/* Header with Glass Pill Actions */}
+            <div className="flex items-center justify-between mb-8 sticky top-0 z-30 pt-4 pb-4 bg-[#04070D]/85 backdrop-blur-2xl border-b border-white/10">
+              <h1 className="text-3xl font-bold tracking-tight text-[#F7F7FC] flex items-center gap-3">
+                 <div className="p-2.5 bg-[#0F766E]/20 border border-[#0F766E]/30 rounded-2xl text-[#00F2FE] shadow-[0_0_15px_rgba(100,223,223,0.2)]">
+                    <FaBell size={18} />
+                 </div>
+                 Activity
+              </h1>
+
+              <div className="flex items-center gap-3">
+                  <button 
+                    onClick={load} 
+                    className="text-xs font-semibold text-[#A5A9BB] hover:text-[#F7F7FC] transition-colors px-3 py-1.5"
+                  >
+                    Refresh
+                  </button>
+                  <button 
+                    onClick={handleMarkAllRead}
+                    className="px-4 py-2 flex items-center gap-2 text-xs font-bold rounded-full bg-[#070B14] border border-white/15 text-[#CBD5E1] hover:text-[#00F2FE] hover:border-[#00F2FE]/40 transition-all shadow-md active:scale-95"
+                  >
+                    <FaCheckDouble /> Mark all read
+                  </button>
+              </div>
+            </div>
+
+            {/* Notification Items Wrapper */}
+            <div className="flex flex-col gap-3">
+                <AnimatePresence initial={false}>
+                    {safeItemsToRender.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-[#A5A9BB] bg-[#070B14]/40 border border-white/5 rounded-3xl">
+                            <div className="w-20 h-20 bg-[#171A26] rounded-full flex items-center justify-center mb-4 border border-white/10 shadow-inner">
+                                <FaBell className="text-4xl text-[#A5A9BB] opacity-40" />
                             </div>
-                        ) : (
-                            items.map(n => {
-                                const link = getNotificationLink(n);
-                                
-                                const Content = (
-                                    <div className={`p-4 rounded-2xl flex items-center gap-4 transition-all relative overflow-hidden group
-                                        ${n.isRead 
-                                            ? "bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50" 
-                                            : "bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30"}`}
-                                    >
-                                        {/* Actor Avatar */}
-                                        <div className="flex-shrink-0 relative">
-                                            <img 
-                                                src={n.actor?.avatar || '/default-avatar.png'} 
-                                                className="w-12 h-12 rounded-full object-cover border border-gray-200 dark:border-gray-700" 
-                                                alt="Actor"
-                                            />
-                                            {/* Type Icon Badge */}
-                                            {!n.isRead && (
-                                                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
-                                            )}
-                                        </div>
+                            <p className="font-medium tracking-wide text-[#CBD5E1] text-sm">No notifications yet.</p>
+                        </div>
+                    ) : (
+                        safeItemsToRender.map(n => {
+                            const link = getNotificationLink(n);
+                            
+                            const Content = (
+                                <div className={`relative group flex items-start gap-4 p-4 md:p-5 rounded-2xl backdrop-blur-xl border transition-all duration-300 cursor-pointer overflow-hidden ${
+                                  n.isRead 
+                                      ? 'bg-[#070B14]/60 border-white/5 opacity-80 hover:opacity-100 hover:border-white/15' 
+                                      : 'bg-[#171A26]/90 border-white/15 shadow-[0_8px_25px_rgba(29,78,216,0.15)] transform hover:-translate-y-0.5'
+                                  }`}>
+                                    
+                                    {/* Unread Glow Indicator */}
+                                    {!n.isRead && (
+                                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-12 bg-gradient-to-b from-[#1D4ED8] to-[#052E24] rounded-r-full shadow-[0_0_12px_rgba(29,78,216,0.8)]" />
+                                    )}
 
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
-                                                <span className="font-bold text-gray-900 dark:text-white hover:underline">
-                                                    {n.actor?.name || 'Someone'}
-                                                </span>{' '}
-                                                {n.message?.replace(n.actor?.name, '') || 'interacted with you.'}
-                                            </div>
-                                            <div className="text-xs text-gray-400 mt-1 font-medium">
-                                                {new Date(n.createdAt || n.ts || Date.now()).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
-                                            </div>
-                                        </div>
-
-                                        {/* Manual Mark Read Dot (Visible on Hover if Unread) */}
-                                        {!n.isRead && (
-                                            <div className="flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        markSingleRead(n._id);
-                                                    }}
-                                                    className="p-2 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-full transition"
-                                                    title="Mark as read"
-                                                >
-                                                    <FaCircle size={10} />
-                                                </button>
-                                            </div>
-                                        )}
+                                    {/* Avatar */}
+                                    <div className="flex-shrink-0 relative">
+                                        <UserAvatar 
+                                          src={n.actor?.avatar} 
+                                          name={n.actor?.name} 
+                                          className="w-11 h-11 border border-white/10"
+                                        />
                                     </div>
-                                );
-                                
-                                return (
-                                    <motion.div 
-                                        key={n._id || n.id} 
-                                        initial={{ opacity: 0, x: -10 }} 
-                                        animate={{ opacity: 1, x: 0 }} 
-                                        exit={{ opacity: 0, height: 0 }} 
-                                        layout
-                                        className="mb-2"
-                                    >
-                                        {/* 🔥 CLICK HANDLER: Mark read AND Navigate */}
-                                        {link ? (
-                                            <Link 
-                                                to={link} 
-                                                onClick={() => markSingleRead(n._id)} 
-                                                className="block focus:outline-none"
+
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0 pt-0.5">
+                                      <p className="text-sm text-[#F7F7FC] leading-relaxed">
+                                        <span className="font-bold cursor-pointer hover:text-[#00F2FE] transition-colors">
+                                          {n.actor?.name || 'Someone'}
+                                        </span>
+                                        {' '}
+                                        <span className="text-[#CBD5E1]">
+                                          {n.message?.replace(n.actor?.name, '') || 'interacted with you.'}
+                                        </span>
+                                      </p>
+                                      <span className="text-xs text-[#00F2FE] mt-1.5 block font-medium tracking-wide">
+                                        {new Date(n.createdAt || n.ts || Date.now()).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                                      </span>
+                                    </div>
+
+                                    {/* Optional: Related Post Image Thumbnail */}
+                                    {n.data?.postImage && (
+                                      <img 
+                                        src={n.data.postImage} 
+                                        alt="Post" 
+                                        className="w-12 h-12 rounded-xl object-cover border border-white/10 opacity-80 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                      />
+                                    )}
+
+                                    {/* Manual Mark Read Button (Visible on Hover if Unread) */}
+                                    {!n.isRead && (
+                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    markSingleRead(n._id);
+                                                }}
+                                                className="p-1.5 text-[#00F2FE] hover:bg-[#0F766E]/20 rounded-full transition-colors"
+                                                title="Mark as read"
                                             >
-                                                {Content}
-                                            </Link>
-                                        ) : (
-                                            <div 
-                                                onClick={() => markSingleRead(n._id)} 
-                                                className="cursor-pointer"
-                                            >
-                                                {Content}
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                );
-                            })
-                        )}
-                    </AnimatePresence>
-                </div>
+                                                <FaCircle size={10} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                            
+                            return (
+                                <motion.div 
+                                    key={n._id || n.id} 
+                                    initial={{ opacity: 0, y: 10 }} 
+                                    animate={{ opacity: 1, y: 0 }} 
+                                    exit={{ opacity: 0, scale: 0.95 }} 
+                                    layout
+                                >
+                                    {link ? (
+                                        <Link 
+                                            to={link} 
+                                            onClick={() => markSingleRead(n._id)} 
+                                            className="block focus:outline-none"
+                                        >
+                                            {Content}
+                                        </Link>
+                                    ) : (
+                                        <div 
+                                            onClick={() => markSingleRead(n._id)} 
+                                            className="focus:outline-none"
+                                        >
+                                            {Content}
+                                        </div>
+                                    )}
+                                </motion.div>
+                            );
+                        })
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

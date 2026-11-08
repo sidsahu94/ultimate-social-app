@@ -1,56 +1,41 @@
-# ==========================================
-# Stage 1: Build Frontend (React/Vite)
-# ==========================================
-FROM node:18-alpine as client-build
-
+# Stage 1: Build Frontend
+FROM node:22-alpine3.20 AS client-build
 WORKDIR /app/frontend
 
-# Copy frontend package files
 COPY frontend/package*.json ./
-
-# Install dependencies (using legacy-peer-deps to avoid conflicts with older UI libs)
 RUN npm install --legacy-peer-deps
 
-# Copy frontend source code
 COPY frontend/ ./
-
-# Set Environment Variable for Build Time
-# This ensures Vite points API calls to the relative path '/api' (handled by Nginx/Express proxy)
 ENV VITE_API_URL=/api
-
-# Build the static assets (outputs to /app/frontend/dist)
 RUN npm run build
 
-# ==========================================
-# Stage 2: Setup Backend (Express)
-# ==========================================
-FROM node:18-alpine
+# Stage 2: Setup Backend
+FROM node:22-alpine3.20
+
+# Add wget for healthcheck along with mediasoup dependencies
+RUN apk add --no-cache python3 make g++ linux-headers wget
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy backend package files
-COPY backend/package*.json ./
+COPY backend/package*.json ./backend/
+WORKDIR /app/backend
 
-# Install ONLY production dependencies for the server (lighter image)
-RUN npm install --production
+# Modern npm production install
+RUN npm ci --omit=dev
 
-# Copy backend source code
-COPY backend/ ./
+COPY --from=client-build /app/frontend/dist /app/frontend/dist
+COPY backend/ .
 
-# ==========================================
-# Stage 3: Merge & Finalize
-# ==========================================
+# CRITICAL FIX: Transfer ownership BEFORE switching to non-root user
+RUN chown -R appuser:appgroup /app
 
-# Copy the built frontend assets from Stage 1 into the backend's directory structure
-# Your server.js is configured to serve static files from 'frontend/dist'
-COPY --from=client-build /app/frontend/dist ./frontend/dist
+USER appuser
 
-# Expose the API port
+# CRITICAL FIX: Container Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
+
 EXPOSE 5000
-
-# Set default environment variables (can be overridden by docker-compose)
-ENV NODE_ENV=production
-ENV PORT=5000
-
-# Start the server
-CMD ["node", "server.js"]
+CMD ["npm", "start"]

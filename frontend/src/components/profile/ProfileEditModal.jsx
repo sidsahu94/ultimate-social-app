@@ -6,7 +6,7 @@ import { useToast } from '../ui/ToastProvider';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../redux/slices/authSlice';
 import { FaTwitter, FaInstagram, FaLinkedin, FaTimes, FaCamera } from 'react-icons/fa';
-import { compressImage } from '../../utils/compressor'; // 🔥 Fix: Import Compression
+import { compressImage } from '../../utils/compressor';
 
 const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     const dispatch = useDispatch();
@@ -44,10 +44,28 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
         }
         setAvatarFile(null);
         setCoverFile(null);
-        setPreviewAvatar(null);
-        setPreviewCover(null);
         setDeleteAvatar(false);
     }, [user, isOpen]);
+
+    useEffect(() => {
+        if (!avatarFile) {
+            setPreviewAvatar(null);
+            return;
+        }
+        const objectUrl = URL.createObjectURL(avatarFile);
+        setPreviewAvatar(objectUrl);
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [avatarFile]);
+
+    useEffect(() => {
+        if (!coverFile) {
+            setPreviewCover(null);
+            return;
+        }
+        const objectUrl = URL.createObjectURL(coverFile);
+        setPreviewCover(objectUrl);
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [coverFile]);
 
     if (!isOpen) return null;
 
@@ -57,11 +75,9 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
 
         if (type === 'avatar') {
             setAvatarFile(file);
-            setPreviewAvatar(URL.createObjectURL(file));
             setDeleteAvatar(false);
         } else {
             setCoverFile(file);
-            setPreviewCover(URL.createObjectURL(file));
         }
     };
 
@@ -69,11 +85,9 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
         e.preventDefault(); 
         e.stopPropagation(); 
         setAvatarFile(null);
-        setPreviewAvatar(null); 
         setDeleteAvatar(true); 
     };
 
-    // 🔥 Fix: Link Sanitizer
     const sanitizeLink = (url) => {
         if (!url) return '';
         const trimmed = url.trim();
@@ -91,7 +105,6 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
             fd.append('name', form.name);
             fd.append('bio', form.bio);
             
-            // 🔥 Fix: Apply sanitization
             fd.append('website', sanitizeLink(form.website));
             fd.append('socialLinks[twitter]', sanitizeLink(form.socialLinks.twitter));
             fd.append('socialLinks[instagram]', sanitizeLink(form.socialLinks.instagram));
@@ -99,7 +112,6 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
 
             if (deleteAvatar) fd.append('deleteAvatar', 'true');
 
-            // 🔥 Fix: Compress images
             if (avatarFile) {
                 const compressed = await compressImage(avatarFile);
                 fd.append('avatar', compressed);
@@ -113,10 +125,8 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
             
             addToast('Profile saved successfully!', { type: 'success' });
             
-            // Update Redux
             dispatch(setUser(res.data)); 
             
-            // 🔥 Fix: Update Parent State
             if (onUpdate) {
                 onUpdate(res.data);
             } else {
@@ -138,66 +148,66 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-                <div className="flex items-center justify-between mb-4 border-b dark:border-gray-700 pb-3">
-                    <h3 className="text-lg font-bold">Edit Profile</h3>
-                    <button onClick={onClose} disabled={saving} className="text-gray-500 hover:text-red-500"><FaTimes /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="w-full max-w-2xl bg-[#070B14] rounded-3xl p-6 shadow-[0_25px_80px_rgba(0,0,0,0.85)] border border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between mb-5 border-b border-white/10 pb-4">
+                    <h3 className="text-xl font-bold text-[#F7F7FC] font-serif">Edit Profile</h3>
+                    <button onClick={onClose} disabled={saving} className="text-[#CBD5E1]/60 hover:text-white p-2 rounded-full hover:bg-white/10 transition"><FaTimes /></button>
                 </div>
 
-                <form onSubmit={submit} className="space-y-4">
+                <form onSubmit={submit} className="space-y-5">
                     {/* Basic Info */}
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold uppercase text-gray-500">Display Name</label>
-                            <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="w-full p-2 rounded border dark:bg-gray-700 dark:border-gray-600" />
+                            <label className="text-xs font-bold uppercase tracking-wider text-[#CBD5E1]/70 mb-1.5 block">Display Name</label>
+                            <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] outline-none focus:border-[#00F2FE]/50 text-sm" />
                         </div>
                         <div>
-                            <label className="text-xs font-bold uppercase text-gray-500">Website</label>
-                            <input value={form.website} onChange={e=>setForm({...form,website:e.target.value})} className="w-full p-2 rounded border dark:bg-gray-700 dark:border-gray-600" placeholder="https://" />
+                            <label className="text-xs font-bold uppercase tracking-wider text-[#CBD5E1]/70 mb-1.5 block">Website</label>
+                            <input value={form.website} onChange={e=>setForm({...form,website:e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] outline-none focus:border-[#00F2FE]/50 text-sm" placeholder="https://" />
                         </div>
                     </div>
                     
                     <div>
-                        <label className="text-xs font-bold uppercase text-gray-500">Bio</label>
-                        <textarea value={form.bio} onChange={e=>setForm({...form,bio:e.target.value})} className="w-full p-2 rounded border dark:bg-gray-700 dark:border-gray-600" rows={3} />
+                        <label className="text-xs font-bold uppercase tracking-wider text-[#CBD5E1]/70 mb-1.5 block">Bio</label>
+                        <textarea value={form.bio} onChange={e=>setForm({...form,bio:e.target.value})} className="w-full px-4 py-2.5 rounded-xl bg-[#0A111E] border border-white/10 text-[#F7F7FC] outline-none focus:border-[#00F2FE]/50 text-sm resize-none" rows={3} />
                     </div>
 
                     {/* Social Links Section */}
-                    <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl space-y-3">
-                        <label className="text-xs font-bold uppercase text-gray-500 mb-2 block">Social Links</label>
+                    <div className="bg-[#0A111E]/80 border border-white/5 p-4 rounded-2xl space-y-3">
+                        <label className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] mb-2 block">Social Channels</label>
                         <div className="flex items-center gap-3">
-                            <FaTwitter className="text-blue-400" />
-                            <input value={form.socialLinks.twitter} onChange={e=>handleSocialChange('twitter', e.target.value)} placeholder="Twitter URL" className="flex-1 p-2 rounded border dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                            <FaTwitter className="text-[#55E6FF]" />
+                            <input value={form.socialLinks.twitter} onChange={e=>handleSocialChange('twitter', e.target.value)} placeholder="Twitter URL" className="flex-1 px-3 py-2 rounded-xl bg-[#070B14] border border-white/10 text-[#F7F7FC] text-sm outline-none focus:border-[#00F2FE]/40" />
                         </div>
                         <div className="flex items-center gap-3">
-                            <FaInstagram className="text-pink-500" />
-                            <input value={form.socialLinks.instagram} onChange={e=>handleSocialChange('instagram', e.target.value)} placeholder="Instagram URL" className="flex-1 p-2 rounded border dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                            <FaInstagram className="text-[#FF6B8A]" />
+                            <input value={form.socialLinks.instagram} onChange={e=>handleSocialChange('instagram', e.target.value)} placeholder="Instagram URL" className="flex-1 px-3 py-2 rounded-xl bg-[#070B14] border border-white/10 text-[#F7F7FC] text-sm outline-none focus:border-[#00F2FE]/40" />
                         </div>
                         <div className="flex items-center gap-3">
-                            <FaLinkedin className="text-blue-700" />
-                            <input value={form.socialLinks.linkedin} onChange={e=>handleSocialChange('linkedin', e.target.value)} placeholder="LinkedIn URL" className="flex-1 p-2 rounded border dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                            <FaLinkedin className="text-[#1D4ED8]" />
+                            <input value={form.socialLinks.linkedin} onChange={e=>handleSocialChange('linkedin', e.target.value)} placeholder="LinkedIn URL" className="flex-1 px-3 py-2 rounded-xl bg-[#070B14] border border-white/10 text-[#F7F7FC] text-sm outline-none focus:border-[#00F2FE]/40" />
                         </div>
                     </div>
                     
                     {/* Media Uploads */}
                     <div className="flex gap-4 pt-2">
                         {/* Avatar */}
-                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center relative overflow-hidden group h-24 flex flex-col items-center justify-center">
-                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2"><FaCamera /> Avatar</div>
+                        <label className="flex-1 cursor-pointer bg-[#0A111E] border border-white/10 p-3 rounded-2xl text-center relative overflow-hidden group h-28 flex flex-col items-center justify-center hover:border-white/20 transition">
+                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2 text-[#CBD5E1]"><FaCamera /> Avatar</div>
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'avatar')} />
                             
-                            {(previewAvatar || (user.avatar && !deleteAvatar)) && (
+                            {(previewAvatar || (user?.avatar && !deleteAvatar)) && (
                                 <>
-                                    <img src={previewAvatar || user.avatar} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" alt="preview" />
-                                    <div className="absolute bottom-1 text-[10px] text-green-600 font-bold bg-white/80 px-2 rounded z-20">
+                                    <img src={previewAvatar || user.avatar} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition" alt="preview" />
+                                    <div className="absolute bottom-1.5 text-[10px] text-[#00F2FE] font-bold bg-[#04070D]/80 border border-white/10 px-2 py-0.5 rounded-full z-20">
                                         {previewAvatar ? 'Selected' : 'Current'}
                                     </div>
                                     
                                     <button 
                                         type="button"
                                         onClick={handleDeleteAvatar}
-                                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full z-30 hover:bg-red-600 shadow-md transition-transform active:scale-95"
+                                        className="absolute top-2 right-2 bg-[#052E24] text-white p-1.5 rounded-full z-30 hover:bg-[#10B981] shadow-md transition-transform active:scale-95"
                                         title="Remove Photo"
                                     >
                                         <FaTimes size={10} />
@@ -206,28 +216,28 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
                             )}
                             
                             {deleteAvatar && (
-                                <div className="absolute inset-0 bg-red-100/50 flex items-center justify-center text-red-500 text-xs font-bold">
+                                <div className="absolute inset-0 bg-[#052E24]/30 flex items-center justify-center text-[#FF6B8A] text-xs font-bold">
                                     Removed
                                 </div>
                             )}
                         </label>
 
                         {/* Cover */}
-                        <label className="flex-1 cursor-pointer bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-center relative overflow-hidden group h-24 flex flex-col items-center justify-center">
-                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2"><FaCamera /> Cover</div>
+                        <label className="flex-1 cursor-pointer bg-[#0A111E] border border-white/10 p-3 rounded-2xl text-center relative overflow-hidden group h-28 flex flex-col items-center justify-center hover:border-white/20 transition">
+                            <div className="font-semibold text-sm z-10 relative flex items-center gap-2 text-[#CBD5E1]"><FaCamera /> Cover</div>
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'cover')} />
                             {previewCover && (
                                 <>
-                                    <img src={previewCover} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" alt="preview" />
-                                    <div className="absolute bottom-1 text-[10px] text-green-600 font-bold bg-white/80 px-2 rounded z-20">Selected</div>
+                                    <img src={previewCover} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition" alt="preview" />
+                                    <div className="absolute bottom-1.5 text-[10px] text-[#00F2FE] font-bold bg-[#04070D]/80 border border-white/10 px-2 py-0.5 rounded-full z-20">Selected</div>
                                 </>
                             )}
                         </label>
                     </div>
                     
-                    <div className="flex justify-end gap-3 pt-3 border-t dark:border-gray-700">
-                        <button type="button" onClick={onClose} className="px-4 py-2 rounded text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
-                        <button disabled={saving} className="btn-primary px-6">{saving ? 'Saving...' : 'Save Changes'}</button>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                        <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-2xl border border-white/10 text-[#CBD5E1] hover:bg-white/5 transition">Cancel</button>
+                        <button disabled={saving} className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white font-bold hover:opacity-90 shadow-lg shadow-blue-900/30 transition">{saving ? 'Saving...' : 'Save Changes'}</button>
                     </div>
                 </form>
             </motion.div>

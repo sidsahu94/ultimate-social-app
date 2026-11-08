@@ -8,46 +8,21 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      // 🔥 FIX: Increase cache limit to 10MB to handle large AI model chunks
       workbox: {
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
       manifest: {
-        name: 'Ultimate Social App',
-        short_name: 'SocialApp',
-        description: 'Connect, Share, and Play.',
-        theme_color: '#4f46e5',
-        background_color: '#ffffff',
+        name: 'Socialo — Aetheria Noir Luxe Expression',
+        short_name: 'Socialo',
+        description: 'Cinematic digital connection, luxury creator economy, and real-time social spaces.',
+        theme_color: '#04070D',
+        background_color: '#04070D',
         display: 'standalone',
         scope: '/',
         start_url: '/',
-        share_target: {
-            action: "/share-target",
-            method: "POST",
-            enctype: "multipart/form-data",
-            params: {
-              title: "title",
-              text: "text",
-              url: "url",
-              files: [
-                {
-                  name: "media",
-                  accept: ["image/*", "video/*"]
-                }
-              ]
-            }
-        },
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
         ]
       }
     })
@@ -69,17 +44,37 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // 🔥 FIX: Proxy local uploads to backend
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      }
     },
   },
   build: {
     outDir: 'dist',
     sourcemap: false,
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom', 'react-redux', '@reduxjs/toolkit'],
-          ui: ['framer-motion', 'react-icons', 'chart.js', 'react-chartjs-2'],
-          utils: ['axios', 'socket.io-client', 'date-fns']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react-router-dom') || id.includes('react-redux') || id.includes('@reduxjs/toolkit')) {
+              return 'react-core';
+            }
+            if (id.includes('framer-motion')) {
+              return 'motion';
+            }
+            if (id.includes('chart.js') || id.includes('react-chartjs-2')) {
+              return 'charts';
+            }
+            if (id.includes('lucide-react') || id.includes('react-icons')) {
+              return 'icons';
+            }
+            if (id.includes('date-fns') || id.includes('axios') || id.includes('socket.io-client')) {
+              return 'networking';
+            }
+          }
         }
       }
     }

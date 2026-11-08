@@ -13,7 +13,6 @@ export default function LevelProgress() {
   const { socket } = useSocket();
   const [animate, setAnimate] = useState(false);
 
-  // Level Logic (matches backend)
   const XP_THRESHOLDS = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 5000];
   const nextLevelXP = XP_THRESHOLDS[user?.level || 1] || ((user?.level || 1) * 500);
   const prevLevelXP = XP_THRESHOLDS[(user?.level || 1) - 1] || 0;
@@ -40,22 +39,21 @@ export default function LevelProgress() {
 
   return (
     <div className="relative w-full max-w-[200px]">
-      <div className="flex justify-between text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">
-        <span className={animate ? 'text-yellow-500 animate-bounce' : ''}>
+      <div className="flex justify-between text-[10px] font-bold text-[#CBD5E1]/70 mb-1.5 uppercase tracking-wider">
+        <span className={animate ? 'text-[#F4D49A] animate-bounce' : 'text-[#D4AF37]'}>
             Lvl {user.level}
         </span>
-        <span>{user.xp} / {nextLevelXP} XP</span>
+        <span className="text-[#CBD5E1]/50">{user.xp} / {nextLevelXP} XP</span>
       </div>
       
-      <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+      <div className="h-2 w-full bg-[#0A111E] border border-white/5 rounded-full overflow-hidden">
         <motion.div 
-            className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 relative"
+            className="h-full bg-gradient-to-r from-[#D4AF37] via-[#F4D49A] to-[#00F2FE] relative"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 1 }}
         >
-            {/* Shimmer Effect */}
-            <div className="absolute inset-0 bg-white/30 w-full animate-[shimmer_2s_infinite]" />
+            <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]" />
         </motion.div>
       </div>
 
@@ -65,7 +63,7 @@ export default function LevelProgress() {
             initial={{ scale: 0, opacity: 0 }} 
             animate={{ scale: 1, opacity: 1 }} 
             exit={{ scale: 0 }}
-            className="absolute top-8 left-1/2 -translate-x-1/2 bg-yellow-500 text-white text-xs font-black px-3 py-1 rounded-lg shadow-lg z-50 whitespace-nowrap flex items-center gap-1"
+            className="absolute top-8 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#D4AF37] to-[#F4D49A] text-black text-xs font-black px-3 py-1 rounded-xl shadow-lg shadow-yellow-900/40 z-50 whitespace-nowrap flex items-center gap-1 border border-white/20"
         >
             <FaStar className="animate-spin" /> LEVEL UP!
         </motion.div>

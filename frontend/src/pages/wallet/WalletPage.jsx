@@ -1,359 +1,473 @@
 // frontend/src/pages/wallet/WalletPage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import API from '../../services/api';
 import socket from '../../services/socket';
-import { FaWallet, FaArrowUp, FaArrowDown, FaHistory, FaCopy, FaPaperPlane, FaSearch, FaLock, FaKey } from 'react-icons/fa';
+import {
+  FaWallet,
+  FaArrowUp,
+  FaArrowDown,
+  FaHistory,
+  FaCopy,
+  FaPaperPlane,
+  FaSearch,
+  FaLock,
+  FaKey,
+  FaCoins,
+  FaMicrochip,
+  FaShieldAlt,
+  FaGift
+} from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { useToast } from '../../components/ui/ToastProvider';
 import UserAvatar from '../../components/ui/UserAvatar';
+import { useSelector } from 'react-redux';
+import { motion } from 'framer-motion';
+import { playCyberClick, playSuccessChord } from '../../utils/soundEffects';
 
 export default function WalletPage() {
-  const [data, setData] = useState({ 
-    balance: 0, 
+  const currentUser = useSelector((s) => s.auth.user);
+  const [data, setData] = useState({
+    balance: 0,
     transactions: [],
-    lastAirdrop: null, 
-    referralCode: 'LOADING...' 
+    lastAirdrop: null,
+    referralCode: 'LOADING...',
   });
   const [loading, setLoading] = useState(true);
-  
-  // Transfer State
   const [recipientId, setRecipientId] = useState('');
   const [amount, setAmount] = useState(10);
-  
-  // Search State
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [claiming, setClaiming] = useState(false);
 
-  // 🔥 Security State (PIN System)
-  const [hasPin, setHasPin] = useState(false); // Does user have a PIN set?
-  const [showConfirm, setShowConfirm] = useState(false); // Confirm Transfer Modal
-  const [showPinSetup, setShowPinSetup] = useState(false); // Setup PIN Modal
-  const [pinInput, setPinInput] = useState(''); // PIN entry field
-  const [newPin, setNewPin] = useState(''); // PIN creation field
-  
   const { add: addToast } = useToast();
+
+  const filteredResults = useMemo(() => {
+    return results.filter((u) => {
+      const hay = `${u.name || ''} ${u.username || ''} ${u.email || ''}`.toLowerCase();
+      return hay.includes(query.toLowerCase());
+    });
+  }, [query, results]);
 
   const load = async () => {
     try {
-      const walletRes = await API.get('/wallet/me');
-      const appsRes = await API.get('/apps/wallet'); 
-      const pinRes = await API.get('/wallet/pin/status'); // Check if PIN exists
-      
-      setData({
-        ...walletRes.data,
-        transactions: appsRes.data?.transactions || []
-      });
-      setHasPin(pinRes.data.hasPin);
+      const [walletRes, appsRes, pinRes] = await Promise.allSettled([
+        API.get('/wallet/me'),
+        API.get('/apps/wallet'),
+        API.get('/wallet/pin/status'),
+      ]);
 
+      const walletData = walletRes.status === 'fulfilled' ? walletRes.value.data : null;
+      const appsData = appsRes.status === 'fulfilled' ? appsRes.value.data : null;
+      const pinData = pinRes.status === 'fulfilled' ? pinRes.value.data : null;
+
+      const balance =
+        walletData?.balance ??
+        appsData?.data?.balance ??
+        appsData?.balance ??
+        0;
+
+      const transactions =
+        walletData?.transactions ??
+        appsData?.data?.transactions ??
+        appsData?.transactions ??
+        [];
+
+      setData((prev) => ({
+        ...prev,
+        balance,
+        transactions,
+        referralCode: walletData?.referralCode || appsData?.referralCode || prev.referralCode,
+      }));
+
+      setHasPin(Boolean(pinData?.hasPin));
     } catch (e) {
-      console.warn("Wallet data partial load");
+      console.warn('Wallet data partial load', e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { 
-    load(); 
+  useEffect(() => {
+    load();
 
     const onWalletUpdate = (update) => {
-        if (update && typeof update.balance === 'number') {
-            setData(prev => ({ ...prev, balance: update.balance }));
-            API.get('/apps/wallet').then(res => {
-                setData(prev => ({ ...prev, transactions: res.data.transactions || [] }));
-            });
-        }
+      if (update && typeof update.balance === 'number') {
+        setData((prev) => ({ ...prev, balance: update.balance }));
+        API.get('/apps/wallet')
+          .then((res) => {
+            setData((prev) => ({
+              ...prev,
+              transactions: res.data?.transactions || res.data?.data?.transactions || [],
+            }));
+          })
+          .catch(() => {});
+      }
     };
 
-    socket.on('wallet:update', onWalletUpdate);
-    return () => socket.off('wallet:update', onWalletUpdate);
+    socket?.on?.('wallet:update', onWalletUpdate);
+    return () => socket?.off?.('wallet:update', onWalletUpdate);
   }, []);
 
-  // Search Logic
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (query.length > 2) {
-        try {
-          const r = await API.get(`/users/search?q=${query}`);
-          setResults(r.data.users || []);
-          setShowDropdown(true);
-        } catch (e) {}
-      } else {
+    if (!query.trim()) {
+      setShowDropdown(false);
+      return;
+    }
+
+    const t = setTimeout(async () => {
+      try {
+        const res = await API.get(`/users/search?q=${encodeURIComponent(query)}`);
+        setResults(res.data?.data || res.data || []);
+        setShowDropdown(true);
+      } catch {
         setResults([]);
         setShowDropdown(false);
       }
-    }, 300);
-    return () => clearTimeout(timer);
+    }, 250);
+
+    return () => clearTimeout(t);
   }, [query]);
 
-  const selectUser = (user) => {
-    setRecipientId(user._id);
-    setQuery(user.name); // Show name in input
-    setShowDropdown(false);
-  };
-
-  // 🔥 1. Initialize Transfer
-  const initTransfer = () => {
-    if (!recipientId || amount <= 0) return addToast("Invalid details", { type: 'error' });
-    
-    if (!hasPin) {
-        setShowPinSetup(true); // Force PIN setup first
-        addToast("Please set a Wallet PIN to continue", { type: "info" });
-        return;
-    }
-    
-    setShowConfirm(true); // Open Enter PIN modal
-  };
-
-  // 🔥 2. Handle PIN Setup
-  const handleSetPin = async () => {
-      if (newPin.length !== 6 || isNaN(newPin)) {
-          return addToast("PIN must be exactly 6 digits", { type: "error" });
-      }
-      try {
-          await API.post('/wallet/pin', { pin: newPin });
-          setHasPin(true);
-          setShowPinSetup(false);
-          setNewPin('');
-          addToast("PIN set successfully! You can now transfer.", { type: "success" });
-          setShowConfirm(true); // Automatically open transfer modal
-      } catch (e) {
-          addToast("Failed to set PIN", { type: "error" });
-      }
-  };
-
-  // 🔥 3. Perform Secure Transfer with PIN
-  const confirmTransfer = async () => {
-    if (!pinInput || pinInput.length !== 6) return addToast("Enter your 6-digit PIN", { type: 'error' });
-    
+  const copyReferral = async () => {
     try {
-      // Sending PIN instead of password
-      await API.post('/wallet/tip', { to: recipientId, amount, pin: pinInput });
-      addToast(`Sent ${amount} coins!`, { type: 'success' });
-      
-      // Reset inputs
+      playCyberClick();
+      await navigator.clipboard.writeText(data.referralCode || '');
+      addToast?.('Referral code copied to clipboard', { type: 'success' });
+    } catch {
+      addToast?.('Could not copy referral code', { type: 'error' });
+    }
+  };
+
+  const sendTip = async () => {
+    if (!recipientId.trim()) {
+      addToast?.('Please choose a recipient', { type: 'error' });
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      addToast?.('Enter a valid coin amount', { type: 'error' });
+      return;
+    }
+
+    try {
+      playCyberClick();
+      const payload = {
+        recipientId,
+        amount: Number(amount),
+      };
+
+      if (hasPin) {
+        payload.pin = pinInput;
+      } else if (newPin.trim()) {
+        payload.newPin = newPin;
+      }
+
+      await API.post('/wallet/tip', payload);
+
+      playSuccessChord();
+      addToast?.('Creator tip transferred successfully!', { type: 'success' });
       setRecipientId('');
-      setQuery(''); 
+      setQuery('');
       setAmount(10);
       setPinInput('');
-      setShowConfirm(false);
-    } catch (e) {
-      addToast(e.userMessage || "Transfer failed (Incorrect PIN?)", { type: 'error' });
+      setNewPin('');
+      load();
+    } catch (err) {
+      addToast?.(err.response?.data?.message || 'Tip transfer failed', { type: 'error' });
     }
   };
 
-  const handleAirdrop = async () => {
+  const claimDailyBonus = async () => {
+    setClaiming(true);
+    playCyberClick();
     try {
-      const res = await API.post('/wallet/airdrop');
-      addToast(res.data.message, { type: 'success' });
-    } catch (e) {
-      addToast(e.userMessage || "Cooldown active", { type: 'error' });
+      const res = await API.post('/wallet/claim-daily-bonus');
+      playSuccessChord();
+      addToast?.(`Daily bonus claimed! Balance: ${res.data?.newBalance ?? data.balance} Coins`, {
+        type: 'success',
+      });
+      load();
+    } catch (err) {
+      addToast?.(err.response?.data?.error || err.response?.data?.message || 'Daily bonus already claimed today', {
+        type: 'error',
+      });
+    } finally {
+      setClaiming(false);
     }
   };
 
-  const handleWithdraw = async () => {
-    if (data.balance < 100) return addToast("Minimum withdrawal is 100 coins", { type: 'error' });
-    
-    const paypalEmail = prompt("Enter PayPal email for withdrawal request:");
-    if (paypalEmail) {
-        try {
-            await API.post('/payouts/create', { 
-                amount: data.balance, 
-                method: 'paypal',
-                details: paypalEmail 
-            });
-            addToast("Withdrawal request submitted!", { type: 'success' });
-        } catch (e) {
-            addToast("Withdrawal request queued.", { type: 'info' });
-        }
-    }
-  };
-
-  const copyReferral = () => {
-    if (data.referralCode) {
-        navigator.clipboard.writeText(data.referralCode);
-        addToast('Referral code copied!', { type: 'success' });
-    }
-  };
-
-  const isCooldown = data.lastAirdrop && (new Date() - new Date(data.lastAirdrop) < 24 * 60 * 60 * 1000);
-
-  if (loading) return <div className="p-10 text-center"><Spinner /></div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-6">
-      
-      {/* Balance Card */}
-      <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10">
-            <div className="flex items-center gap-2 opacity-80 mb-1">
-            <FaWallet /> Total Balance
-            </div>
-            <div className="text-5xl font-bold mb-6">{(data.balance || 0).toLocaleString()} <span className="text-lg font-medium">Coins</span></div>
-            
-            <div className="flex gap-3">
-            <button 
-                onClick={handleAirdrop}
-                disabled={isCooldown}
-                className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${isCooldown ? 'bg-white/10 cursor-not-allowed opacity-70' : 'bg-white/20 hover:bg-white/30 backdrop-blur-md'}`}
-            >
-                <FaArrowDown /> {isCooldown ? 'Claimed' : 'Daily Bonus'}
-            </button>
-            <button 
-                onClick={handleWithdraw}
-                className="flex-1 bg-white text-indigo-700 py-3 rounded-xl font-bold hover:bg-gray-100 transition flex items-center justify-center gap-2"
-            >
-                <FaArrowUp /> Withdraw
-            </button>
-            </div>
-        </div>
-        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-      </div>
+    <div className="mx-auto max-w-5xl p-4 md:p-6 font-sans text-[#F7F7FC] pb-24">
+      {/* 3D Holographic Titanium Metal VIP Card */}
+      <div className="relative mb-8 overflow-hidden rounded-[32px] border border-[rgba(226,232,240,0.18)] bg-gradient-to-br from-[#070B14] via-[#0A111E] to-[#04070D] p-6 md:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.7)] backdrop-blur-3xl ring-1 ring-white/10">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#1D4ED8]/20 blur-[100px]" />
+        <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-[#052E24]/25 blur-[100px]" />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 h-32 w-32 rounded-full bg-[#00F2FE]/10 blur-[80px]" />
 
-      {/* Transfer Section */}
-      <div className="card p-5">
-        <h3 className="font-bold mb-3 flex items-center gap-2"><FaPaperPlane className="text-indigo-500"/> Send Coins</h3>
-        <div className="flex flex-col gap-3">
-            
-            {/* Recipient Search */}
-            <div className="relative">
-                <div className="flex items-center border rounded-xl bg-gray-50 dark:bg-gray-800 dark:border-gray-700 px-3 transition focus-within:ring-2 ring-indigo-500/20">
-                    <FaSearch className="text-gray-400 mr-2" />
-                    <input 
-                        value={query}
-                        onChange={e => { setQuery(e.target.value); setRecipientId(''); }} 
-                        placeholder="Search user to tip..."
-                        className="w-full py-3 bg-transparent outline-none"
-                    />
-                </div>
-
-                {/* Dropdown Results */}
-                {showDropdown && results.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
-                        {results.map(u => (
-                            <div 
-                                key={u._id} 
-                                onClick={() => selectUser(u)}
-                                className="flex items-center gap-3 p-3 hover:bg-indigo-50 dark:hover:bg-gray-700 cursor-pointer transition"
-                            >
-                                <UserAvatar src={u.avatar} name={u.name} className="w-8 h-8" />
-                                <div className="text-sm font-semibold">{u.name}</div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-white/10">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#04070D] border border-white/15 text-[#F4D49A] shadow-[0_0_25px_rgba(244,212,154,0.3)]">
+              <FaWallet size={22} />
             </div>
-
-            <div className="flex gap-2">
-                <div className="flex-1">
-                    <input 
-                        className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:border-gray-700" 
-                        type="number" 
-                        placeholder="Amount"
-                        value={amount}
-                        onChange={e => setAmount(Number(e.target.value))}
-                    />
-                </div>
-                <button onClick={initTransfer} className="btn-primary rounded-xl px-6 font-bold">Send</button>
-            </div>
-        </div>
-      </div>
-
-      {/* Referral Card */}
-      <div className="card p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
-        <div className="flex justify-between items-center">
             <div>
-                <h3 className="font-bold text-lg text-green-800 dark:text-green-300">Invite Friends & Earn</h3>
-                <p className="text-sm text-green-700 dark:text-green-400">Get 50 coins for every friend who signs up!</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#00F2FE]">
+                  DIGITAL LEDGER &bull; SECURE VAULT
+                </span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[9px] text-[#D4AF37]">
+                  TITANIUM VIP
+                </span>
+              </div>
+              <h1 className="font-display text-2xl md:text-3xl font-black tracking-tight text-[#F7F7FC]">
+                Creator Treasury<span className="text-[#D4AF37]">.</span>
+              </h1>
             </div>
-            <div className="flex gap-2">
-                <code className="bg-white dark:bg-black/30 px-3 py-2 rounded-lg font-mono font-bold border border-green-300 dark:border-green-700 select-all">
-                    {data.referralCode || '...'}
-                </code>
-                <button onClick={copyReferral} className="p-2 bg-green-600 text-white rounded-lg shadow-lg hover:bg-green-700 transition">
-                    <FaCopy />
-                </button>
+          </div>
+
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3.5 py-2">
+              <FaMicrochip className="text-[#F4D49A]" />
+              <span className="text-[#CBD5E1]/70">CIPHER PROTOCOL</span>
             </div>
+            <button
+              onClick={copyReferral}
+              className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3.5 py-2 text-[#00F2FE] hover:bg-white/10 transition"
+            >
+              <FaCopy /> {data.referralCode}
+            </button>
+          </div>
+        </div>
+
+        {/* Balance & Bonus Stats */}
+        <div className="relative z-10 mt-6 grid gap-4 sm:grid-cols-3">
+          {/* Card 1: Balance */}
+          <div className="rounded-[22px] border border-white/10 bg-[#04070D]/80 p-5 shadow-silverGlass">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]/70">
+              Treasury Balance
+            </span>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="font-mono text-3xl md:text-4xl font-black text-[#F4D49A] drop-shadow-[0_0_20px_rgba(244,212,154,0.4)]">
+                {data.balance}
+              </span>
+              <span className="text-xs font-bold text-[#CBD5E1]/60">COINS</span>
+            </div>
+            <span className="mt-1 block text-[10px] text-[#00F2FE]">Instant P2P Liquidity</span>
+          </div>
+
+          {/* Card 2: Security Pin */}
+          <div className="rounded-[22px] border border-white/10 bg-[#04070D]/80 p-5 shadow-silverGlass flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]/70">
+                Security Enclave
+              </span>
+              <div className="mt-1 flex items-center gap-2 font-mono text-xs text-[#F8FAFC]">
+                <FaLock className="text-[#00F2FE]" />
+                <span>{hasPin ? 'PIN Enclave Active' : 'No PIN Configured'}</span>
+              </div>
+            </div>
+            <span className="mt-1 block text-[10px] text-[#CBD5E1]/50">
+              Zero-knowledge authorization
+            </span>
+          </div>
+
+          {/* Card 3: Daily Activity Reward */}
+          <div className="rounded-[22px] border border-white/10 bg-gradient-to-br from-[#1D4ED8]/20 via-[#052E24]/15 to-[#D4AF37]/20 p-5 shadow-silverGlass flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#F8FAFC]">
+                Daily Activity Reward
+              </span>
+              <FaGift className="text-[#F4D49A]" />
+            </div>
+            <button
+              onClick={claimDailyBonus}
+              disabled={claiming}
+              className="mt-3 w-full rounded-xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] py-2.5 text-xs font-bold text-white shadow-lg shadow-[#1D4ED8]/30 transition hover:scale-[1.02] active:scale-98 disabled:opacity-50"
+            >
+              {claiming ? 'Claiming Reward...' : 'Claim 100 Free Coins'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Transactions History */}
-      <div className="card p-5">
-        <div className="flex items-center gap-2 font-bold text-lg mb-4 text-gray-500">
-          <FaHistory /> Recent Transactions
-        </div>
-        <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
-          {(!data.transactions || data.transactions.length === 0) && <div className="text-center text-gray-400 py-4">No transactions yet</div>}
-          {(data.transactions || []).map((tx, i) => (
-            <div key={i} className="flex justify-between items-center border-b dark:border-gray-700 pb-3 last:border-0 last:pb-0">
-              <div>
-                <div className="font-semibold capitalize text-sm">{tx.description || tx.type}</div>
-                <div className="text-xs text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</div>
-              </div>
-              <div className={`font-bold ${tx.type === 'credit' ? 'text-green-500' : 'text-red-500'}`}>
-                {tx.type === 'credit' ? '+' : '-'}{tx.amount}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Main Grid: Send Tip & Transaction Ledger */}
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        {/* Send Tip Section */}
+        <div className="rounded-[28px] border border-white/10 bg-[#070B14]/90 p-6 md:p-7 shadow-silverGlass backdrop-blur-xl">
+          <div className="mb-5 flex items-center gap-2 text-[#F7F7FC]">
+            <FaPaperPlane className="text-[#00F2FE]" />
+            <h2 className="text-lg font-bold font-display">Direct Creator Tipping</h2>
+          </div>
 
-      {/* 🔥 MODAL: Set PIN (Only shows if no PIN set) */}
-      {showPinSetup && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-sm shadow-2xl border dark:border-gray-700 text-center">
-                <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center mb-4">
-                    <FaKey size={20} />
-                </div>
-                <h3 className="font-bold text-xl mb-2 text-gray-900 dark:text-white">Create Wallet PIN</h3>
-                <p className="text-sm text-gray-500 mb-6">Set a 6-digit PIN to secure your transactions.</p>
-                
-                <input 
-                    type="password" 
-                    maxLength={6}
-                    value={newPin} 
-                    onChange={e => setNewPin(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="000000"
-                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-blue-500 outline-none text-center text-2xl tracking-[0.5em] font-mono"
-                    autoFocus
-                />
-                
-                <button onClick={handleSetPin} className="btn-primary w-full py-3 rounded-xl font-bold">Set PIN</button>
+          <div className="relative">
+            <div className="mb-3.5 flex items-center gap-2.5 rounded-2xl bg-[#04070D] border border-white/15 px-4 py-3 focus-within:border-[#00F2FE] transition">
+              <FaSearch className="text-[#CBD5E1]/50" />
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setRecipientId('');
+                }}
+                placeholder="Search recipient creator by name or username..."
+                className="w-full bg-transparent outline-none text-[#F7F7FC] placeholder-[#CBD5E1]/40 text-sm"
+              />
             </div>
-        </div>
-      )}
 
-      {/* 🔥 MODAL: Confirm Transfer (Verify PIN) */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-sm shadow-2xl border dark:border-gray-700">
-                <div className="flex justify-center mb-4 text-indigo-500">
-                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
-                        <FaLock size={24} />
+            {showDropdown && filteredResults.length > 0 && (
+              <div className="absolute z-20 mt-1 w-full rounded-2xl border border-white/15 bg-[#070B14] p-2 shadow-2xl backdrop-blur-2xl">
+                {filteredResults.map((u) => (
+                  <button
+                    key={u._id}
+                    type="button"
+                    onClick={() => {
+                      setRecipientId(u._id);
+                      setQuery(u.name || u.username || u.email || '');
+                      setShowDropdown(false);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/10 transition cursor-pointer"
+                  >
+                    <UserAvatar src={u.avatar} name={u.name} className="h-8 w-8" />
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-xs text-[#F7F7FC]">{u.name}</div>
+                      <div className="truncate text-[10px] text-[#CBD5E1]/60">
+                        @{u.username || u.email?.split('@')[0]}
+                      </div>
                     </div>
-                </div>
-                <h3 className="font-bold text-xl mb-2 text-center text-gray-900 dark:text-white">Confirm Transfer</h3>
-                <p className="text-sm text-gray-500 mb-6 text-center">
-                    Sending <b>{amount} coins</b> to <b>{query}</b>. <br/>Enter your Wallet PIN.
-                </p>
-                
-                <input 
-                    type="password" 
-                    maxLength={6}
-                    value={pinInput} 
-                    onChange={e => setPinInput(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="------"
-                    className="w-full p-4 rounded-xl border bg-gray-50 dark:bg-black/30 dark:border-gray-700 mb-4 focus:ring-2 ring-indigo-500 outline-none text-center text-2xl tracking-[0.5em] font-mono"
-                    autoFocus
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-3.5 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-[#CBD5E1]">
+                Transfer Amount (Coins)
+              </span>
+              <input
+                type="number"
+                min="1"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full rounded-xl bg-[#04070D] border border-white/15 px-4 py-3 outline-none text-[#F7F7FC] focus:border-[#00F2FE] text-sm"
+              />
+            </label>
+
+            {hasPin ? (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-[#CBD5E1]">
+                  Security PIN
+                </span>
+                <input
+                  type="password"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full rounded-xl bg-[#04070D] border border-white/15 px-4 py-3 outline-none text-[#F7F7FC] focus:border-[#00F2FE] text-sm"
                 />
-                
-                <div className="flex gap-3">
-                    <button onClick={() => { setShowConfirm(false); setPinInput(''); }} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition">Cancel</button>
-                    <button onClick={confirmTransfer} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/30">Confirm</button>
-                </div>
+              </label>
+            ) : (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-[#CBD5E1]">
+                  Set Security PIN
+                </span>
+                <input
+                  type="password"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value)}
+                  placeholder="Create 4-digit PIN"
+                  className="w-full rounded-xl bg-[#04070D] border border-white/15 px-4 py-3 outline-none text-[#F7F7FC] placeholder-[#CBD5E1]/40 focus:border-[#00F2FE] text-sm"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <button
+              onClick={sendTip}
+              className="flex-1 rounded-xl bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] px-6 py-3.5 font-bold text-white shadow-lg shadow-[#1D4ED8]/30 hover:opacity-95 transition text-sm cursor-pointer"
+            >
+              Transfer Coins
+            </button>
+            <button
+              onClick={load}
+              className="rounded-xl bg-white/5 border border-white/10 px-5 py-3.5 font-semibold text-[#CBD5E1] hover:bg-white/10 transition text-sm cursor-pointer"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {recipientId && (
+            <div className="mt-3.5 text-xs text-[#00F2FE] font-mono">
+              Target creator address confirmed: {recipientId}
             </div>
+          )}
         </div>
-      )}
+
+        {/* Transaction History Section */}
+        <div className="rounded-[28px] border border-white/10 bg-[#070B14]/90 p-6 md:p-7 shadow-silverGlass backdrop-blur-xl">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[#F7F7FC]">
+              <FaHistory className="text-[#D4AF37]" />
+              <h2 className="text-lg font-bold font-display">Treasury Ledger</h2>
+            </div>
+            <span className="text-[10px] font-mono text-[#CBD5E1]/50">P2P AUDIT LOG</span>
+          </div>
+
+          <div className="space-y-2.5 max-h-[340px] overflow-y-auto custom-scrollbar">
+            {(data.transactions || []).length === 0 ? (
+              <div className="rounded-2xl bg-[#04070D] border border-white/10 p-8 text-xs text-[#CBD5E1]/50 text-center">
+                No ledger activity recorded yet.
+              </div>
+            ) : (
+              (data.transactions || []).map((tx) => {
+                const isCredit =
+                  tx.type === 'credit' ||
+                  tx.amount > 0 ||
+                  tx.direction === 'in';
+
+                return (
+                  <div
+                    key={tx._id || `${tx.createdAt}-${tx.amount}`}
+                    className="flex items-center justify-between rounded-2xl bg-[#04070D] border border-white/5 p-3.5 hover:border-white/15 transition"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="font-semibold text-xs text-[#F7F7FC] truncate">
+                        {tx.description || tx.note || 'Treasury Transaction'}
+                      </div>
+                      <div className="text-[10px] text-[#CBD5E1]/50">
+                        {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : 'Confirmed'}
+                      </div>
+                    </div>
+                    <div
+                      className={`font-mono font-bold text-sm shrink-0 ${
+                        isCredit ? 'text-[#14B8A6]' : 'text-[#10B981]'
+                      }`}
+                    >
+                      {isCredit ? '+' : '-'}{Math.abs(tx.amount || 0)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-dashed border-white/10 p-3.5 text-[11px] text-[#CBD5E1]/60 flex items-center gap-2">
+            <FaShieldAlt className="text-[#00F2FE] shrink-0" />
+            <span>Cryptographic multi-factor PIN required for all coin deductions.</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

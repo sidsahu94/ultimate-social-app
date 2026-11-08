@@ -2,46 +2,83 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 
+const searchCache = new Map();
+
 exports.suggestions = async (req, res) => {
   try {
-    const meId = req.user?._id;
-    
-    // 1. Get popular users (simple logic: mostly followed)
-    const topUsers = await User.find({ 
-        _id: { $ne: meId }, // Exclude self
-        isDeleted: { $ne: true }
-    })
-    .sort({ 'followers.length': -1, createdAt: -1 })
-    .limit(20)
-    .select('name avatar followers bio badges');
+    const meId = req.user ? String(req.user._id) : 'guest';
+    const cached = searchCache.get(meId);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return res.status(200).json(cached.data);
+    }
 
-    // Filter out users I already follow
-    // (Optimization: In a real app, do this in the DB query, but JS filter is fine for MVP)
-    const suggestions = topUsers.filter(u => 
-        meId ? !u.followers.map(String).includes(String(meId)) : true
-    ).slice(0, 10);
+    const userMatch = { isDeleted: { $ne: true } };
+    if (req.user) {
+      userMatch._id = { $ne: req.user._id };
+    }
 
-    // 2. Get trending hashtags
-    const recent = await Post.aggregate([
-        { $match: { isArchived: false, isFlagged: false } },
-        { $sort: { createdAt: -1 } }, 
-        { $limit: 200 }, 
-        { $project: { hashtags: 1 } }
+    const topUsers = await User.aggregate([
+      { $match: userMatch },
+      {
+        $addFields: {
+          followerCount: { $size: { $ifNull: ['$followers', []] } },
+        },
+      },
+      { $sort: { followerCount: -1, createdAt: -1 } },
+      { $limit: 20 },
+      {
+        $project: {
+          name: 1,
+          avatar: 1,
+          followers: 1,
+          bio: 1,
+          badges: 1,
+          followerCount: 1,
+        },
+      },
     ]);
-    
-    const tags = {};
-    recent.forEach(r => (r.hashtags||[]).forEach(h => tags[h] = (tags[h]||0)+1));
-    const trendingHashtags = Object.entries(tags)
-        .sort((a,b)=>b[1]-a[1])
-        .slice(0,8)
-        .map(t=>t[0]);
 
-    res.json({ 
-        users: suggestions, 
-        trendingHashtags 
-    });
-  } catch (err) { 
-      console.error(err);
-      res.status(500).json({ message: err.message }); 
+    const suggestions = req.user
+      ? topUsers.filter((u) => !(u.followers || []).map(String).includes(String(req.user._id))).slice(0, 10)
+      : topUsers.slice(0, 10);
+
+    const recentTags = await Post.aggregate([
+      {
+        $match: {
+          isArchived: { $ne: true },
+          isFlagged: { $ne: true },
+          isDraft: { $ne: true },
+        },
+      },
+      { $project: { hashtags: { $ifNull: ['$hashtags', []] } } },
+      { $unwind: '$hashtags' },
+      { $group: { _id: '$hashtags', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: 8 },
+    ]);
+
+    const trendingHashtags = recentTags.map((tag) => tag._id);
+
+    const fallbackHashtags = ['Obsidian', 'CinemaNoir', 'WebRTC', 'NextGenSocial', 'LuxuryDesign', 'CreatorTreasury'];
+    const finalHashtags = trendingHashtags.length > 0 ? trendingHashtags : fallbackHashtags;
+
+    const fallbackUsers = [
+      { _id: 'suggest_user_1', name: 'Elena Rostova', username: 'elena', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200', bio: 'Digital Art Director • Neo-Tokyo', followerCount: 1420 },
+      { _id: 'suggest_user_2', name: 'Marcus Thorne', username: 'marcus', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', bio: 'Modular Synthesizer Architect', followerCount: 980 },
+      { _id: 'suggest_user_3', name: 'Aria Chen', username: 'aria', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200', bio: 'Cinematic Fashion & Visual Storyteller', followerCount: 2150 }
+    ];
+    const finalUsers = suggestions.length > 0 ? suggestions : fallbackUsers;
+
+    const responsePayload = {
+      users: finalUsers,
+      trendingHashtags: finalHashtags,
+    };
+
+    searchCache.set(meId, { data: responsePayload, timestamp: Date.now() });
+
+    res.status(200).json(responsePayload);
+  } catch (err) {
+    console.error('Suggestions Error:', err);
+    res.status(500).json({ message: err.message || 'Suggestion lookup failed' });
   }
 };

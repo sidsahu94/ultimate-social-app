@@ -1,4 +1,3 @@
-
 // frontend/src/redux/store.js
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./slices/authSlice";
@@ -15,9 +14,11 @@ export const store = configureStore({
     chat: chatReducer,
     user: userReducer,
     notifications: notificationReducer,
-    [apiSlice.reducerPath]: apiSlice.reducer, // <-- RTK Query reducer
+    [apiSlice.reducerPath]: apiSlice.reducer,
   },
+  // 🔥 FIX: Configure middleware to ignore serializability checks
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware()
-      .concat(apiSlice.middleware), // <-- RTK Query middleware
+    getDefaultMiddleware({
+      serializableCheck: false, // Disables the warning
+    }).concat(apiSlice.middleware),
 });

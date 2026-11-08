@@ -1,10 +1,11 @@
 version: '3.8'
 
 services:
-  # --- MongoDB Replica Set (Required for Transactions) ---
+  # --- MongoDB Replica Set (Required for ACID Transactions) ---
   mongo:
     image: mongo:6.0
     container_name: social_mongo
+    # Starts the replica set "rs0" and binds to all interfaces
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
@@ -16,33 +17,51 @@ services:
       timeout: 10s
       retries: 5
 
-  # --- Redis (Required for Socket.io Adapter) ---
+  # --- Redis (Socket.io Adapter & Cache) ---
   redis:
     image: redis:7-alpine
     container_name: social_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # --- Backend API ---
+  # --- Backend API & Web Application ---
   api:
     build: .
     container_name: social_api
-    restart: always
+    restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
       - PORT=5000
-      - NODE_ENV=development
-      - MONGO_URI=mongodb://mongo:27017/social_app?replicaSet=rs0
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=super_secure_dev_secret_change_me
-      - JWT_REFRESH_SECRET=another_super_secure_refresh_secret
-      - ALLOWED_ORIGINS=http://localhost:5173
+      - NODE_ENV=${NODE_ENV:-production}
+      # Defaults to the containerized Mongo replica set
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/ultimate_social?replicaSet=rs0}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # Security Keys (Injected via .env or runtime secrets)
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - VITE_ENCRYPTION_KEY=${VITE_ENCRYPTION_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5000}
+      # Cloudinary Integration
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      # Web Push / VAPID Keys
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_EMAIL=${VAPID_EMAIL}
+    volumes:
+      - ./backend/uploads:/app/backend/uploads
     depends_on:
       mongo:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   mongo_data:

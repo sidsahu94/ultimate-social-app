@@ -6,19 +6,16 @@ export const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const theme = 'dark';
 
   useEffect(() => {
     const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    root.classList.add('dark');
+    root.classList.remove('light');
+    localStorage.setItem('theme', 'dark');
+  }, []);
 
-  const toggle = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  const toggle = () => {}; // Single masterpiece theme - no toggle
 
   return (
     <ThemeContext.Provider value={{ theme, toggle }}>

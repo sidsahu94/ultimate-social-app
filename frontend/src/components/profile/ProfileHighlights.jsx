@@ -13,20 +13,20 @@ export default function ProfileHighlights({ isMe }) {
   return (
     <div className="flex gap-4 overflow-x-auto py-4 no-scrollbar px-4">
       {isMe && (
-        <div className="flex flex-col items-center gap-1 min-w-[70px] cursor-pointer">
-          <div className="w-[70px] h-[70px] rounded-full border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 transition">
-            <FaPlus className="text-gray-400" />
+        <div className="flex flex-col items-center gap-1.5 min-w-[70px] cursor-pointer group">
+          <div className="w-[70px] h-[70px] rounded-full border-2 border-dashed border-white/20 flex items-center justify-center bg-[#070B14] hover:border-[#00F2FE]/50 hover:bg-[#0A111E] transition shadow-md">
+            <FaPlus className="text-[#D4AF37] group-hover:scale-110 transition-transform" />
           </div>
-          <span className="text-xs font-medium">New</span>
+          <span className="text-xs font-medium text-[#CBD5E1]/70">New</span>
         </div>
       )}
       
       {DUMMY_HIGHLIGHTS.map(h => (
-        <div key={h.id} className="flex flex-col items-center gap-1 min-w-[70px] cursor-pointer group">
-          <div className="w-[70px] h-[70px] rounded-full p-[2px] bg-gray-200 dark:bg-gray-800 group-hover:bg-gradient-to-tr from-yellow-400 to-fuchsia-600 transition-all">
-            <img src={h.img} className="w-full h-full rounded-full object-cover border-2 border-white dark:border-gray-900" />
+        <div key={h.id} className="flex flex-col items-center gap-1.5 min-w-[70px] cursor-pointer group">
+          <div className="w-[70px] h-[70px] rounded-full p-[2px] bg-white/10 group-hover:bg-gradient-to-tr group-hover:from-[#D4AF37] group-hover:via-[#F4D49A] group-hover:to-[#00F2FE] transition-all shadow-md">
+            <img src={h.img} alt={h.title} className="w-full h-full rounded-full object-cover border-2 border-[#04070D]" />
           </div>
-          <span className="text-xs font-medium">{h.title}</span>
+          <span className="text-xs font-medium text-[#CBD5E1]">{h.title}</span>
         </div>
       ))}
     </div>

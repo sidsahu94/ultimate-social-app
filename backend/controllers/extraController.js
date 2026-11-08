@@ -2,9 +2,12 @@
 const User = require('../models/User');
 const Chat = require('../models/Chat');
 const Post = require('../models/Post');
+const Message = require('../models/Message');
 const cloud = require('../utils/cloudinary');
 const Saved = require('../models/Saved');
 const mongoose = require('mongoose');
+const path = require('path');
+const fs = require('fs');
 
 exports.aiAvatar = async (req, res) => {
   const up = await cloud.uploads(req.file.path, 'avatars');
@@ -13,46 +16,46 @@ exports.aiAvatar = async (req, res) => {
   res.json({ url: up.secure_url });
 };
 
-// VOICE CONTROLLER
 exports.voice = async (req, res) => {
   try {
-    const chat = await Chat.findById(req.params.chatId);
-    if (!chat) return res.status(404).json({ message: 'Chat not found' });
+    const { chatId } = req.params;
+    const { url } = req.body; // Assuming your middleware uploads the file and passes the URL in req.body
 
-    const up = await cloud.uploads(req.file.path, 'voice', { resource_type: 'video' }); 
-    
-    const message = {
+    if (!url) {
+      return res.status(400).json({ message: "Audio URL is required" });
+    }
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+       return res.status(404).json({ message: "Chat not found" });
+    }
+
+    // 1. Create a proper Message document
+    const newMessage = await Message.create({
+      chat: chatId,
       sender: req.user._id,
-      content: '', 
-      audio: up.secure_url, 
-      createdAt: new Date()
-    };
-
-    chat.messages.push(message);
-    chat.updatedAt = Date.now();
-    await chat.save();
-
-    const populatedChat = await Chat.findById(req.params.chatId)
-      .populate('participants', 'name avatar')
-      .populate('messages.sender', 'name avatar');
-
-    const io = req.app.get('io') || global.io;
-    const newMessage = populatedChat.messages[populatedChat.messages.length - 1];
-    
-    chat.participants.forEach(p => {
-        io.to(String(p)).emit('receiveMessage', { 
-            chatId: chat._id, 
-            message: newMessage 
-        });
+      audio: url,
+      type: 'voice',
+      content: '🎤 Voice Message' // Fallback for UI that doesn't support audio players
     });
 
-    res.json(chat);
-  } catch (err) {
-    console.error('Voice upload error:', err);
-    res.status(500).json({ message: 'Server error during voice upload' });
+    // 2. Update the Chat's lastMessage reference properly
+    await Chat.findByIdAndUpdate(chatId, {
+      lastMessage: newMessage._id,
+      $set: { updatedAt: Date.now() } 
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: "Voice message sent",
+      data: newMessage 
+    });
+
+  } catch (error) {
+    console.error("Voice message error:", error);
+    res.status(500).json({ message: "Server error sending voice message" });
   }
 };
-
 exports.insights = async (req, res) => {
   res.json({
     dates: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
@@ -97,15 +100,12 @@ exports.getSavedByUser = async (req, res) => {
     
     // Slice projection for pagination
     const record = await Saved.findOne({ user: userId })
-        .populate({
-            path: 'posts',
-            options: { 
-                sort: { createdAt: -1 }, 
-                skip: page * limit,
-                limit: limit 
-            },
-            populate: { path: 'user', select: 'name avatar' } 
-        });
+      .populate({
+        path: 'posts',
+        match: req.query.cursor ? { createdAt: { $lt: new Date(req.query.cursor) } } : {},
+        options: { sort: { createdAt: -1 }, limit: limit },
+        populate: { path: 'user', select: 'name avatar' }
+      });
 
     const validPosts = (record?.posts || []).filter(post => post !== null);
 
@@ -142,10 +142,19 @@ exports.getShopItems = async (req, res) => {
 exports.uploadFile = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const up = await cloud.uploads(req.file.path, 'general');
-    res.json({ url: up.secure_url });
+    try {
+      if (process.env.CLOUDINARY_CLOUD_NAME) {
+        const up = await cloud.uploads(req.file.path, 'general');
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+        return res.json({ url: up.secure_url });
+      }
+    } catch (cloudErr) {
+      console.warn('Cloudinary upload fallback to disk:', cloudErr.message);
+    }
+    const localUrl = `/uploads/${path.basename(req.file.path)}`;
+    res.json({ url: localUrl });
   } catch (e) {
-    console.error(e);
+    console.error('Upload failed:', e);
     res.status(500).json({ message: 'Upload failed' });
   }
 };

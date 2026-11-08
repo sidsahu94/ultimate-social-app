@@ -8,8 +8,8 @@ const AdminRoute = () => {
 
   if (loading) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#050505]">
-            <div className="text-gray-500 font-medium animate-pulse">Verifying permissions...</div>
+        <div className="min-h-screen flex items-center justify-center bg-[#04070D]">
+            <div className="text-[#CBD5E1]/70 font-medium tracking-wide animate-pulse">Verifying permissions...</div>
         </div>
       );
   }

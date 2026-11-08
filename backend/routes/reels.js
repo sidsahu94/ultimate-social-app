@@ -1,7 +1,7 @@
 // backend/routes/reels.js
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const upload = require('../utils/multer');
 const reels = require('../controllers/reelsController');
 
@@ -9,14 +9,18 @@ const reels = require('../controllers/reelsController');
 router.post('/upload', protect, upload.any(), reels.uploadReel);
 
 // Reels feed
-router.get('/feed', protect, reels.feed);
+router.get('/feed', optionalAuth, reels.feed);
 
-// ✅ LIKE / UNLIKE REEL (FIX)
+// Like / unlike reel
 router.put('/like/:id', protect, reels.likeReel);
-// 🔥 NEW: Delete Reel Route
+
+// Tip creator on reel
+router.post('/:id/tip', protect, reels.tipReel);
+
+// View reel analytics
+router.post('/:id/view', protect, reels.viewReel);
+
+// Delete reel
 router.delete('/:id', protect, reels.deleteReel);
-
-router.post('/:id/view', protect, reels.viewReel); // 🔥 NEW ROUTE
-
 
 module.exports = router;

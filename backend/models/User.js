@@ -1,147 +1,237 @@
 // backend/models/User.js
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema({
-  name: { 
-    type: String, 
-    required: [true, 'Please provide a name'], 
-    trim: true,
-    index: 'text' 
-  },
-  // Unique username for mentions/urls
-  username: { 
-      type: String, 
-      unique: true, 
-      sparse: true, 
-      index: true 
-  },
-  email: { 
-    type: String, 
-    unique: true, 
-    required: [true, 'Please provide an email'], 
-    lowercase: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 
-      'Please provide a valid email'
-    ]
-  },
-  // 🔥 Fix: Password is only required if NOT a Google User
-  password: { 
-    type: String, 
-    required: function() { return !this.googleId; }, 
-    minlength: 6,
-    select: false 
-  },
-  
-  // --- Profile Visuals ---
-  avatar: { type: String, default: "" },
-  coverPhoto: { type: String, default: "" },
-  bio: { type: String, maxlength: 160, default: "" },
-  location: { type: String, default: "" },
-  website: { type: String, default: "" },
-  socialLinks: {
-    twitter: String,
-    instagram: String,
-    linkedin: String
-  },
-  
-  // --- Status & Meta ---
-  role: { type: String, enum: ['user', 'admin', 'moderator'], default: 'user' },
-  isVerified: { type: Boolean, default: false },
-  userStatus: { type: String, default: 'Available' },
-  googleId: String,
-  
-  // --- Gamification ---
-  xp: { type: Number, default: 0, index: -1 }, 
-  level: { type: Number, default: 1 },
-  badges: [{ type: String }],
-  streak: {
-    count: { type: Number, default: 0 },
-    lastLogin: { type: Date }
-  },
-  
-  // --- Social Graph ---
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  closeFriends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  saved: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
-  
-  // --- Wallet & Economy ---
-  wallet: {
-    balance: { type: Number, default: 100 },
-    totalReceived: { type: Number, default: 0 },
-    totalSent: { type: Number, default: 0 }
-  },
-  walletPin: { type: String, select: false },
-  referralCode: { type: String, unique: true, sparse: true },
-  referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  
-  // --- Settings ---
-  notificationSettings: {
-    likes: { type: Boolean, default: true },
-    comments: { type: Boolean, default: true },
-    follows: { type: Boolean, default: true },
-    messages: { type: Boolean, default: true },
-  },
-  pushSubscription: { type: [Object], select: false, default: [] },
-  
-  // --- Geo Location ---
-  geo: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: [0, 0] }
-  },
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
 
-  // --- Security ---
-  is2FAEnabled: { type: Boolean, default: false },
-  refreshToken: { type: String, select: false },
-  tempOtp: { type: String, select: false },
-  resetOtp: { type: String, select: false },
-  resetOtpExpires: { type: Number, select: false },
-  
-  // --- Soft Delete ---
-  isDeleted: { type: Boolean, default: false, index: true },
-  deletedAt: { type: Date, default: null }
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true // Critically indexed for high-volume username lookups
+    },
 
-}, { 
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true // Critically indexed for high-volume email lookups
+    },
 
-// --- INDEXES ---
-UserSchema.index({ geo: '2dsphere' });
+    password: {
+      type: String,
+      required: function() { 
+        // Dynamic condition: password property is required only if the profile isn't authenticating via Google OAuth
+        return !this.googleId; 
+      }
+    },
 
-// --- VIRTUALS ---
-UserSchema.virtual('followersCount').get(function() {
-  return this.followers ? this.followers.length : 0;
-});
+    avatar: {
+      type: String,
+      default: ''
+    },
 
-UserSchema.virtual('followingCount').get(function() {
-  return this.following ? this.following.length : 0;
-});
+    coverPhoto: {
+      type: String,
+      default: ''
+    },
 
-// --- MIDDLEWARE ---
-UserSchema.pre('save', function(next) {
-  if (!this.referralCode) {
-    this.referralCode = this._id.toString().slice(-6).toUpperCase();
+    bio: {
+      type: String,
+      default: ''
+    },
+
+    website: {
+      type: String,
+      default: ''
+    },
+
+    followers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+
+    following: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+
+    role: {
+      type: String,
+      enum: ['user', 'admin', 'moderator', 'banned'],
+      default: 'user'
+    },
+
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+
+    // ==========================================
+    // EXTRA FUNCTIONAL SYSTEMS
+    // ==========================================
+
+    // --- Wallet & Economy System ---
+    wallet: {
+      balance: { type: Number, default: 0 },
+      totalSent: { type: Number, default: 0 },
+      totalReceived: { type: Number, default: 0 }
+    },
+    walletPin: { type: String, select: false }, // Hashed PIN for transactions
+    lastAirdrop: { type: Date },
+    lastDailyBonus: { type: Date },
+    referralCode: { type: String },
+
+    // --- Gamification & Social ---
+    streak: {
+      count: { type: Number, default: 1 },
+      lastActiveDate: { type: Date, default: Date.now },
+      bestStreak: { type: Number, default: 1 }
+    },
+    dailyQuests: [
+      {
+        id: String,
+        title: String,
+        reward: Number,
+        completed: { type: Boolean, default: false },
+        claimed: { type: Boolean, default: false },
+        progress: { type: Number, default: 0 },
+        target: { type: Number, default: 1 }
+      }
+    ],
+    passkeyCredentials: [
+      {
+        credentialId: String,
+        publicKey: String,
+        counter: Number,
+        transports: [String],
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
+    xp: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
+    badges: [{ type: String }],
+    nftPfpUrl: { type: String },
+    profileCompletion: { type: Number, default: 20 },
+    socialLinks: {
+      twitter: { type: String, default: '' },
+      instagram: { type: String, default: '' },
+      linkedin: { type: String, default: '' }
+    },
+
+    // --- Profile Visibility & Status ---
+    privateProfile: { type: Boolean, default: false },
+    userStatus: { type: String, default: 'online' },
+    pinnedPost: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
+    closeFriends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+    // --- Location & Geo-queries ---
+    geo: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: [0, 0] } // [longitude, latitude]
+    },
+
+    // --- Security & Auth (2FA / Sessions / Push) ---
+    is2FAEnabled: { type: Boolean, default: false },
+    twoFactorAuth: {
+      enabled: { type: Boolean, default: false },
+      secret: { type: String }
+    },
+    refreshToken: { type: String },
+    googleId: { type: String, unique: true, sparse: true }, // Added sparse flag configuration for partial validation indexing on federated signups
+    notificationSettings: {
+      likes: { type: Boolean, default: true },
+      comments: { type: Boolean, default: true },
+      follows: { type: Boolean, default: true }
+    },
+    pushSubscriptions: [{
+      endpoint: String,
+      keys: {
+        p256dh: String,
+        auth: String
+      }
+    }],
+
+    // --- Account Deletion State ---
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date }
+  },
+  {
+    timestamps: true
   }
-  next();
-});
+);
 
-// 🔥 Fix: Only hash password if it exists and is modified
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || !this.password) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
+// ==========================================
+// DB INDEXES
+// ==========================================
 
-UserSchema.pre(/^find/, function(next) {
-  if (this.options.includeDeleted !== true) {
-    this.where({ isDeleted: { $ne: true } });
+// Critical index required for $near and geo-spatial queries
+userSchema.index({ geo: '2dsphere' });
+
+// Optimized Compound/Standard Time-Series Query Indexing
+userSchema.index({ createdAt: -1 });
+
+// ==========================================
+// PASSWORD HASH
+// ==========================================
+
+userSchema.pre(
+  'save',
+  async function (next) {
+    if (!this.isModified('password') || !this.password) {
+      return next();
+    }
+
+    try {
+      const salt = await bcrypt.genSalt(10);
+      this.password = await bcrypt.hash(this.password, salt);
+      next();
+    } catch (err) {
+      next(err);
+    }
   }
-  next();
-});
+);
 
-module.exports = mongoose.model('User', UserSchema);
+// ==========================================
+// PASSWORD COMPARE
+// ==========================================
+
+userSchema.methods.matchPassword =
+  async function (enteredPassword) {
+    if (!this.password) return false; // Prevent comparison if user is an exclusive OAuth signup without a password
+    return bcrypt.compare(
+      enteredPassword,
+      this.password
+    );
+  };
+
+// ==========================================
+
+module.exports =
+  mongoose.models.User ||
+  mongoose.model(
+    'User',
+    userSchema
+  );

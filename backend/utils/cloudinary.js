@@ -80,38 +80,24 @@ const uploadsStream = (readableStream, folder = 'ultimate_social', opts = {}) =>
 		readableStream.pipe(uploadStream);
 	});
 
-module.exports = {
-	uploads,
-	uploadsStream,
-	cloudinary,
-};
-
-
-// 🔥 NEW: Extract Public ID and Delete
 const deleteFile = async (url) => {
     if (!url || !url.includes('cloudinary')) return;
     try {
-        // Extract public_id from URL: 
-        // matches "folder/filename" before the extension
-        const regex = /\/v\d+\/([^/]+)\.[a-z]+$/;
-        const match = url.match(regex);
-        // Or simpler split logic depending on your folder structure
-        // Assuming format: .../upload/v1234/ultimate_social/filename.jpg
-        const parts = url.split('/');
-        const filename = parts[parts.length - 1].split('.')[0];
-        const folder = 'ultimate_social'; // Match the folder name used in uploads
-        const publicId = `${folder}/${filename}`;
-
-        await cloudinary.uploader.destroy(publicId);
-        console.log(`Deleted Cloudinary image: ${publicId}`);
-    } catch (err) {
-        console.error("Cloudinary delete failed:", err.message);
+        // Isolate sub-folder groupings and unique identifiers accurately via refined regex matching
+        const matches = url.match(/\/v\d+\/(.+)\.[a-z0-9]+$/i);
+        if (matches && matches[1]) {
+            const publicId = matches[1];
+            await cloudinary.uploader.destroy(publicId);
+            console.log(`Deleted Cloudinary image: ${publicId}`);
+        }
+    } catch (error) {
+        console.error("Remote file release task sequence failed:", error.message);
     }
 };
 
 module.exports = {
 	uploads,
 	uploadsStream,
-    deleteFile, // Export it
+    deleteFile,
 	cloudinary,
 };

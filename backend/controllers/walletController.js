@@ -81,79 +81,95 @@ exports.airdrop = async (req, res) => {
 
     const AMOUNT = 200;
     
-    // Simple update is fine here (low risk)
-    await User.findByIdAndUpdate(req.user._id, {
+    // 🔥 FIX: Use { new: true } to return the updated document, preventing stale socket emits
+    const updatedUser = await User.findByIdAndUpdate(req.user._id, {
       $inc: { "wallet.balance": AMOUNT },
       $set: { lastAirdrop: now }
-    });
+    }, { new: true });
 
     // Log transaction (fire and forget for airdrop)
     Transaction.create({
       user: me._id,
       type: 'credit',
       amount: AMOUNT,
-      description: 'Daily Airdrop Reward'
-    });
+      description: 'Daily Airdrop Reward',
+      idempotencyKey: `airdrop:${me._id}:${now.toISOString().split('T')[0]}`
+    }).catch(err => console.warn('Airdrop transaction log error:', err.message));
 
     const io = req.app.get('io') || global.io;
     if (io) {
-      io.to(String(me._id)).emit('wallet:update', { balance: me.wallet.balance + AMOUNT });
+      // Broadcast the exact new balance
+      io.to(String(me._id)).emit('wallet:update', { balance: updatedUser.wallet.balance });
     }
 
-    res.json({ success: true, message: `Received ${AMOUNT} coins!`, balance: me.wallet.balance + AMOUNT });
+    res.json({ success: true, message: `Received ${AMOUNT} coins!`, balance: updatedUser.wallet.balance });
   } catch (e) {
+    console.error("Airdrop error:", e);
     res.status(500).json({ message: 'Server error processing airdrop' });
   }
 };
 
-// --- 5. SECURE TRANSFER (TIP) - ACID Transaction ---
+// --- 5. SECURE TRANSFER (TIP) - ACID Transaction with Standalone Mongo Fallback ---
 exports.tip = async (req, res) => {
   let session = null;
   try {
-    const { to, amount, pin, idempotencyKey } = req.body; 
-    const numAmount = Math.abs(Number(amount));
+    const to = req.body.to || req.body.recipientId || req.body.targetUserId;
+    const pin = req.body.pin || req.body.newPin;
+    const idempotencyKey = req.body.idempotencyKey;
+    const numAmount = Math.abs(Number(req.body.amount));
 
     if (!numAmount || numAmount < 1) return fail(res, 'Invalid amount (min 1 coin)');
 
     // 1. Fetch Sender & Verify PIN (Read Operation)
     const sender = await User.findById(req.user._id).select('+walletPin wallet');
-    if (!sender.walletPin) return fail(res, 'Please set a Wallet PIN first in Settings', 403);
-    
-    const isPinValid = await bcrypt.compare(pin, sender.walletPin);
-    if (!isPinValid) return fail(res, 'Incorrect PIN', 401);
-    
+    if (!sender.walletPin) {
+      if (req.body.newPin && String(req.body.newPin).length === 6 && !isNaN(req.body.newPin)) {
+        sender.walletPin = await bcrypt.hash(String(req.body.newPin), 10);
+        await sender.save();
+      } else {
+        return fail(res, 'Please set a 6-digit Wallet PIN first', 403);
+      }
+    } else {
+      const isPinValid = await bcrypt.compare(String(pin || ''), sender.walletPin);
+      if (!isPinValid) return fail(res, 'Incorrect PIN', 401);
+    }
+
     if (sender.wallet.balance < numAmount) return fail(res, 'Insufficient balance');
 
     // 2. Resolve Recipient
+    if (!to) return fail(res, 'Recipient ID is required', 400);
     const recipient = await User.findById(to);
     if (!recipient) return fail(res, 'User not found', 404);
     if (sender._id.equals(recipient._id)) return fail(res, 'Cannot tip yourself');
 
-    // 3. START ACID SESSION
-    session = await mongoose.startSession();
-    session.startTransaction();
+    // 3. START SESSION IF SUPPORTED (Replica set environments)
+    try {
+      session = await mongoose.startSession();
+      session.startTransaction();
+    } catch (_) {
+      session = null;
+    }
+    const sessionOpts = session ? { session } : {};
+
+    const safeIdempotencyKey = idempotencyKey || `tip:${sender._id}:${Date.now()}`;
 
     // 4. Log Transaction FIRST (Idempotency Guard)
-    // 🔥 CRITICAL FIX: We insert the transaction first. 
-    // If the idempotencyKey exists, MongoDB throws E11000 immediately, aborting the logic.
-    // This prevents race conditions where two requests pass the "check" simultaneously.
     await Transaction.create([{
       user: sender._id,
       type: 'debit',
       amount: numAmount,
       description: `Tip to ${recipient.name}`,
-      idempotencyKey // Relies on MongoDB Unique Index
-    }], { session });
+      idempotencyKey: safeIdempotencyKey
+    }], sessionOpts);
 
     // 5. Deduct from Sender (Atomic decrement with balance guard)
     const updatedSender = await User.findOneAndUpdate(
       { _id: sender._id, "wallet.balance": { $gte: numAmount } },
       { $inc: { "wallet.balance": -numAmount, "wallet.totalSent": numAmount } },
-      { session, new: true }
+      { ...sessionOpts, new: true }
     );
 
     if (!updatedSender) {
-        // This happens if balance dropped between step 1 and step 5
         throw new Error("Balance check failed during atomic update");
     }
 
@@ -161,7 +177,7 @@ exports.tip = async (req, res) => {
     await User.findByIdAndUpdate(
       recipient._id,
       { $inc: { "wallet.balance": numAmount, "wallet.totalReceived": numAmount } },
-      { session }
+      sessionOpts
     );
 
     // 7. Log Recipient Credit Side
@@ -169,12 +185,15 @@ exports.tip = async (req, res) => {
       user: recipient._id,
       type: 'credit',
       amount: numAmount,
-      description: `Tip from ${sender.name}`
-    }], { session });
+      description: `Tip from ${sender.name}`,
+      idempotencyKey: `tip-credit:${sender._id}:${recipient._id}:${Date.now()}`
+    }], sessionOpts);
 
-    // 8. Commit
-    await session.commitTransaction();
-    session.endSession();
+    // 8. Commit if session is active
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
 
     // 9. Real-time Updates (Best Effort)
     const io = req.app.get('io') || global.io;
@@ -191,7 +210,7 @@ exports.tip = async (req, res) => {
 
   } catch (err) {
     if (session) {
-      await session.abortTransaction();
+      try { await session.abortTransaction(); } catch (_) {}
       session.endSession();
     }
     
@@ -202,7 +221,6 @@ exports.tip = async (req, res) => {
     
     console.error("Tip Transaction Failed:", err);
     
-    // Handle specific balance error manually thrown above
     if (err.message === "Balance check failed during atomic update") {
         return fail(res, 'Insufficient balance (Concurrent transaction)');
     }

@@ -1,8 +1,11 @@
 // backend/routes/extra.js
-const router = require('express').Router();
-// 🔥 CHANGE: Import optionalAuth along with protect
+const express = require('express');
+const router = express.Router();
+
+// Ensure both protect and optionalAuth are imported from your auth middleware
 const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const upload = require('../utils/multer');
+
 const extraController = require('../controllers/extraController');
 const searchSuggestController = require('../controllers/searchSuggestController');
 const { chatLimiter } = require('../middleware/rateLimit');
@@ -23,8 +26,8 @@ router.get('/save/:id', protect, extraController.getSavedByUser);
 // Profile Insights
 router.get('/insights', protect, extraController.insights);
 
-// 🔥 FIX: Suggestions are now Public (Optional Auth)
-// This prevents the 401 loop on the home page for new/guest users
+// 🔥 FIX: Suggestions now use optionalAuth instead of protect
+// This allows the home page to load suggestions for guests without throwing a 401 error.
 router.get('/suggestions', optionalAuth, searchSuggestController.suggestions); 
 
 // Reels Feed (Public)

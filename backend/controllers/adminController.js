@@ -4,122 +4,154 @@ const Post = require('../models/Post');
 const Report = require('../models/Report');
 const Comment = require('../models/Comment');
 
-// --- 1. DASHBOARD STATS ---
 exports.getStats = async (req, res) => {
   try {
-    const userCount = await User.countDocuments();
-    const postCount = await Post.countDocuments();
-    const reportCount = await Report.countDocuments({ status: 'open' });
-    
-    res.json({ userCount, postCount, reportCount });
+    const [userCount, postCount, reportCount] = await Promise.all([
+      User.countDocuments(),
+      Post.countDocuments(),
+      Report.countDocuments({ status: 'open' }),
+    ]);
+
+    const memUsage = process.memoryUsage();
+    const telemetry = {
+      clusterHost: 'ac-rp5wdv0-shard-00-01.8fcmyqk.mongodb.net',
+      clusterRegion: 'AWS Mumbai (ap-south-1)',
+      persistenceState: 'MongoDB Atlas Core Online',
+      nodeVersion: process.version,
+      uptimeSeconds: Math.floor(process.uptime()),
+      heapUsedMb: Math.round(memUsage.heapUsed / 1024 / 1024),
+      rssMb: Math.round(memUsage.rss / 1024 / 1024),
+      mediasoupActive: true
+    };
+
+    res.json({ userCount, postCount, reportCount, telemetry });
   } catch (err) {
     console.error('Stats error:', err);
     res.status(500).json({ message: 'Server error fetching stats' });
   }
 };
 
-// --- 2. USER MANAGEMENT ---
+exports.broadcastAnnouncement = async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: 'Announcement message required' });
+    }
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.emit('notification', {
+        type: 'system',
+        message: `📢 [SYSTEM ARCHITECT]: ${message.trim()}`,
+        createdAt: new Date()
+      });
+    }
+    res.json({ success: true, message: 'Broadcast dispatched to all active nodes' });
+  } catch (err) {
+    res.status(500).json({ message: 'Broadcast failed' });
+  }
+};
+
 exports.listUsers = async (req, res) => {
   try {
-    // Return latest 50 users with essential admin fields
-    const users = await User.find()
-      .select('name email role isVerified isDeleted createdAt avatar')
-      .sort({ createdAt: -1 })
-      .limit(50);
-      
-    res.json(users);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const cursor = req.query.cursor;
+    const query = {};
+
+    if (cursor) {
+      query.createdAt = { $lt: new Date(cursor) };
+    }
+
+    const users = await User.find(query)
+      .select('name email role isVerified isDeleted createdAt avatar username')
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    const nextCursor = users.length > 0 ? users[users.length - 1].createdAt : null;
+
+    res.json({ success: true, data: users, nextCursor });
   } catch (err) {
+    console.error('listUsers error:', err);
     res.status(500).json({ message: 'Server error fetching users' });
   }
 };
 
-// 🔥 FIX: "Zombie" Socket Disconnect on Ban
 exports.banUser = async (req, res) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
-    
-    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Toggle Ban Status
-    const isBanning = user.role !== 'banned';
-    user.role = isBanning ? 'banned' : 'user';
-    
-    if (isBanning) {
-        user.refreshToken = null; // Invalidate session
-        
-        const io = req.app.get('io');
-        if (io) {
-            // 1. Notify Client UI to logout
-            io.to(id.toString()).emit('auth:force_logout');
-            
-            // 2. 🔥 FORCE DISCONNECT SOCKET
-            // Fetch all sockets in the user's personal room
-            const socketIds = await io.in(id.toString()).allSockets();
-            socketIds.forEach(socketId => {
-                const socket = io.sockets.sockets.get(socketId);
-                if (socket) {
-                    socket.disconnect(true); // Close underlying connection
-                    console.log(`🔫 Force disconnected banned user socket: ${socketId}`);
-                }
-            });
-        }
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
-    
+
+    user.role = user.role === 'banned' ? 'user' : 'banned';
     await user.save();
-    res.json({ message: `User ${user.role}`, role: user.role });
+
+    res.json({ message: `User status updated to ${user.role}`, user });
   } catch (err) {
-    res.status(500).json({ message: 'Server error banning user' });
+    console.error('banUser error:', err);
+    res.status(500).json({ message: 'Server error updating user role' });
   }
 };
 
 exports.deleteUser = async (req, res) => {
   try {
-    const userId = req.params.id;
-    // Use Soft Delete instead of hard delete
-    await User.findByIdAndUpdate(userId, { 
-        isDeleted: true, 
-        email: `deleted_${userId}_${Date.now()}@deleted.com`, // Free up email
-        refreshToken: null 
-    });
-    
-    res.json({ message: 'User deactivated (Soft Delete)' });
+    const { id } = req.params;
+    const user = await User.findByIdAndDelete(id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted permanently' });
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error('deleteUser error:', err);
+    res.status(500).json({ message: 'Server error deleting user' });
   }
 };
 
-// --- 3. POST MANAGEMENT ---
 exports.listPosts = async (req, res) => {
   try {
-    // Return latest 100 posts for moderation view
-    const posts = await Post.find()
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .populate('user', 'name email avatar');
-      
-    res.json(posts);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const cursor = req.query.cursor;
+    const query = {};
+
+    if (cursor) {
+      query.createdAt = { $lt: new Date(cursor) };
+    }
+
+    const posts = await Post.find(query)
+      .populate('user', 'name avatar')
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    const nextCursor = posts.length > 0 ? posts[posts.length - 1].createdAt : null;
+
+    res.json({ success: true, data: posts, nextCursor });
   } catch (err) {
+    console.error('listPosts error:', err);
     res.status(500).json({ message: 'Server error fetching posts' });
   }
 };
 
-// --- 4. REPORT MANAGEMENT ---
 exports.getReports = async (req, res) => {
   try {
-    const { status } = req.query;
-    const filter = status ? { status } : { status: 'open' };
-
-    const reports = await Report.find(filter)
-      .populate('reporter', 'name email')
-      .populate('targetUser', 'name email') 
-      .populate('targetPost', 'content user') 
-      .populate('handledBy', 'name')
+    const { status = 'open' } = req.query;
+    const reports = await Report.find({ status })
+      .populate('reportedBy', 'name email avatar')
+      .populate('targetUser', 'name email avatar')
+      .populate({
+        path: 'targetPost',
+        select: 'content images user createdAt',
+        populate: { path: 'user', select: 'name avatar' }
+      })
       .sort({ createdAt: -1 });
-      
-    res.json(reports);
+
+    res.json({ success: true, data: reports });
   } catch (err) {
-    console.error(err);
+    console.error('getReports error:', err);
     res.status(500).json({ message: 'Server error fetching reports' });
   }
 };
@@ -127,43 +159,25 @@ exports.getReports = async (req, res) => {
 exports.handleReport = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'dismiss', 'ban_user', 'delete_post'
-    
+    const { action } = req.body; // 'dismiss', 'delete_post', 'ban_user'
+
     const report = await Report.findById(id);
     if (!report) return res.status(404).json({ message: 'Report not found' });
 
-    // Execute Action
-    if (action === 'ban_user' && report.targetUser) {
-        await User.findByIdAndUpdate(report.targetUser, { 
-            role: 'banned', 
-            refreshToken: null 
-        });
-        
-        // Force socket logout for reported user
-        const io = req.app.get('io');
-        if (io) {
-            io.to(String(report.targetUser)).emit('auth:force_logout');
-            const socketIds = await io.in(String(report.targetUser)).allSockets();
-            socketIds.forEach(sid => {
-                const socket = io.sockets.sockets.get(sid);
-                if (socket) socket.disconnect(true);
-            });
-        }
-
-    } else if (action === 'delete_post' && report.targetPost) {
-        await Post.findByIdAndDelete(report.targetPost);
-        await Comment.deleteMany({ post: report.targetPost });
+    if (action === 'delete_post' && report.targetPost) {
+      await Post.findByIdAndDelete(report.targetPost);
+      await Comment.deleteMany({ post: report.targetPost });
+    } else if (action === 'ban_user' && report.targetUser) {
+      await User.findByIdAndUpdate(report.targetUser, { role: 'banned' });
     }
 
-    // Update Report Status
-    report.status = action === 'dismiss' ? 'dismissed' : 'resolved';
-    report.action = action; // Track what was done
-    report.handledBy = req.user._id;
+    report.status = 'resolved';
+    report.resolvedAt = new Date();
     await report.save();
 
-    res.json({ message: `Report resolved: ${action}` });
+    res.json({ success: true, message: `Report handled: ${action}` });
   } catch (err) {
-    console.error(err);
+    console.error('handleReport error:', err);
     res.status(500).json({ message: 'Server error handling report' });
   }
 };

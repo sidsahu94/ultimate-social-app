@@ -1,8 +1,8 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
-// Use environment variable or fallback to localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Use environment variable or fallback to /api/v1
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 const API = axios.create({
   baseURL: API_URL,
@@ -86,10 +86,10 @@ API.interceptors.response.use(
 
       try {
         // Attempt refresh using the HTTP-Only cookie
-        // Note: No body needed, the cookie is sent automatically via withCredentials
+        const localRefreshToken = localStorage.getItem('refreshToken');
         const { data } = await axios.post(
           `${API_URL}/auth/refresh`,
-          {},
+          { refreshToken: localRefreshToken },
           { withCredentials: true }
         );
 
@@ -99,8 +99,11 @@ API.interceptors.response.use(
 
         if (!newToken) throw new Error('Invalid refresh response');
 
-        // Update Local Storage with new Access Token
+        // Update Local Storage with new Access Token & rotated Refresh Token
         localStorage.setItem('token', newToken);
+        if (payload.refreshToken) {
+          localStorage.setItem('refreshToken', payload.refreshToken);
+        }
 
         // Update default headers for future requests
         API.defaults.headers.common['Authorization'] = 'Bearer ' + newToken;
@@ -117,16 +120,13 @@ API.interceptors.response.use(
 
         // Critical Cleanup
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
         localStorage.removeItem('meId');
 
         // Dispatch Logout Event (App.jsx listens to this)
         window.dispatchEvent(new Event('auth:logout'));
 
-        // Redirect to Login if not already on a public page
-        const publicPaths = ['/login', '/register', '/welcome', '/verify-account'];
-        if (!publicPaths.includes(window.location.pathname)) {
-          window.location.href = '/login';
-        }
+        // Session expired - auth:logout handled by router
 
         return Promise.reject(refreshError);
       } finally {

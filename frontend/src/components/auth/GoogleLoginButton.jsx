@@ -18,7 +18,6 @@ export default function GoogleLoginButton() {
             token: tokenResponse.access_token 
         });
         
-        // 🔥 FIX: Handle unified response format (res.data.data) or fallback
         const payload = res.data.data || res.data;
         const { token, refreshToken, user } = payload;
         
@@ -34,7 +33,6 @@ export default function GoogleLoginButton() {
         
         addToast(`Welcome back, ${user.name}!`, { type: 'success' });
         
-        // Hard redirect to clear any stale state
         setTimeout(() => {
             window.location.href = '/'; 
         }, 500);
@@ -53,10 +51,10 @@ export default function GoogleLoginButton() {
     <button
       type="button" 
       onClick={() => login()}
-      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-[20px] bg-[#E0E5EC] dark:bg-[#1A1B1E] shadow-neu-flat dark:shadow-neu-dark-flat hover:shadow-neu-pressed dark:hover:shadow-neu-dark-pressed text-slate-700 dark:text-slate-200 transition-all active:scale-95 border border-white/40 dark:border-white/5 group"
+      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-[#070B14]/90 hover:bg-[#0A111E] text-[#F7F7FC] transition-all active:scale-95 border border-white/10 hover:border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.4)] group"
     >
-      <FaGoogle className="text-red-500 group-hover:scale-110 transition-transform drop-shadow-md" />
-      <span className="font-bold text-sm">Continue with Google</span>
+      <FaGoogle className="text-[#FF6B8A] group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(255,107,138,0.5)]" />
+      <span className="font-semibold text-sm tracking-wide text-[#CBD5E1]">Continue with Google</span>
     </button>
   );
 }

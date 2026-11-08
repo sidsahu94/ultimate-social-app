@@ -1,79 +1,187 @@
 // backend/models/Post.js
 const mongoose = require('mongoose');
 
-const PollOptionSchema = new mongoose.Schema({
-  text: String,
-  // 🔥 SCALABILITY FIX: Removed 'votes' array (User IDs).
-  // Storing IDs inside the document limits the number of voters to ~50k before crashing.
-  // We now store just the count here. Detailed tracking is in the 'PollVote' collection.
-  count: { type: Number, default: 0 } 
-}, { _id: false });
+const { Schema } = mongoose;
 
-const PostSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  
-  content: { type: String, default: '' },
-  images: [String],
-  videos: [String],
-  
-  hashtags: { type: [String], index: true },
-  mentions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  
-  // Note: We keep 'likes' array here for easier "isLikedByMe" checks on the frontend.
-  // However, we added 'likesCount' for performance when just displaying numbers.
-  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  likesCount: { type: Number, default: 0 },
-  
-  // 🔥 SCALABILITY FIX: Removed 'comments' array [ObjectId].
-  // Comments are now queried directly from the Comment collection using index { post: 1 }.
-  commentsCount: { type: Number, default: 0 },
-  
-  views: { type: Number, default: 0 },
-  
-  // Status Flags
-  isArchived: { type: Boolean, default: false },
-  isFlagged: { type: Boolean, default: false },
-  isDraft: { type: Boolean, default: false },
-  
-  // Trending Score (Pre-calculated for algorithmic feed)
-  score: { type: Number, default: 0, index: true }, 
+const PostSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
 
-  poll: {
-    question: String,
-    options: [PollOptionSchema],
-    expiresAt: Date
+    group: {
+      type: Schema.Types.ObjectId,
+      ref: 'Group',
+      default: null,
+      index: true,
+    },
+
+    content: {
+      type: String,
+      trim: true,
+      maxlength: 5000,
+      default: '',
+    },
+
+    caption: {
+      type: String,
+      trim: true,
+      maxlength: 5000,
+      default: '',
+    },
+
+    images: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+
+    videos: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+
+    hashtags: [
+      {
+        type: String,
+        lowercase: true,
+        trim: true,
+      },
+    ],
+
+    mentions: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+
+    likes: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+
+    likesCount: {
+      type: Number,
+      default: 0,
+    },
+
+    commentsCount: {
+      type: Number,
+      default: 0,
+    },
+
+    views: {
+      type: Number,
+      default: 0,
+    },
+
+    score: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+
+    isArchived: {
+      type: Boolean,
+      default: false,
+    },
+
+    isFlagged: {
+      type: Boolean,
+      default: false,
+    },
+
+    isPaywalled: {
+      type: Boolean,
+      default: false,
+    },
+
+    unlockPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    unlockedBy: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+
+    isDraft: {
+      type: Boolean,
+      default: false,
+    },
+
+    isPublished: {
+      type: Boolean,
+      default: true,
+    },
+
+    publishAt: {
+      type: Date,
+      default: null,
+    },
+
+    scheduledFor: {
+      type: Date,
+      default: null,
+    },
+
+    visibility: {
+      type: String,
+      enum: ['public', 'followers', 'private'],
+      default: 'public',
+    },
+
+    allowComments: {
+      type: Boolean,
+      default: true,
+    },
+
+    location: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    link: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
   },
-  
-  scheduledAt: { type: Date, index: true },
-  createdAt: { type: Date, default: Date.now } // Indexed via compound index below
-}, { timestamps: true });
-
-// --- INDEXES ---
-
-// 1. Feed Query Optimization: 
-// Speeds up "Find posts by users I follow, sorted by newest"
-PostSchema.index({ user: 1, createdAt: -1 });
-
-// 2. Search Optimization: 
-// Allows full-text search on content and tags
-PostSchema.index({ content: 'text', hashtags: 'text' });
-
-// 3. Trending Feed: 
-// Speeds up fetching "Hot" posts
-PostSchema.index({ score: -1, createdAt: -1 });
-
-// 4. Feed Filtering (Partial Index):
-// Creates a smaller, faster index containing only public, published posts
-PostSchema.index(
-  { createdAt: -1 },
-  { 
-    name: "feed_optimization_idx",
-    partialFilterExpression: { 
-      isArchived: false, 
-      isFlagged: false, 
-      isDraft: false 
-    } 
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
-module.exports = mongoose.model('Post', PostSchema);
+PostSchema.virtual('comments', {
+  ref: 'Comment',
+  localField: '_id',
+  foreignField: 'post',
+});
+
+PostSchema.index({ hashtags: 1 });
+PostSchema.index({ createdAt: -1 });
+PostSchema.index({ user: 1, createdAt: -1 });
+PostSchema.index({ score: -1, createdAt: -1 });
+
+module.exports = mongoose.models.Post || mongoose.model('Post', PostSchema);

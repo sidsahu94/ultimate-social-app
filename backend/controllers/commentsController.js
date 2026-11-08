@@ -3,6 +3,8 @@ const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const createNotification = require('../utils/notify'); 
 
+const mongoose = require('mongoose');
+
 /**
  * POST /api/comments/:postId
  * Creates a comment, updates the post counters atomically, emits socket event, and notifies the author.
@@ -16,8 +18,19 @@ exports.create = async (req, res) => {
         return res.status(400).json({ message: "Comment cannot be empty" });
     }
 
-    const post = await Post.findById(req.params.postId);
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.postId)) {
+        return res.status(400).json({ message: "Invalid post or content ID" });
+    }
+
+    let post = await Post.findById(req.params.postId);
+    let isReel = false;
+    if (!post) {
+      const Reel = require('../models/Reel');
+      post = await Reel.findById(req.params.postId);
+      isReel = true;
+    }
+
+    if (!post) return res.status(404).json({ message: "Post or Reel not found" });
 
     // 1. Create Comment (Standalone Document)
     // We do NOT push this ID into the Post document array to ensure scalability.
@@ -29,11 +42,11 @@ exports.create = async (req, res) => {
     });
 
     // 2. 🔥 Scalable: Increment Count Only (Atomic Operation)
-    // Instead of pushing to an array, we just increment the counter.
-    // We also increment 'score' for the trending algorithm.
-    await Post.findByIdAndUpdate(post._id, { 
-        $inc: { commentsCount: 1, score: 2 } 
-    });
+    if (!isReel) {
+      await Post.findByIdAndUpdate(post._id, { 
+          $inc: { commentsCount: 1, score: 2 } 
+      });
+    }
 
     // Populate user details for the frontend
     await comment.populate("user", "name avatar");
@@ -56,33 +69,50 @@ exports.create = async (req, res) => {
 
     res.status(201).json(comment);
   } catch (e) {
-    console.error("Create comment error", e);
+    console.error("Create comment error:", e);
     res.status(500).json({ message: "Error adding comment" });
   }
 };
 
 /**
  * GET /api/comments/:postId
- * List comments for a post with Pagination.
- * Uses the compound index { post: 1, createdAt: -1 } for performance.
+ * Fetches comments using cursor pagination.
  */
 exports.listAll = async (req, res) => {
-  try {
-    const page = parseInt(req.query.page || 0);
-    const limit = parseInt(req.query.limit || 20);
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.postId)) {
+        return res.json({ success: true, data: [], nextCursor: null });
+      }
 
-    // 🔥 Scalable: Query Comments collection directly
-    const comments = await Comment.find({ post: req.params.postId })
-      .sort({ createdAt: -1 }) // Newest first
-      .skip(page * limit)
-      .limit(limit)
-      .populate("user", "name avatar");
+      const limit = parseInt(req.query.limit) || 20;
+      const page = parseInt(req.query.page) || 0;
+      const cursor = req.query.cursor;
+      const query = { post: req.params.postId };
 
-    res.json(comments);
-  } catch (e) {
-    console.error("List comments error", e);
-    res.status(500).json({ message: "Error fetching comments" });
-  }
+      // Cursor Pagination
+      if (cursor) {
+        query.createdAt = { $lt: new Date(cursor) };
+      }
+
+      const comments = await Comment.find(query)
+          .sort({ createdAt: -1 })
+          .skip(cursor ? 0 : page * limit)
+          .limit(limit)
+          .populate('user', 'name avatar');
+
+      const nextCursor = comments.length > 0
+          ? comments[comments.length - 1].createdAt
+          : null;
+
+      res.json({
+        success: true,
+        data: comments.reverse(),
+        nextCursor
+      });
+    } catch (e) {
+      console.error('List comments error:', e);
+      res.status(500).json({ message: 'Error fetching comments' });
+    }
 };
 
 /**
@@ -114,7 +144,7 @@ exports.remove = async (req, res) => {
 
     res.json({ message: "Deleted" });
   } catch (e) {
-    console.error("Delete comment error", e);
+    console.error("Delete comment error:", e);
     res.status(500).json({ message: "Error deleting comment" });
   }
 };
@@ -138,13 +168,9 @@ exports.toggleLike = async (req, res) => {
 
     const updatedComment = await Comment.findByIdAndUpdate(commentId, update, { new: true });
 
-    // Optional: Real-time update for likes
-    // const io = req.app.get("io");
-    // if (io) io.to(`post:${updatedComment.post}`).emit("comment:updated", updatedComment);
-
     res.json({ liked: !isLiked, likesCount: updatedComment.likes.length });
   } catch (e) {
-    console.error("Toggle like error", e);
+    console.error("Toggle like error:", e);
     res.status(500).json({ message: "Error toggling like" });
   }
 };

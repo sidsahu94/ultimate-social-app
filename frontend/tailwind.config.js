@@ -4,76 +4,156 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: "class",
+  darkMode: 'class', // Enables class-based dark mode toggling
   theme: {
     extend: {
-      fontFamily: {
-        heading: ['"Outfit"', 'sans-serif'],
-        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-      },
       colors: {
-        // The "Void" Dark Theme
-        bg: {
-          light: "#F0F2F5",     // Clean porcelain
-          dark: "#050505",      // True OLED Black
-          card: "#121212",      // Slightly lighter black
+        // ======================================================================
+        // AETHERIA IMPERIAL NOIR MASTERPIECE THEME
+        // Tri-Theme Fusion:
+        // 1. Quiet Royal Black (Velvet obsidian voids, zero glare)
+        // 2. High-Contrast Electric Ocean / Deep Navy & Electric Blue
+        // 3. Modern Dark Emerald & Royal Liquid Gold
+        // ======================================================================
+        aetheria: {
+          void: '#04070D',
+          abyss: '#070B14',
+          surface: '#0A111E',
+          elevated: '#0F1A2C',
+          border: 'rgba(0, 242, 254, 0.16)',
+          borderGold: 'rgba(212, 175, 55, 0.22)',
+          
+          electricCyan: '#00F2FE',
+          electricOcean: '#38BDF8',
+          royalCobalt: '#1D4ED8',
+          electricBlue: '#2563EB',
+          deepNavy: '#070F1E',
+
+          darkEmerald: '#052E24',
+          emeraldJade: '#064E3B',
+          vividEmerald: '#10B981',
+          emeraldGlow: 'rgba(16, 185, 129, 0.45)',
+
+          royalGold: '#D4AF37',
+          liquidGold: '#F59E0B',
+          champagneGold: '#F4D49A',
+          goldGlow: 'rgba(212, 175, 55, 0.45)',
+
+          crispWhite: '#F8FAFC',
+          silverMuted: '#CBD5E1',
         },
-        primary: {
-          DEFAULT: "#3B82F6",   // Electric Blue
-          500: "#3B82F6",
-          600: "#2563EB",
-          glow: "rgba(59, 130, 246, 0.5)",
+        // Backward compatibility mappings seamlessly updated to the tri-theme aesthetic
+        masterpiece: {
+          darkRed: '#064E3B', // Modern dark emerald
+          darkRedLight: '#10B981', // Vivid emerald
+          darkRedGlow: 'rgba(16, 185, 129, 0.55)',
+          
+          silverGlass: 'rgba(10, 17, 30, 0.82)',
+          silverBorder: 'rgba(0, 242, 254, 0.18)',
+          silverHighlight: 'rgba(255, 255, 255, 0.28)',
+
+          roseGold: '#D4AF37', // Royal Gold
+          roseGoldLight: '#F4D49A', // Champagne Gold
+          roseGoldDark: '#B8860B',
+          roseGoldGlow: 'rgba(212, 175, 55, 0.4)',
+
+          sandBeige: '#F4D49A',
+          sandBeigeLight: '#FEF3C7',
+          sandBeigeMuted: '#CBD5E1',
+
+          sapphireElite: '#1D4ED8',
+          sapphireLight: '#38BDF8',
+          sapphireDark: '#070F1E',
+          sapphireGlow: 'rgba(0, 242, 254, 0.45)',
+
+          deepTeal: '#052E24', // Imperial Dark Emerald
+          deepTealLight: '#10B981',
+          deepTealDark: '#031F18',
+          deepTealGlow: 'rgba(16, 185, 129, 0.4)',
+
+          cherryNoir: '#04070D', // Quiet Royal Black void
+          cherryNoirSurface: '#0A111E', // Oceanic obsidian surface
+          cherryNoirElevated: '#0F1A2C', // Elevated deep navy
+          cherryNoirBorder: 'rgba(0, 242, 254, 0.16)',
+
+          oceanMist: '#00F2FE', // Electric Ocean Cyan
+          oceanMistLight: '#38BDF8',
+          oceanMistSoft: 'rgba(0, 242, 254, 0.2)',
+          oceanMistGlow: 'rgba(0, 242, 254, 0.5)',
+
+          softWhite: '#F8FAFC',
         },
-        secondary: {
-          DEFAULT: "#8B5CF6",   // Violet
-          glow: "rgba(139, 92, 246, 0.5)",
+        aurora: {
+          obsidian: '#04070D',
+          midnight: '#070B14',
+          graphite: '#0A111E',
+          indigo: '#1D4ED8',
+          violet: '#064E3B',
+          cyan: '#00F2FE',
+          coral: '#D4AF37',
+          gold: '#F4D49A',
+          softWhite: '#F8FAFC',
+          mistGrey: '#CBD5E1',
+          border: 'rgba(0, 242, 254, 0.18)',
         },
-        accent: {
-          pink: "#EC4899",
-          cyan: "#06B6D4",
+        obsidian: {
+          DEFAULT: '#04070D',
+          surface: '#0A111E',
+          elevated: '#0F1A2C',
+          glass: 'rgba(10, 17, 30, 0.85)',
+        },
+        luxury: {
+          gold: '#D4AF37',
+          champagne: '#F4D49A',
+          rose: '#052E24',
+          teal: '#10B981',
+          indigo: '#1D4ED8',
+          violet: '#00F2FE',
+          charcoal: '#0A111E',
+          cream: '#FEF3C7',
         }
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'glass-gradient': 'linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%)',
-        'glass-shine': 'linear-gradient(45deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%)',
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        display: ['Sora', 'sans-serif'],
+        editorial: ['Playfair Display', 'serif'],
+      },
+      borderRadius: {
+        card: '24px',
+        button: '14px',
+        input: '14px',
+        premium: '24px',
       },
       boxShadow: {
-        'glow-sm': '0 0 10px rgba(59, 130, 246, 0.3)',
-        'glow-md': '0 0 20px rgba(59, 130, 246, 0.5)',
-        'glow-lg': '0 0 30px rgba(139, 92, 246, 0.6)',
-        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-        'nav-float': '0 10px 40px -10px rgba(0,0,0,0.5)',
-        // Neumorphic shadows
-        'neu-light': '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5)',
-        'neu-dark': '5px 5px 10px #0a0a0a, -5px -5px 10px #1a1a1a',
-        'neu-inset-light': 'inset 6px 6px 10px 0 rgba(163, 177, 198, 0.7), inset -6px -6px 10px 0 rgba(255, 255, 255, 0.8)',
-        'neu-inset-dark': 'inset 5px 5px 10px #0b0b0b, inset -5px -5px 10px #1e1e1e',
-        'neon-blue': '0 0 5px #03e9f4, 0 0 25px #03e9f4, 0 0 50px #03e9f4, 0 0 100px #03e9f4',
-        'neon-pink': '0 0 5px #ff00de, 0 0 25px #ff00de, 0 0 50px #ff00de, 0 0 100px #ff00de',
+        card: '0 16px 48px rgba(0, 0, 0, 0.65)',
+        silverGlass: '0 16px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+        electricCyanGlow: '0 0 30px rgba(0, 242, 254, 0.5)',
+        sapphireGlow: '0 0 30px rgba(29, 78, 216, 0.45)',
+        oceanMistGlow: '0 0 30px rgba(0, 242, 254, 0.45)',
+        emeraldGlow: '0 0 30px rgba(16, 185, 129, 0.45)',
+        royalGoldGlow: '0 0 30px rgba(212, 175, 55, 0.45)',
+        aetheriaGlow: '0 0 35px rgba(0, 242, 254, 0.35), 0 0 50px rgba(212, 175, 55, 0.25)',
       },
-      animation: {
-        'float': 'float 6s ease-in-out infinite',
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'heart-beat': 'heartBeat 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        'shimmer': 'shimmer 2s linear infinite',
+      backgroundImage: {
+        'aetheria-signature': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 30%, #052E24 65%, #D4AF37 100%)',
+        'electric-ocean': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 60%, #070F1E 100%)',
+        'emerald-gold': 'linear-gradient(135deg, #052E24 0%, #10B981 50%, #D4AF37 100%)',
+        'royal-obsidian': 'linear-gradient(135deg, #04070D 0%, #0A111E 50%, #0F1A2C 100%)',
+        'masterpiece-signature': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 30%, #10B981 65%, #D4AF37 100%)',
+        'sapphire-mist': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 50%, #38BDF8 100%)',
+        'cherry-rose': 'linear-gradient(135deg, #052E24 0%, #10B981 50%, #D4AF37 100%)',
+        'silver-sheen': 'linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 242, 254, 0.08) 50%, rgba(212, 175, 55, 0.15) 100%)',
+        'aurora-signature': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 30%, #10B981 65%, #D4AF37 100%)',
+        'aurora-brand': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 100%)',
+        'socialo-gradient': 'linear-gradient(135deg, #00F2FE 0%, #1D4ED8 30%, #10B981 65%, #D4AF37 100%)',
       },
-      keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
-        heartBeat: {
-          '0%': { transform: 'scale(1)' },
-          '50%': { transform: 'scale(1.3)' },
-          '100%': { transform: 'scale(1)' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        }
+      transitionTimingFunction: {
+        socialo: 'cubic-bezier(0.2, 0.75, 0.25, 1)',
+      },
+      transitionDuration: {
+        socialo: '240ms',
       }
     },
   },
   plugins: [],
-};
+}

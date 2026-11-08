@@ -8,9 +8,7 @@ const FollowButton = ({ userId, initialStatus, onChange }) => {
   const [isFollowing, setIsFollowing] = useState(false);
   const { add: addToast } = useToast();
 
-  // Initialize state
   useEffect(() => {
-    // If parent passed status, use it. Otherwise fetch.
     if (initialStatus !== undefined) {
       setIsFollowing(initialStatus);
     } else {
@@ -28,7 +26,7 @@ const FollowButton = ({ userId, initialStatus, onChange }) => {
   };
 
   const toggle = async (e) => {
-    e.preventDefault(); // Stop link clicks if inside a card
+    e.preventDefault();
     e.stopPropagation();
     
     if (loading) return;
@@ -36,9 +34,7 @@ const FollowButton = ({ userId, initialStatus, onChange }) => {
 
     try {
       const r = await API.post(`/users/${userId}/follow`);
-      
-      // Update state based on backend response
-      const nowFollowing = r.data.following; // Backend returns { following: true/false }
+      const nowFollowing = r.data.following;
       setIsFollowing(nowFollowing);
       
       if (nowFollowing) {
@@ -61,10 +57,10 @@ const FollowButton = ({ userId, initialStatus, onChange }) => {
       onClick={toggle} 
       disabled={loading}
       className={`
-        px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 shadow-sm
+        px-4 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all duration-200 shadow-sm
         ${isFollowing 
-          ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 border border-transparent' 
-          : 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-md'
+          ? 'bg-[#0A111E] text-[#CBD5E1] border border-white/10 hover:border-[#052E24]/40 hover:bg-[#052E24]/20 hover:text-[#FF6B8A]' 
+          : 'bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white hover:opacity-90 shadow-md shadow-blue-900/30 border border-white/10'
         }
         ${loading ? 'opacity-70 cursor-wait' : ''}
       `}

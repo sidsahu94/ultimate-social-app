@@ -1,19 +1,21 @@
 // frontend/src/pages/home/Feed.jsx
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
+import { useSelector } from "react-redux";
 import API from "../../services/api";
 import socket from "../../services/socket";
 import PostCard from "../../components/posts/PostCard";
 import SkeletonPost from "../../components/ui/SkeletonPost";
 import { AnimatePresence, motion } from "framer-motion";
 import Stories from "../../components/stories/Stories";
+import LiveSpacesBar from "../../components/spaces/LiveSpacesBar";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import CreatePostModal from "../../components/posts/CreatePostModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { FaArrowUp } from "react-icons/fa";
 import useScrollRestoration from "../../hooks/useScrollRestoration"; 
+import { getScrollContainer, getScrollPosition, scrollToTop as smoothScrollToTop } from "../../utils/scrollUtils"; 
 
-// Utility to deduplicate posts by ID
 const uniqueById = (arr) => {
   const seen = new Set();
   const out = [];
@@ -25,70 +27,84 @@ const uniqueById = (arr) => {
 };
 
 export default function Feed() {
-  // 🔥 Remembers scroll position on back navigation
   useScrollRestoration('feed_scroll_pos');
+  
+  const { user: currentUser } = useSelector((state) => state.auth);
 
   const [posts, setPosts] = useState([]);
-  const [cursor, setCursor] = useState(null); // 🔥 Changed from 'page' to 'cursor'
+  const [cursorDate, setCursorDate] = useState(null); 
+  const [cursorId, setCursorId] = useState(null);     
   const [loading, setLoading] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   
-  // UI State
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [startY, setStartY] = useState(0);
 
   const { add: addToast } = useToast();
   const isFirstLoad = useRef(true);
+  const isLoadingRef = useRef(false);
+
+  useEffect(() => {
+    isLoadingRef.current = loading;
+  }, [loading]);
 
   // --- DATA LOADING ---
   const load = useCallback(async (reset = false) => {
-    if (loading) return;
+    if (isLoadingRef.current) return;
     setLoading(true);
     
     try {
-      // Logic: If resetting, clear cursor. If scrolling, use last cursor.
-      const queryCursor = reset ? '' : (cursor ? `&cursor=${cursor}` : '');
+      let queryCursor = '';
+      if (!reset) {
+        if (cursorDate) queryCursor += `&cursorDate=${encodeURIComponent(cursorDate)}`;
+        if (cursorId) queryCursor += `&cursorId=${encodeURIComponent(cursorId)}`;
+      }
+
       const res = await API.get(`/posts/feed?limit=10${queryCursor}`);
       
-      // Handle unified response format
-      const payload = res.data.data || res.data; 
-      const newPosts = Array.isArray(payload) ? payload : (payload.posts || []);
-      const nextCursor = payload.nextCursor || null;
+      const raw = res.data;
+      const newPosts = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : (raw?.posts || []));
+      
+      const nextCursorDate = raw?.nextCursorDate || (newPosts.length >= 10 ? newPosts[newPosts.length - 1]?.createdAt : null);
+      const nextCursorId = raw?.nextCursorId || (newPosts.length >= 10 ? newPosts[newPosts.length - 1]?._id : null);
 
       setPosts(prev => {
         if (reset) return uniqueById(newPosts);
         return uniqueById([...prev, ...newPosts]);
       });
 
-      setCursor(nextCursor);
-      setHasMore(!!nextCursor);
+      setCursorDate(nextCursorDate);
+      setCursorId(nextCursorId);
+      setHasMore(Boolean((nextCursorDate || nextCursorId) && newPosts.length >= 10));
 
     } catch (err) {
       console.error("Feed load error", err);
-      // Optional: addToast("Failed to load feed", { type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [cursor, loading]);
+  }, [cursorDate, cursorId]);
 
-  // Initial Load
   useEffect(() => { 
       if(isFirstLoad.current) {
           isFirstLoad.current = false;
           if(posts.length === 0) load(true); 
       }
-  }, []);
+  }, [load, posts.length]);
 
   // --- REAL-TIME UPDATES ---
   useEffect(() => {
     const onPostCreated = (ev) => {
       const newPost = ev.detail || ev; 
       if (newPost && newPost._id) {
-        setPosts(prev => uniqueById([newPost, ...prev])); // Add to top
+        setPosts(prev => uniqueById([newPost, ...prev])); 
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        addToast('New post loaded!', { type: 'info' });
+        
+        const postAuthorId = newPost.user?._id || newPost.user;
+        if (currentUser && postAuthorId !== currentUser._id) {
+           addToast('New post loaded!', { type: 'info' });
+        }
       } else {
         load(true);
       }
@@ -118,25 +134,30 @@ export default function Feed() {
       socket.off('post:created', onPostCreated);
       socket.off('post:published', onScheduled);
     };
-  }, [load, addToast]);
+  }, [load, addToast, currentUser]);
 
   // --- SCROLL TO TOP ---
   useEffect(() => {
-    const checkScroll = () => setShowTopBtn(window.scrollY > 400);
-    window.addEventListener('scroll', checkScroll);
-    return () => window.removeEventListener('scroll', checkScroll);
+    const container = getScrollContainer();
+    const checkScroll = () => setShowTopBtn(getScrollPosition() > 400);
+    container.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('scroll', checkScroll);
+    };
   }, []);
 
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleScrollToTop = () => smoothScrollToTop(true);
 
   // --- PULL TO REFRESH ---
   const handleTouchStart = (e) => {
-    if (window.scrollY === 0) setStartY(e.touches[0].clientY);
+    if (getScrollPosition() <= 0) setStartY(e.touches[0].clientY);
   };
 
   const handleTouchMove = (e) => {
     const y = e.touches[0].clientY;
-    if (window.scrollY === 0 && y - startY > 70 && !refreshing) {
+    if (getScrollPosition() <= 0 && y - startY > 70 && !refreshing) {
       setRefreshing(true);
       if (navigator.vibrate) navigator.vibrate(50);
       
@@ -147,40 +168,38 @@ export default function Feed() {
   };
 
   useEffect(() => {
-    document.body.addEventListener('touchstart', handleTouchStart);
-    document.body.addEventListener('touchmove', handleTouchMove);
+    document.body.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.body.addEventListener('touchmove', handleTouchMove, { passive: true });
     return () => {
       document.body.removeEventListener('touchstart', handleTouchStart);
       document.body.removeEventListener('touchmove', handleTouchMove);
     };
   }, [startY, refreshing, load]);
 
-  // Infinite Scroll Hook
   const loaderRef = useInfiniteScroll(() => {
-      if(hasMore && !loading) load(false);
+      if(hasMore && !isLoadingRef.current) load(false);
   });
 
   return (
     <div className="min-h-screen pb-24 md:pb-6">
       <div className="max-w-3xl mx-auto"> 
         
-        {/* Pull Refresh Indicator */}
         <div className={`w-full flex justify-center overflow-hidden transition-all duration-300 ${refreshing ? 'h-16 py-4' : 'h-0'}`}>
-           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00F2FE]"></div>
         </div>
 
-        {/* Stories */}
-        <div className="mb-6">
+        <div className="mb-4">
           <Stories />
         </div>
 
-        {/* Feed Posts */}
+        <LiveSpacesBar />
+
         <div className="space-y-6">
           {posts.length === 0 && !loading && !hasMore && (
-            <div className="text-center py-10">
-                <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300">Welcome to SocialApp!</h3>
-                <p className="text-gray-500 mt-2">Follow users or create a post to get started.</p>
-                <Link to="/explore" className="mt-4 inline-block btn-primary px-6 py-2 rounded-full">Find People</Link>
+            <div className="text-center py-12 rounded-[28px] border border-white/10 bg-[#070B14]/90 backdrop-blur-xl p-8 shadow-2xl">
+                <h3 className="font-display font-bold text-xl text-[#F7F7FC]">Welcome to Socialo</h3>
+                <p className="text-[#CBD5E1] mt-2 text-sm max-w-sm mx-auto">Follow active creators or share your first moment with the community.</p>
+                <Link to="/explore" className="mt-5 inline-block px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold shadow-md hover:opacity-95 transition">Find People</Link>
             </div>
           )}
 
@@ -199,7 +218,6 @@ export default function Feed() {
           </AnimatePresence>
         </div>
 
-        {/* Loaders */}
         {loading && (
           <div className="mt-6 space-y-6">
             <SkeletonPost />
@@ -207,14 +225,12 @@ export default function Feed() {
           </div>
         )}
 
-        {/* Infinite Scroll Trigger */}
         {hasMore && !loading && (
             <div ref={loaderRef} className="h-24 flex items-center justify-center text-gray-400 text-sm font-medium">
                 Loading more...
             </div>
         )}
 
-        {/* End of Feed Message */}
         {!hasMore && posts.length > 0 && (
             <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
                 <div className="w-2 h-2 bg-gray-300 rounded-full mb-2"></div>
@@ -222,25 +238,23 @@ export default function Feed() {
             </div>
         )}
 
-        {/* Modals */}
         <CreatePostModal 
             isOpen={openCreate} 
             onClose={() => setOpenCreate(false)} 
             onPosted={() => {
                 setOpenCreate(false);
-                load(true); // Refresh feed
+                load(true);
             }} 
         />
 
-        {/* Scroll To Top */}
         <AnimatePresence>
             {showTopBtn && (
                 <motion.button
                     initial={{ opacity: 0, scale: 0 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0 }}
-                    onClick={scrollToTop}
-                    className="fixed bottom-24 right-6 md:bottom-10 md:right-10 z-40 bg-gray-800 dark:bg-white text-white dark:text-gray-900 p-3 rounded-full shadow-xl hover:bg-gray-700 dark:hover:bg-gray-200 transition"
+                    onClick={handleScrollToTop}
+                    className="fixed bottom-24 right-6 md:bottom-10 md:right-10 z-40 bg-[#070B14]/90 border border-white/20 text-[#00F2FE] p-3.5 rounded-full shadow-2xl backdrop-blur-xl hover:bg-[#0A111E] hover:border-[#00F2FE]/40 transition"
                 >
                     <FaArrowUp />
                 </motion.button>

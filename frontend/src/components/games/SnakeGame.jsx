@@ -89,12 +89,12 @@ export default function SnakeGame({ onClose, onScoreSaved }) {
 
   const generateFood = (currentSnake) => {
     let newFood;
-    while (true) {
+    let placed = false;
+    while (!placed) {
       newFood = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)];
       // Ensure food doesn't spawn on snake body
-      // eslint-disable-next-line no-loop-func
       const isOnSnake = currentSnake.some(s => s[0] === newFood[0] && s[1] === newFood[1]);
-      if (!isOnSnake) break;
+      if (!isOnSnake) placed = true;
     }
     setFood(newFood);
   };

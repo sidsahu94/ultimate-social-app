@@ -1,48 +1,53 @@
-// frontend/services/socket.js
-import { io } from "socket.io-client";
+import { io } from 'socket.io-client';
 
-// Vite proxy handles forwarding to backend
-const BACKEND_WS = window.location.origin;
+const getBackendWs = () => {
+  if (typeof window === 'undefined') return 'http://localhost:5000';
+  const envWs = import.meta.env.VITE_WS_URL;
+  if (envWs) return envWs;
+  const envApi = import.meta.env.VITE_API_URL;
+  if (envApi && envApi.startsWith('http')) {
+    try {
+      return new URL(envApi).origin;
+    } catch (_) {}
+  }
+  return window.location.origin;
+};
 
-const socket = io(BACKEND_WS, {
+const socket = io(getBackendWs(), {
   autoConnect: false,
-  transports: ["websocket", "polling"],
+  withCredentials: true,
+  transports: ['websocket', 'polling'],
   path: '/socket.io',
   auth: (cb) => {
     const token = localStorage.getItem('token');
     const meId = localStorage.getItem('meId');
-    // Callback with the latest credentials
     cb({ token, userId: meId });
   },
   reconnection: true,
   reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionDelay: 1000,
 });
 
-// Prevent infinite auth loops
-socket.on("connect_error", (err) => {
-  if (err.message === "Unauthorized" || err.message === "Authentication error" || err.message.includes("token")) {
-    console.warn("Socket authentication failed. Stopping reconnection loop.");
+socket.on('connect_error', (err) => {
+  if (
+    err.message === 'Unauthorized' ||
+    err.message === 'Authentication error' ||
+    err.message.toLowerCase().includes('token')
+  ) {
+    console.warn('Socket authentication failed. Stopping reconnection loop.');
     socket.disconnect();
   }
 });
 
-// 🔥 NEW: Global Logout Listener to kill socket connection
 if (typeof window !== 'undefined') {
-    window.addEventListener('auth:logout', () => {
-        if (socket.connected) {
-            console.log("🔒 Logging out socket...");
-            socket.disconnect();
-        }
-    });
+  window.addEventListener('auth:logout', () => {
+    if (socket.connected) socket.disconnect();
+  });
 }
 
-// Helper to manually update auth
 export const updateSocketAuth = (token, userId) => {
-    socket.auth = { token, userId };
-    if (socket.disconnected) {
-        socket.connect();
-    }
+  socket.auth = { token, userId };
+  if (socket.disconnected) socket.connect();
 };
 
 export default socket;

@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { FaUserPlus, FaMapMarkerAlt, FaLink, FaCheckCircle } from 'react-icons/fa';
 
 export default function ProfileCompletion({ user }) {
-  // Memoize calculation to avoid re-renders
   const { score, missing } = useMemo(() => {
     if (!user) return { score: 0, missing: [] };
 
@@ -18,7 +17,6 @@ export default function ProfileCompletion({ user }) {
     else m.push({ label: 'Add Bio', icon: <FaUserPlus />, link: '/settings' });
 
     if (user.coverPhoto) s += 20;
-    // Cover photo is optional for "missing" list visually, but counts for score
 
     if (user.location) s += 10;
     else m.push({ label: 'Add Location', icon: <FaMapMarkerAlt />, link: '/settings' });
@@ -29,22 +27,21 @@ export default function ProfileCompletion({ user }) {
     return { score: Math.min(s, 100), missing: m };
   }, [user]);
 
-  // Hide if complete
   if (!user || score >= 100) return null;
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-5 rounded-2xl mb-6 border border-indigo-100 dark:border-indigo-800/50 shadow-sm animate-fade-in">
+    <div className="bg-[#070B14] p-5 rounded-2xl mb-6 border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.4)] animate-fade-in backdrop-blur-xl">
       <div className="flex justify-between items-center mb-3">
-        <h4 className="font-bold text-sm text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
-          <FaCheckCircle className="text-indigo-500" /> Complete your profile
+        <h4 className="font-bold text-sm text-[#F7F7FC] flex items-center gap-2 font-serif">
+          <FaCheckCircle className="text-[#00F2FE]" /> Complete your profile
         </h4>
-        <span className="font-black text-lg text-indigo-600 dark:text-indigo-400">{score}%</span>
+        <span className="font-black text-lg text-[#F4D49A]">{score}%</span>
       </div>
       
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-white dark:bg-gray-700 rounded-full overflow-hidden mb-4 shadow-inner">
+      <div className="h-2.5 w-full bg-[#0A111E] rounded-full overflow-hidden mb-4 border border-white/5 shadow-inner">
         <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000 ease-out rounded-full" 
+            className="h-full bg-gradient-to-r from-[#1D4ED8] via-[#0F766E] to-[#00F2FE] transition-all duration-1000 ease-out rounded-full" 
             style={{ width: `${score}%` }} 
         />
       </div>
@@ -55,9 +52,9 @@ export default function ProfileCompletion({ user }) {
           <Link 
             key={i} 
             to={item.link} 
-            className="flex items-center gap-1.5 text-xs font-semibold bg-white dark:bg-gray-800 px-3 py-1.5 rounded-full shadow-sm hover:shadow-md text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 transition hover:text-indigo-500 dark:hover:text-indigo-400"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-[#0A111E] px-3 py-1.5 rounded-full shadow-sm hover:shadow-md text-[#CBD5E1] border border-white/10 transition hover:border-[#00F2FE]/40 hover:text-white"
           >
-            {item.icon} {item.label}
+            <span className="text-[#D4AF37]">{item.icon}</span> {item.label}
           </Link>
         ))}
       </div>

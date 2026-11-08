@@ -1,107 +1,318 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   AETHERIA IMPERIAL NOIR DESIGN SYSTEM
+   Bespoke Fusion of Three Elite Aesthetics:
+   1. QUIET ROYAL BLACK (Anti-fatigue velvet obsidian void, zero glare: #04070D)
+   2. HIGH-CONTRAST ELECTRIC OCEAN / DEEP NAVY (Bioluminescent Cyan #00F2FE,
+      Electric Ocean Blue #38BDF8, Royal Cobalt #1D4ED8, Trench Navy #070F1E)
+   3. MODERN DARK EMERALD & GOLD (Imperial Jade #052E24, Vivid Emerald #10B981,
+      Royal Liquid Gold #D4AF37, Champagne Gold #F4D49A)
+   Hyper-contrast · Regal · Cinematic · Ultra-Fluid · Specular Glass
+   ========================================================================== */
+
+:root {
+  /* 1. Quiet Royal Black & Abyssal Navy */
+  --bg-primary: #04070D;
+  --bg-secondary: #070B14;
+  --bg-surface: #0A111E;
+  --bg-elevated: #0F1A2C;
+
+  /* 2. High-Contrast Electric Ocean */
+  --color-electric-cyan: #00F2FE;
+  --color-ocean-blue: #38BDF8;
+  --color-cobalt-royal: #1D4ED8;
+  --color-navy-abyss: #070F1E;
+
+  /* 3. Modern Dark Emerald & Royal Gold */
+  --color-dark-emerald: #052E24;
+  --color-emerald-jade: #064E3B;
+  --color-vivid-emerald: #10B981;
+  --color-royal-gold: #D4AF37;
+  --color-liquid-gold: #F59E0B;
+  --color-champagne-gold: #F4D49A;
+
+  /* Compatibility & Semantic Aliases */
+  --color-cherry-noir: #04070D;
+  --color-sapphire-elite: #1D4ED8;
+  --color-ocean-mist: #00F2FE;
+  --color-dark-red: #052E24;
+  --color-rose-gold: #D4AF37;
+  --color-sand-beige: #F4D49A;
+  --color-deep-teal: #052E24;
+
+  /* Text & Specular Contours */
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --text-gold: #F4D49A;
+  --text-cyan: #00F2FE;
+
+  --border-subtle: rgba(0, 242, 254, 0.16);
+  --border-specular: rgba(212, 175, 55, 0.22);
+
+  --radius-card: 24px;
+  --radius-button: 14px;
+
+  --shadow-card: 0 16px 48px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 30px rgba(0, 242, 254, 0.35);
+  --transition-ui: 240ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
 @layer base {
-  body {
-    @apply font-sans antialiased text-slate-900 dark:text-slate-100 bg-bg-light dark:bg-bg-dark transition-colors duration-500 overflow-x-hidden;
+  html,
+  body,
+  #root {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+    background-color: #04070D;
+    background-image:
+      radial-gradient(circle at 12% 15%, rgba(0, 242, 254, 0.09) 0%, transparent 40%),
+      radial-gradient(circle at 88% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+      radial-gradient(circle at 45% 85%, rgba(29, 78, 216, 0.10) 0%, transparent 50%),
+      radial-gradient(circle at 80% 90%, rgba(212, 175, 55, 0.07) 0%, transparent 45%);
+    background-attachment: fixed;
   }
-  
-  /* Custom Scrollbar */
-  ::-webkit-scrollbar {
+
+  body {
+    color: #F8FAFC;
+    background-color: #04070D;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Sora', sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  .font-editorial {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .app-layout-frame {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background-color: #04070D;
+  }
+
+  .scroll-workspace-canvas {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .scroll-workspace-canvas::-webkit-scrollbar {
     width: 6px;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
+
+  .scroll-workspace-canvas::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(0, 242, 254, 0.55) 0%, rgba(16, 185, 129, 0.5) 50%, rgba(212, 175, 55, 0.55) 100%);
+    border-radius: 9999px;
   }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+
+  .scroll-workspace-canvas::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(0, 242, 254, 0.8) 0%, rgba(16, 185, 129, 0.75) 50%, rgba(212, 175, 55, 0.8) 100%);
   }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary;
+}
+
+/* Specular Oceanic Obsidian Glass Panels */
+.silver-glass,
+.glass-panel {
+  background: rgba(10, 17, 30, 0.84);
+  border: 1px solid rgba(0, 242, 254, 0.16);
+  border-radius: var(--radius-card);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.silver-border {
+  border: 1px solid rgba(0, 242, 254, 0.16);
+}
+
+.silver-border-glow:hover {
+  border-color: rgba(0, 242, 254, 0.4);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.25), 0 0 35px rgba(212, 175, 55, 0.15);
+}
+
+.glass-dropdown {
+  background: #0A111E;
+  border: 1px solid rgba(0, 242, 254, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Interactive Card */
+.interactive-card {
+  background-color: #0A111E;
+  border: 1px solid rgba(0, 242, 254, 0.15);
+  border-radius: var(--radius-card);
+  transition:
+    transform var(--transition-ui),
+    border-color var(--transition-ui),
+    box-shadow var(--transition-ui);
+}
+
+@media (hover: hover) {
+  .interactive-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(0, 242, 254, 0.38);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 242, 254, 0.22);
   }
 }
 
 @layer components {
-  /* THE ULTIMATE GLASS CARD */
-  .cyber-card {
-    @apply relative bg-white/70 dark:bg-bg-card/60 backdrop-blur-xl border border-white/40 dark:border-white/5 rounded-[24px] shadow-lg dark:shadow-black/50 transition-all duration-300 overflow-hidden;
+  /* Standardized Cards */
+  .card {
+    @apply rounded-[24px] transition-all duration-200 border;
+    background-color: var(--bg-surface);
+    border-color: var(--border-subtle);
+    box-shadow: var(--shadow-card);
   }
 
-  /* Hover effect for cards */
-  .cyber-card-hover {
-    @apply hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-1;
-  }
-
-  /* Neon Button */
+  /* Primary High-Contrast Electric Ocean Button */
   .btn-primary {
-    @apply relative overflow-hidden rounded-xl px-6 py-3 font-heading font-bold text-white transition-all duration-300;
-    background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+    @apply inline-flex items-center justify-center font-bold px-5 py-2.5 rounded-[14px] text-white shadow-sm active:scale-95 transition-all duration-200 cursor-pointer;
+    background: linear-gradient(135deg, #00F2FE 0%, #1D4ED8 100%);
+    box-shadow: 0 0 22px rgba(0, 242, 254, 0.45);
   }
-  
-  .btn-primary::before {
-    content: '';
-    @apply absolute inset-0 bg-white/20 translate-y-full transition-transform duration-300;
-  }
-  
-  .btn-primary:hover::before {
-    @apply translate-y-0;
-  }
-  
   .btn-primary:hover {
-    @apply shadow-glow-md scale-[1.02];
+    background: linear-gradient(135deg, #38BDF8 0%, #2563EB 100%);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.6);
   }
 
-  /* Interactive Icon Wrapper */
-  .icon-btn {
-    @apply p-3 rounded-full transition-all duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 active:scale-95;
+  /* Imperial Liquid Gold Button */
+  .btn-rosegold,
+  .btn-gold {
+    @apply inline-flex items-center justify-center font-bold px-4 py-2 rounded-[14px] text-[#04070D] active:scale-95 transition-all duration-200 cursor-pointer;
+    background: linear-gradient(135deg, #FEF3C7 0%, #F59E0B 50%, #D4AF37 100%);
+    box-shadow: 0 0 22px rgba(212, 175, 55, 0.45);
   }
-  
-  /* Neon Input Fields */
-  .neu-input {
-    @apply w-full bg-[#E0E5EC] dark:bg-[#141517] rounded-xl px-4 py-3 outline-none text-slate-700 dark:text-slate-200 shadow-neu-inset-light dark:shadow-neu-inset-dark border border-transparent focus:border-primary/50 transition-all;
+  .btn-rosegold:hover,
+  .btn-gold:hover {
+    box-shadow: 0 0 32px rgba(212, 175, 55, 0.65);
+    background: linear-gradient(135deg, #FFFFFF 0%, #FBBF24 50%, #D4AF37 100%);
   }
 
-  /* Glowing Button for Dark Mode */
-  .btn-neon {
-    @apply bg-transparent text-primary font-bold py-2 px-6 rounded-lg border-2 border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)] hover:bg-primary hover:text-white hover:shadow-[0_0_20px_rgba(59,130,246,0.8)] transition-all duration-300;
+  /* Modern Dark Emerald Button */
+  .btn-emerald {
+    @apply inline-flex items-center justify-center font-bold px-4 py-2 rounded-[14px] text-white active:scale-95 transition-all duration-200 cursor-pointer;
+    background: linear-gradient(135deg, #052E24 0%, #064E3B 50%, #10B981 100%);
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.45);
+  }
+  .btn-emerald:hover {
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.65);
+  }
+
+  /* Secondary Button */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center font-semibold px-4 py-2.5 rounded-[14px] transition-all duration-200 border;
+    background-color: var(--bg-elevated);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+  }
+  .btn-secondary:hover {
+    border-color: rgba(0, 242, 254, 0.4);
+    color: #00F2FE;
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.2);
+  }
+
+  .btn-error {
+    @apply inline-flex items-center justify-center font-bold px-5 py-2.5 rounded-[14px] bg-[#991B1B] text-white shadow-sm hover:bg-[#DC2626] active:scale-95 transition-all duration-200 cursor-pointer;
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.45);
+  }
+
+  /* Master Quad-Spectrum Story Ring: Cyan -> Cobalt -> Emerald -> Gold */
+  .story-ring {
+    @apply rounded-full p-[2.5px];
+    background: linear-gradient(135deg, #00F2FE 0%, #1D4ED8 30%, #10B981 65%, #D4AF37 100%);
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.4);
+  }
+
+  .story-ring-viewed {
+    @apply rounded-full p-[2.5px];
+    background: rgba(0, 242, 254, 0.2);
+  }
+
+  /* Text Shimmer Accents */
+  .gradient-text-aetheria,
+  .gradient-text-socialo,
+  .gradient-text-masterpiece,
+  .gradient-text-aurora {
+    background: linear-gradient(135deg, #00F2FE 0%, #38BDF8 30%, #34D399 65%, #F4D49A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-text-gold,
+  .gradient-text-rosegold {
+    background: linear-gradient(135deg, #FEF3C7 0%, #F59E0B 50%, #D4AF37 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-text-ocean {
+    background: linear-gradient(135deg, #00F2FE 0%, #38BDF8 60%, #1D4ED8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-text-emerald {
+    background: linear-gradient(135deg, #A7F3D0 0%, #10B981 60%, #052E24 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-text-sand {
+    background: linear-gradient(135deg, #F8FAFC 0%, #CBD5E1 50%, #F4D49A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  @keyframes flyUp {
+    0% {
+      transform: translateY(0) scale(0.6);
+      opacity: 0;
+    }
+    20% {
+      opacity: 1;
+      transform: translateY(-20px) scale(1.2);
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-160px) scale(1);
+      opacity: 0;
+    }
+  }
+
+  .animate-fly-up {
+    animation: flyUp 1.4s ease-out forwards;
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
   }
 }
 
-@layer utilities {
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent-cyan;
-  }
-  
-  /* Animated Background Blobs */
-  .aurora-bg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: -1;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  
-  .aurora-blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.4;
-    animation: blob-bounce 10s infinite ease-in-out;
-  }
-
-  .blob-1 { background: #3B82F6; width: 500px; height: 500px; top: -100px; left: -100px; animation-delay: 0s; }
-  .blob-2 { background: #8B5CF6; width: 400px; height: 400px; bottom: -50px; right: -50px; animation-delay: 2s; }
-  .blob-3 { background: #EC4899; width: 300px; height: 300px; top: 40%; left: 40%; animation-delay: 4s; }
-
-  @keyframes blob-bounce {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

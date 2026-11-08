@@ -6,6 +6,7 @@ import { useToast } from '../../components/ui/ToastProvider';
 import { useSelector } from 'react-redux';
 import Spinner from '../../components/common/Spinner';
 import useInfiniteScroll from '../../hooks/useInfiniteScroll'; 
+import { FaBookmark } from 'react-icons/fa';
 
 export default function SavedPage() {
     const [posts, setPosts] = useState([]);
@@ -26,9 +27,16 @@ export default function SavedPage() {
         else setLoadingMore(true);
 
         try {
-            // 🔥 Updated API call with pagination
-            const r = await API.get(`/extra/save/${myId}?page=${pageToLoad}&limit=12`); 
-            const newPosts = r.data || [];
+            let newPosts = [];
+            try {
+                const r = await API.get(`/extra/save/${myId}?page=${pageToLoad}&limit=12`);
+                const raw = r.data?.data || r.data;
+                newPosts = Array.isArray(raw) ? raw : [];
+            } catch (_) {
+                const r2 = await API.get('/posts/bookmarks/me');
+                const raw2 = r2.data?.data || r2.data;
+                newPosts = Array.isArray(raw2) ? raw2 : [];
+            }
 
             if (newPosts.length < 12) setHasMore(false);
             
@@ -47,19 +55,28 @@ export default function SavedPage() {
 
     const loaderRef = useInfiniteScroll(() => { if(hasMore) load(); });
 
-    if (!myId) return <div className="p-4 text-center">Please login.</div>;
+    if (!myId) return <div className="p-8 text-center text-[#CBD5E1]">Please login to view bookmarks.</div>;
 
     return (
-        <div className="max-w-4xl mx-auto p-4 pb-20">
-            <h2 className="text-xl font-bold mb-4 border-b dark:border-gray-800 pb-2 flex items-center gap-2">
-                💾 Saved Posts
-            </h2>
+        <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24">
+            <div className="mb-6 pb-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#D4AF37] mb-1">
+                    <FaBookmark /> Curated Collection
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-black text-[#F7F7FC] tracking-tight font-display">
+                    Saved Editorial Artifacts<span className="text-[#00F2FE]">.</span>
+                  </h1>
+                </div>
+            </div>
             
-            {loading && <div className="p-10 flex justify-center"><Spinner /></div>}
+            {loading && <div className="p-12 flex justify-center"><Spinner /></div>}
 
             {!loading && posts.length === 0 && (
-                <div className="card p-10 text-center text-gray-500 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-                    No saved posts yet.
+                <div className="p-16 text-center text-[#CBD5E1] bg-[#070B14]/40 border border-dashed border-white/10 rounded-3xl backdrop-blur-xl">
+                    <FaBookmark className="mx-auto text-4xl mb-3 text-[#A5A9BB] opacity-30" />
+                    <p className="font-semibold text-sm">No saved posts yet.</p>
+                    <p className="text-xs text-[#A5A9BB] mt-1">Bookmark posts from your feed to revisit them anytime.</p>
                 </div>
             )}
 

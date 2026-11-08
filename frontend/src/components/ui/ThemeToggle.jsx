@@ -1,108 +1,34 @@
 // frontend/src/components/ui/ThemeToggle.jsx
 import React from 'react';
-import { useTheme } from '../../contexts/ThemeProvider';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaCloud, FaStar } from 'react-icons/fa';
+import { motion } from 'framer-motion';
 
-export default function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  const isDark = theme === 'dark';
-
+export default function ThemeToggle({ className = '' }) {
   return (
-    <button
-      onClick={toggle}
-      className={`
-        relative w-20 h-10 rounded-full flex items-center px-1 
-        shadow-inner transition-colors duration-500 ease-in-out cursor-pointer overflow-hidden
-        ${isDark ? 'bg-[#0f172a] border border-white/10' : 'bg-[#bae6fd] border border-white/50'}
-      `}
-      aria-label="Toggle Theme"
+    <div
+      title="Aetheria Imperial Noir — Quiet Royal Black · Electric Ocean · Modern Emerald & Gold"
+      className={`group relative flex h-9 items-center gap-2.5 rounded-full px-3.5 py-1 select-none bg-[#0A111E]/90 border border-[rgba(0,242,254,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_0_20px_rgba(0,242,254,0.15)] backdrop-blur-xl ${className}`}
     >
-      {/* --- BACKGROUND DECORATIONS --- */}
-      
-      {/* Light Mode Clouds */}
-      <AnimatePresence>
-        {!isDark && (
-          <>
-            <motion.div 
-              initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }}
-              className="absolute right-3 text-white/80 text-[10px]"
-            >
-              <FaCloud />
-            </motion.div>
-            <motion.div 
-              initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }}
-              transition={{ delay: 0.1 }}
-              className="absolute right-6 top-2 text-white/60 text-[8px]"
-            >
-              <FaCloud />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Tri-Theme Celestial Core */}
+      <div className="relative flex h-5 w-5 items-center justify-center">
+        {/* Pulsing Electric Cyan & Imperial Emerald Aura */}
+        <motion.div
+          animate={{ scale: [1, 1.35, 1], opacity: [0.4, 0.9, 0.4], rotate: [0, 180, 360] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#00F2FE] via-[#10B981] to-[#D4AF37] blur-[4px]"
+        />
+        {/* Kinetic Royal Obsidian & Gold Core */}
+        <div className="relative h-4 w-4 rounded-full bg-gradient-to-tr from-[#00F2FE] via-[#1D4ED8] to-[#D4AF37] shadow-[0_0_12px_#00F2FE] flex items-center justify-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
+            className="h-1.5 w-1.5 rounded-full bg-[#F4D49A] opacity-95 shadow-[0_0_6px_#00F2FE]"
+          />
+        </div>
+      </div>
 
-      {/* Dark Mode Stars */}
-      <AnimatePresence>
-        {isDark && (
-          <>
-            <motion.div 
-              initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}
-              className="absolute left-3 text-yellow-100 text-[6px]"
-            >
-              <FaStar />
-            </motion.div>
-            <motion.div 
-              initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}
-              transition={{ delay: 0.1 }}
-              className="absolute left-6 bottom-2 text-white/50 text-[4px]"
-            >
-              <FaStar />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* --- THE KNOB (Sun / Moon) --- */}
-      <motion.div
-        layout
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        className={`
-          relative w-8 h-8 rounded-full shadow-md z-10 flex items-center justify-center
-          ${isDark 
-            ? 'bg-gray-200 translate-x-10 shadow-[inset_-3px_-3px_5px_rgba(0,0,0,0.2)]' 
-            : 'bg-electric-amber translate-x-0 shadow-neon-amber'
-          }
-        `}
-      >
-        <AnimatePresence mode="wait">
-          {isDark ? (
-            /* MOON CRATERS */
-            <motion.div
-              key="moon"
-              initial={{ scale: 0, rotate: -90 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: 90 }}
-              className="relative w-full h-full"
-            >
-              <div className="absolute top-2 left-2 w-2 h-2 bg-gray-400/50 rounded-full" />
-              <div className="absolute bottom-2 right-3 w-1.5 h-1.5 bg-gray-400/50 rounded-full" />
-              <div className="absolute top-4 right-1 w-1 h-1 bg-gray-400/50 rounded-full" />
-            </motion.div>
-          ) : (
-            /* SUN RAYS */
-            <motion.div
-              key="sun"
-              initial={{ scale: 0, rotate: 90 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: -90 }}
-              className="relative w-full h-full"
-            >
-               {/* Simple glowing center is usually enough, but let's add a subtle rim */}
-               <div className="absolute inset-1 rounded-full border-2 border-white/30" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </button>
+      <span className="font-display text-[9.5px] font-bold tracking-[0.2em] uppercase bg-gradient-to-r from-[#00F2FE] via-[#10B981] to-[#D4AF37] bg-clip-text text-transparent">
+        Aetheria Noir
+      </span>
+    </div>
   );
 }

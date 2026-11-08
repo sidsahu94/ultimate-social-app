@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';
-import { FaUsers, FaSearch, FaCheck } from 'react-icons/fa';
+import { FaUsers, FaSearch, FaCheck, FaTimes } from 'react-icons/fa';
 
 export default function CreateGroupModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');
@@ -13,78 +13,125 @@ export default function CreateGroupModal({ isOpen, onClose, onCreated }) {
   const search = async (q) => {
     setQuery(q);
     if (q.length > 2) {
-      const r = await API.get(`/users/search?q=${q}`);
-      setResults(r.data.users || []);
+      try {
+        const r = await API.get(`/users/search?q=${encodeURIComponent(q)}`);
+        setResults(r.data.users || r.data.data || r.data || []);
+      } catch (_) {
+        setResults([]);
+      }
+    } else {
+      setResults([]);
     }
   };
 
   const toggleUser = (u) => {
-    if (selected.find(s => s._id === u._id)) {
-      setSelected(selected.filter(s => s._id !== u._id));
-    } else {
-      setSelected([...selected, u]);
-    }
+    setSelected((prev) => {
+      if (prev.some((s) => s._id === u._id)) return prev.filter((s) => s._id !== u._id);
+      return [...prev, u];
+    });
   };
 
   const create = async () => {
-    if (!name || selected.length === 0) return;
+    if (!name.trim() || selected.length === 0) return;
     try {
-      await API.post('/chat', {
-        name,
+      const res = await API.post('/chat', {
+        name: name.trim(),
         isGroup: true,
-        participants: selected.map(u => u._id)
+        participants: selected.map((u) => u._id),
       });
-      onCreated();
-      onClose();
-    } catch (e) { alert('Failed'); }
+      onCreated?.(res.data?.data || res.data);
+      onClose?.();
+      setName('');
+      setQuery('');
+      setResults([]);
+      setSelected([]);
+    } catch (e) {
+      alert(e.response?.data?.message || 'Failed to create group');
+    }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">Create Group</h2>
-        
-        <input 
-          value={name} 
-          onChange={e => setName(e.target.value)}
-          placeholder="Group Name" 
-          className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-xl mb-4 outline-none"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-md rounded-[28px] border border-[rgba(226,232,240,0.16)] bg-[#070B14] p-6 shadow-2xl text-[#F8FAFC]">
+        <div className="mb-5 flex items-center justify-between border-b border-[rgba(226,232,240,0.1)] pb-3">
+          <h2 className="flex items-center gap-2 text-xl font-black text-[#F8FAFC]">
+            <FaUsers className="text-[#00F2FE]" /> Create Group
+          </h2>
+          <button onClick={onClose} className="rounded-full p-2 text-[#CBD5E1]/60 hover:text-white hover:bg-white/[0.08] transition-colors">
+            <FaTimes />
+          </button>
+        </div>
+
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Group name"
+          className="mb-4 w-full rounded-2xl border border-[rgba(226,232,240,0.14)] bg-[#04070D] px-4 py-3 text-sm text-[#F8FAFC] placeholder-[#CBD5E1]/40 outline-none focus:ring-1 focus:ring-[#00F2FE] transition-all"
         />
 
-        <div className="mb-2 font-medium text-sm">Add Members</div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {selected.map(u => (
-            <span key={u._id} onClick={() => toggleUser(u)} className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs cursor-pointer flex items-center gap-1">
-              {u.name} <FaTimes />
+        <div className="mb-2 text-sm font-semibold text-[#CBD5E1]/80">Add members</div>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {selected.map((u) => (
+            <span
+              key={u._id}
+              onClick={() => toggleUser(u)}
+              className="flex cursor-pointer items-center gap-1 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 px-3 py-1 text-xs font-semibold text-[#D4AF37] hover:bg-[#D4AF37]/30 transition-colors"
+            >
+              {u.name} <FaTimes size={10} />
             </span>
           ))}
         </div>
 
         <div className="relative mb-4">
-          <FaSearch className="absolute left-3 top-3.5 text-gray-400" />
-          <input 
-            value={query} 
-            onChange={e => search(e.target.value)}
-            placeholder="Search users..." 
-            className="w-full p-3 pl-10 border rounded-xl dark:bg-gray-700 dark:border-gray-600"
+          <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#CBD5E1]/40" />
+          <input
+            value={query}
+            onChange={(e) => search(e.target.value)}
+            placeholder="Search users..."
+            className="w-full rounded-2xl border border-[rgba(226,232,240,0.14)] bg-[#04070D] px-4 py-3 pl-10 text-sm text-[#F8FAFC] placeholder-[#CBD5E1]/40 outline-none focus:ring-1 focus:ring-[#00F2FE] transition-all"
           />
         </div>
 
-        <div className="max-h-40 overflow-y-auto space-y-2 mb-4">
-          {results.map(u => (
-            <div key={u._id} onClick={() => toggleUser(u)} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer">
-              <img src={u.avatar || '/default-avatar.png'} className="w-8 h-8 rounded-full" />
-              <div className="flex-1">{u.name}</div>
-              {selected.find(s => s._id === u._id) && <FaCheck className="text-green-500" />}
-            </div>
-          ))}
+        <div className="mb-5 max-h-48 space-y-2 overflow-y-auto pr-1">
+          {results.map((u) => {
+            const active = selected.some((s) => s._id === u._id);
+            return (
+              <button
+                key={u._id}
+                type="button"
+                onClick={() => toggleUser(u)}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
+                  active ? 'bg-[#1D4ED8]/25 border border-[rgba(226,232,240,0.15)]' : 'hover:bg-white/[0.06]'
+                }`}
+              >
+                <img
+                  src={u.avatar || '/default-avatar.png'}
+                  alt={u.name}
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-[#F8FAFC]">{u.name}</div>
+                  <div className="truncate text-xs text-[#CBD5E1]/60">@{u.email?.split('@')[0] || 'user'}</div>
+                </div>
+                {active && <FaCheck className="text-[#00F2FE]" />}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-gray-500">Cancel</button>
-          <button onClick={create} disabled={!name || selected.length===0} className="btn-primary">Create</button>
+        <div className="flex justify-end gap-2 border-t border-[rgba(226,232,240,0.1)] pt-4">
+          <button onClick={onClose} className="rounded-2xl px-4 py-2.5 text-sm font-semibold text-[#CBD5E1]/70 hover:bg-white/[0.06] hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={create}
+            disabled={!name.trim() || selected.length === 0}
+            className="rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-[#2563EB] to-[#00F2FE] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 shadow-sapphireGlow hover:opacity-95 transition-all"
+          >
+            Create Group
+          </button>
         </div>
       </motion.div>
     </div>

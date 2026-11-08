@@ -10,7 +10,7 @@ export const loginUser = createAsyncThunk(
     try {
       const res = await API.post("/auth/login", credentials);
       
-      // 🔥 FIX: Handle both Unified ({ success: true, data: {...} }) and Legacy formats
+      // Handle both Unified ({ success: true, data: {...} }) and Legacy formats
       const payload = res.data.data || res.data;
       
       const { token, refreshToken, user } = payload;
@@ -35,13 +35,18 @@ export const fetchMe = createAsyncThunk("auth/fetchMe", async (_, thunkAPI) => {
     if (!token) return null;
 
     const res = await API.get("/users/me");
-    return res.data.data || res.data;
+    const user = res.data.data || res.data;
+    if (user?._id) {
+      localStorage.setItem("meId", user._id);
+    }
+    return user;
   } catch (err) {
-    // Silent fail - user just isn't logged in or token is bad
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("meId");
-    return null; 
+    // Only clear local session if the token is explicitly rejected by the server
+    if (err?.response?.status === 401) {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+    return thunkAPI.rejectWithValue(err?.response?.status || 'Network Error'); 
   }
 });
 
@@ -68,18 +73,22 @@ const authSlice = createSlice({
     logout: (state) => {
       state.user = null;
       state.error = null;
-      // 🔥 Full Cleanup
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("meId");
+      state.loading = false;
       state.checkingAuth = false;
+      
+      // Full Cleanup: Clear all local and session cache scopes
+      localStorage.clear();
+      sessionStorage.clear();
     },
     clearError: (state) => { 
         state.error = null; 
     },
     setUser: (state, action) => { 
         state.user = action.payload; 
-        state.checkingAuth = false; 
+        state.checkingAuth = false;
+        if (action.payload?._id) {
+          localStorage.setItem("meId", action.payload._id);
+        }
     },
   },
   extraReducers: (builder) => {
@@ -112,14 +121,13 @@ const authSlice = createSlice({
           state.error = null;
       })
       .addCase(fetchMe.rejected, (state, action) => { 
-          // If fetch fails, we assume logged out
           state.user = null; 
           state.checkingAuth = false; 
-          // Note: We deliberately don't set 'state.error' here to avoid 
-          // showing an error message just because a guest visited the site.
-          localStorage.removeItem("token");
-          localStorage.removeItem("refreshToken");
-          localStorage.removeItem("meId");
+          
+          if (action.payload === 401) {
+              localStorage.clear();
+              sessionStorage.clear();
+          }
       })
 
       // --- Manual Update ---

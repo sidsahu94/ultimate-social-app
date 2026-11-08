@@ -1,11 +1,19 @@
-// backend/services/socketService.js
 const jwt = require('jsonwebtoken');
 const cookie = require('cookie'); // Requires: npm install cookie
 const User = require('../models/User');
+const ActiveCall = require('../models/ActiveCall'); // Required for WebRTC cleanup
+const { handleCallSockets } = require('../controllers/callsController');
+
+// Global timeout registry for reconnect grace period
+const disconnectTimeouts = new Map();
+// Global online users registry (userId -> Set of socketIds)
+const activeOnlineUsers = new Map();
+// Global audio lounge registry (userId -> { _id, name, avatar, isMuted, socketIds: Set<string> })
+const loungeParticipants = new Map();
 
 module.exports = (io) => {
   // =================================================================
-  // 🛡️ MIDDLEWARE: Authentication & Session Validation
+  // MIDDLEWARE: Authentication & Session Validation
   // =================================================================
   io.use(async (socket, next) => {
     try {
@@ -27,10 +35,19 @@ module.exports = (io) => {
       }
 
       // 3. Verify Token
-      // Uses REFRESH_SECRET because we are using the long-lived cookie for the socket session
-      const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+      // Supports both Access Token (handshake.auth) and long-lived Refresh Token (HttpOnly cookie)
+      let decoded = null;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET || '');
+      } catch (err1) {
+        try {
+          decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET || '');
+        } catch (err2) {
+          return next(new Error('Authentication error: Invalid credentials'));
+        }
+      }
 
-      // 4. Validate User in DB (Prevents banned users from connecting)
+      // 4. Validate User in DB
       const user = await User.findById(decoded.id).select('_id name avatar role isDeleted');
 
       if (!user || user.isDeleted) {
@@ -45,33 +62,58 @@ module.exports = (io) => {
       socket.user = user;
       socket.userId = user._id.toString();
 
-      // 🔥 AUTO-JOIN PERSONAL ROOM
-      // This is crucial for Redis scaling. We target users by io.to(userId)
+      // Auto-join personal room for direct emits
       socket.join(socket.userId);
 
       next();
     } catch (err) {
-      // console.error("Socket Auth Failed:", err.message);
       next(new Error('Authentication error: Invalid credentials'));
     }
   });
 
   // =================================================================
-  // 🔌 CONNECTION HANDLER
+  // CONNECTION HANDLER
   // =================================================================
   io.on('connection', async (socket) => {
     const userId = socket.userId;
-    // console.log(`✅ User Connected: ${socket.user.name} (${userId})`);
+
+    // Attach mediasoup/WebRTC call signaling
+    handleCallSockets(io, socket);
+
+    // If this user reconnected during the grace period, cancel pending cleanup
+    if (disconnectTimeouts.has(userId)) {
+      clearTimeout(disconnectTimeouts.get(userId));
+      disconnectTimeouts.delete(userId);
+      console.log(`[WebRTC] Host ${userId} reconnected. Pending room cleanup canceled.`);
+    }
 
     // ===========================
-    // 💬 CHAT EVENTS
+    // PRESENCE TRACKING
+    // ===========================
+    let userSockets = activeOnlineUsers.get(userId);
+    const isFirstSocket = !userSockets || userSockets.size === 0;
+    if (!userSockets) {
+      userSockets = new Set();
+      activeOnlineUsers.set(userId, userSockets);
+    }
+    userSockets.add(socket.id);
+
+    // Send current list of online users to the newly connected client
+    socket.emit('users:list', Array.from(activeOnlineUsers.keys()));
+
+    // Broadcast user online event if this is their first active session
+    if (isFirstSocket) {
+      io.emit('user:online', userId);
+    }
+
+    // ===========================
+    // CHAT EVENTS
     // ===========================
 
-    // Join/Leave Chat Rooms (Groups or active chat windows)
     socket.on('joinRoom', ({ room }) => {
       if (room) {
         socket.join(room);
-        // console.log(`User ${userId} joined room: ${room}`);
+        socket.to(room).emit('user-joined', { userId: socket.id, user: socket.user });
       }
     });
 
@@ -79,10 +121,8 @@ module.exports = (io) => {
       if (room) socket.leave(room);
     });
 
-    // Typing Indicators
     socket.on('typing', (data) => {
       if (data.chatId) {
-        // Broadcast to specific room, excluding sender
         socket.to(data.chatId).emit('typing', {
           chatId: data.chatId,
           userId: userId,
@@ -92,10 +132,9 @@ module.exports = (io) => {
     });
 
     // ===========================
-    // 📞 WEBRTC CALLING EVENTS
+    // WEBRTC CALLING EVENTS
     // ===========================
 
-    // Initiate Call: Send offer to target user's personal room
     socket.on('call:start', ({ toUserId, roomId, callerName, callerAvatar }) => {
       io.to(toUserId).emit('call:incoming', {
         roomId,
@@ -107,27 +146,52 @@ module.exports = (io) => {
       });
     });
 
-    // Signaling (SDP / ICE Candidates)
-    // Routing signals directly via personal rooms ensures they reach the user
-    // regardless of which server node they are connected to.
     socket.on('call:signal', ({ to, signal, from }) => {
       io.to(to).emit('call:signal', { signal, from });
     });
 
-    // Reject Call
     socket.on('call:rejected', ({ roomId }) => {
-      // Notify callers in that specific call room
       socket.to(roomId).emit('call:rejected');
     });
 
-    // End Call
     socket.on('call:ended', ({ roomId }) => {
       io.to(roomId).emit('call:ended');
-      // Forcefully clear the room context if possible, or clients handle cleanup
     });
 
     // ===========================
-    // 🔴 LIVE STREAMING EVENTS
+    // SOCIALO LIVE AUDIO SPACES EVENTS
+    // ===========================
+    socket.on('space:join', ({ spaceId, user }) => {
+      if (!spaceId) return;
+      const room = `space_${spaceId}`;
+      socket.join(room);
+      io.to(room).emit('space:user-joined', { spaceId, user: user || socket.user });
+    });
+
+    socket.on('space:leave', ({ spaceId, userId }) => {
+      if (!spaceId) return;
+      const room = `space_${spaceId}`;
+      socket.leave(room);
+      io.to(room).emit('space:user-left', { spaceId, userId: userId || socket.userId });
+    });
+
+    socket.on('space:raise-hand', ({ spaceId, user }) => {
+      if (!spaceId) return;
+      io.to(`space_${spaceId}`).emit('space:hand-raised', { spaceId, user: user || socket.user });
+    });
+
+    socket.on('space:promote-speaker', ({ spaceId, targetUserId }) => {
+      if (!spaceId) return;
+      io.to(`space_${spaceId}`).emit('space:speaker-promoted', { spaceId, targetUserId });
+    });
+
+    socket.on('space:speaking', ({ spaceId, userId, audioLevel }) => {
+      if (!spaceId) return;
+      socket.to(`space_${spaceId}`).emit('space:speaking', { spaceId, userId: userId || socket.userId, audioLevel });
+    });
+
+    // ===========================
+    // LIVE STREAMING EVENTS
     // ===========================
 
     socket.on('live:host', ({ roomId }) => {
@@ -136,21 +200,17 @@ module.exports = (io) => {
 
     socket.on('live:viewer', ({ roomId }) => {
       socket.join(roomId);
-      // Notify host a viewer joined (Host is in the room)
       socket.to(roomId).emit('live:viewer-joined', socket.id);
     });
 
-    // WebRTC Signaling for Live Stream (One-to-Many)
     socket.on('live:signal', ({ to, data, roomId }) => {
       io.to(to).emit('live:signal', { data, from: socket.id });
     });
 
     socket.on('live:return', ({ roomId, data }) => {
-      // Return answer to the host/sender
       socket.to(roomId).emit('live:return', { data, from: socket.id });
     });
 
-    // Live Interaction (Comments/Hearts)
     socket.on('live:comment', (payload) => {
       io.to(payload.roomId).emit('live:comment', {
         ...payload,
@@ -163,41 +223,124 @@ module.exports = (io) => {
     });
 
     // ===========================
-    // 🎧 AUDIO LOUNGE (Clubhouse Style)
+    // AUDIO LOUNGE
     // ===========================
-    
-    // Note: managing active speakers list in a distributed system requires Redis.
-    // For this implementation, we broadcast state changes to the room and let clients build the list.
-    
+
+    const getLoungeRoster = () => {
+      return Array.from(loungeParticipants.values()).map((p) => ({
+        _id: p._id,
+        name: p.name,
+        avatar: p.avatar,
+        isMuted: p.isMuted,
+      }));
+    };
+
     socket.on('lounge:join', () => {
-        socket.join('global-lounge');
-        // Announce join
-        io.to('global-lounge').emit('lounge:user_joined', {
-            _id: userId,
-            name: socket.user.name,
-            avatar: socket.user.avatar,
-            isMuted: true
-        });
+      socket.join('global-lounge');
+
+      let participant = loungeParticipants.get(userId);
+      if (!participant) {
+        participant = {
+          _id: userId,
+          name: socket.user.name,
+          avatar: socket.user.avatar,
+          isMuted: true,
+          socketIds: new Set([socket.id]),
+        };
+        loungeParticipants.set(userId, participant);
+      } else {
+        participant.socketIds.add(socket.id);
+      }
+
+      const roster = getLoungeRoster();
+      io.to('global-lounge').emit('lounge:update', roster);
+      io.to('global-lounge').emit('lounge:user_joined', {
+        _id: userId,
+        name: socket.user.name,
+        avatar: socket.user.avatar,
+        isMuted: participant.isMuted,
+      });
     });
 
     socket.on('lounge:toggle_mute', ({ isMuted }) => {
-        io.to('global-lounge').emit('lounge:user_updated', { userId, isMuted });
+      const participant = loungeParticipants.get(userId);
+      if (participant) {
+        participant.isMuted = !!isMuted;
+        const roster = getLoungeRoster();
+        io.to('global-lounge').emit('lounge:update', roster);
+        io.to('global-lounge').emit('lounge:user_updated', { userId, isMuted: !!isMuted });
+      }
     });
 
     socket.on('lounge:leave', () => {
-        socket.leave('global-lounge');
-        io.to('global-lounge').emit('lounge:user_left', userId);
+      socket.leave('global-lounge');
+      const participant = loungeParticipants.get(userId);
+      if (participant) {
+        participant.socketIds.delete(socket.id);
+        if (participant.socketIds.size === 0) {
+          loungeParticipants.delete(userId);
+          const roster = getLoungeRoster();
+          io.to('global-lounge').emit('lounge:update', roster);
+          io.to('global-lounge').emit('lounge:user_left', userId);
+        }
+      }
     });
 
     // ===========================
-    // 🔌 DISCONNECT
+    // DISCONNECT
     // ===========================
     socket.on('disconnect', () => {
-      // console.log(`❌ User Disconnected: ${userId}`);
-      // Automatic cleanup: Socket.io + Redis Adapter handles leaving rooms
-      
-      // Notify Lounge if they were there
-      io.to('global-lounge').emit('lounge:user_left', userId);
+      // Clean up user from activeOnlineUsers registry
+      const userSockets = activeOnlineUsers.get(userId);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          activeOnlineUsers.delete(userId);
+          io.emit('user:offline', userId);
+        }
+      }
+
+      // Clean up user from loungeParticipants registry
+      const participant = loungeParticipants.get(userId);
+      if (participant) {
+        participant.socketIds.delete(socket.id);
+        if (participant.socketIds.size === 0) {
+          loungeParticipants.delete(userId);
+          const roster = getLoungeRoster();
+          io.to('global-lounge').emit('lounge:update', roster);
+          io.to('global-lounge').emit('lounge:user_left', userId);
+        }
+      }
+
+      // Start grace-period cleanup instead of destroying immediately
+      const timeoutId = setTimeout(async () => {
+        try {
+          const calls = await ActiveCall.find({ host: userId });
+
+          if (calls.length > 0) {
+            // Notify participants that the room is closed
+            calls.forEach((call) => {
+              if (call.roomId) {
+                io.to(call.roomId).emit('call:ended', {
+                  reason: 'host_disconnected'
+                });
+              }
+            });
+
+            // Remove active call records after notifying clients
+            await ActiveCall.deleteMany({ host: userId });
+
+            console.log(`[WebRTC] Host ${userId} dropped. Room destroyed after grace period.`);
+          }
+        } catch (err) {
+          console.error('Error cleaning up WebRTC call:', err);
+        }
+
+        // Cleanup timeout registry
+        disconnectTimeouts.delete(userId);
+      }, 15000); // 15 seconds grace period
+
+      disconnectTimeouts.set(userId, timeoutId);
     });
   });
 };

@@ -17,15 +17,23 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={{ add, remove }}>
       {children}
-      <div aria-live="polite" className="fixed right-6 bottom-6 z-50 flex flex-col gap-3">
-        {toasts.map(t => (
-          <div key={t.id} role="status" className={`max-w-xs px-4 py-2 rounded shadow-lg text-sm ${t.type === 'error' ? 'bg-red-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-900'}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>{t.msg}</div>
-              <button onClick={() => remove(t.id)} aria-label="Dismiss" className="ml-3">✕</button>
+      <div aria-live="polite" className="fixed right-6 bottom-6 z-50 flex flex-col gap-3 pointer-events-none">
+        {toasts.map(t => {
+          let style = "bg-[#070B14]/95 text-[#F8FAFC] border border-[rgba(226,232,240,0.18)] shadow-silverGlass";
+          if (t.type === 'error') {
+            style = "bg-[#052E24] text-white border border-red-500/40 shadow-[0_8px_30px_rgba(139,0,24,0.6)]";
+          } else if (t.type === 'success') {
+            style = "bg-[#0F766E]/95 text-white border border-[#14B8A6]/40 shadow-[0_8px_30px_rgba(15,118,110,0.6)]";
+          }
+          return (
+            <div key={t.id} role="status" className={`pointer-events-auto max-w-sm px-4 py-3 rounded-2xl backdrop-blur-xl text-sm transition-all duration-300 ${style}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-medium">{t.msg}</div>
+                <button onClick={() => remove(t.id)} aria-label="Dismiss" className="ml-3 opacity-60 hover:opacity-100 transition-opacity">✕</button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

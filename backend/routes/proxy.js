@@ -7,7 +7,12 @@ const axios = require('axios');
 // 🔥 FIX: Use exact hostnames to prevent subdomain bypass (e.g. images.unsplash.com.attacker.com)
 const ALLOWED_HOSTS = [
     'res.cloudinary.com',
-    'images.unsplash.com',
+    'images.unsplash.com',       // Required for Seed Data
+    'plus.unsplash.com',         // Required for Unsplash
+    'loremflickr.com',           // Required for Faker/Seed Data
+    'cloudflare-ipfs.com',       // Common for avatars
+    'avatars.githubusercontent.com',
+    'lh3.googleusercontent.com', // Google Auth avatars
     'dl.dropboxusercontent.com',
     'i.imgur.com', 
 ];
