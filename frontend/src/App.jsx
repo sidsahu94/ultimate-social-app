@@ -242,6 +242,7 @@ function AppContent() {
                   <Route path="/groups" element={<PageTransition><FollowSuggestions /></PageTransition>} />
                   <Route path="/drafts" element={<ProtectedRoute><PageTransition><DraftsPage /></PageTransition></ProtectedRoute>} />
 
+                  <Route path="/profile" element={<ProtectedRoute><PageTransition><ProfilePage /></PageTransition></ProtectedRoute>} />
                   <Route path="/profile/:id" element={<PageTransition><ProfilePage /></PageTransition>} />
                   <Route path="/post/:id" element={<PageTransition><PostPage /></PageTransition>} />
 

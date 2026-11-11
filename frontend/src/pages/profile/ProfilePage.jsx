@@ -107,7 +107,15 @@ export default function ProfilePage() {
 
   const tab = searchParams.get("tab") || "posts";
   const [activeMediaTab, setActiveMediaTab] = useState("grid"); // 'grid' | 'reels' | 'videos' | 'tagged'
-  const isMe = myId === id;
+  const effectiveId = id && id !== "me" ? id : (myId || loggedInUser?._id);
+  const isMe = Boolean(
+    !id ||
+    id === "me" ||
+    (myId && String(myId) === String(id)) ||
+    (loggedInUser?.username && String(loggedInUser.username).toLowerCase() === String(id).toLowerCase()) ||
+    (user?._id && myId && String(user._id) === String(myId)) ||
+    (user?.username && loggedInUser?.username && String(user.username).toLowerCase() === String(loggedInUser.username).toLowerCase())
+  );
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -139,25 +147,28 @@ export default function ProfilePage() {
 
     const loadProfile = async () => {
       try {
-        const res = await API.get(`/users/${id}`);
+        const targetParam = effectiveId || "me";
+        const res = await API.get(`/users/${targetParam}`);
         const data = res.data.data || res.data;
         setUser(data);
 
+        const targetUserId = data?._id || targetParam;
+
         const [folRes, followingRes] = await Promise.all([
-          API.get(`/users/${id}/followers`).catch(() => ({ data: [] })),
-          API.get(`/users/${id}/following`).catch(() => ({ data: [] })),
+          API.get(`/users/${targetUserId}/followers`).catch(() => ({ data: [] })),
+          API.get(`/users/${targetUserId}/following`).catch(() => ({ data: [] })),
         ]);
 
         setFollowers(uniqueUsers(folRes.data.data || folRes.data || []));
         setFollowing(uniqueUsers(followingRes.data.data || followingRes.data || []));
 
         if (isMe) {
-          API.get(`/extra/save/${id}`)
+          API.get(`/extra/save/${targetUserId}`)
             .then((r) => setSavedPosts(r.data.data || r.data || []))
             .catch(() => {});
         }
 
-        const postRes = await API.get(`/posts/user/${id}?page=0&limit=12`);
+        const postRes = await API.get(`/posts/user/${targetUserId}?page=0&limit=12`);
         const postData = postRes.data.data || postRes.data || [];
         setPosts(postData);
         if (postData.length < 12) setHasMorePosts(false);
@@ -512,11 +523,19 @@ export default function ProfilePage() {
       </div>
 
       {/* Modals */}
-      {isMe && editOpen && (
+      {editOpen && (
         <ProfileEditModal
+          isOpen={editOpen}
           user={user || loggedInUser}
           onClose={() => setEditOpen(false)}
-          onUpdated={(updated) => setUser(updated)}
+          onUpdate={(updated) => {
+            setUser(updated);
+            setEditOpen(false);
+          }}
+          onUpdated={(updated) => {
+            setUser(updated);
+            setEditOpen(false);
+          }}
         />
       )}
 

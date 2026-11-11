@@ -8,7 +8,7 @@ import { setUser } from '../../redux/slices/authSlice';
 import { FaTwitter, FaInstagram, FaLinkedin, FaTimes, FaCamera } from 'react-icons/fa';
 import { compressImage } from '../../utils/compressor';
 
-const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
+const ProfileEditModal = ({ isOpen = true, onClose, user, onUpdate, onUpdated }) => {
     const dispatch = useDispatch();
     const { add: addToast } = useToast();
     
@@ -121,7 +121,8 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
                 fd.append('coverPhoto', compressed);
             }
             
-            const res = await API.put(`/users/${user._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const targetId = user?._id || user?.id || localStorage.getItem('meId') || 'me';
+            const res = await API.put(`/users/${targetId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
             
             addToast('Profile saved successfully!', { type: 'success' });
             
@@ -130,6 +131,9 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
             
             if (onUpdate) {
                 onUpdate(updatedUser);
+            }
+            if (onUpdated) {
+                onUpdated(updatedUser);
             }
             onClose();
         } catch (err) {

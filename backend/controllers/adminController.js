@@ -189,3 +189,82 @@ exports.handleReport = async (req, res) => {
     res.status(500).json({ message: 'Server error handling report' });
   }
 };
+
+// Toggle Verification Badge
+exports.toggleVerifyUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.isVerified = !user.isVerified;
+    if (user.isVerified) {
+      if (!user.badges) user.badges = [];
+      if (!user.badges.includes('verified')) user.badges.push('verified');
+    } else {
+      user.badges = (user.badges || []).filter(b => b !== 'verified');
+    }
+    await user.save();
+    res.json({ success: true, message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified, user });
+  } catch (err) {
+    console.error('toggleVerifyUser error:', err);
+    res.status(500).json({ message: 'Failed to update verification status' });
+  }
+};
+
+// Creator Treasury: Grant / Mint Coins to User
+exports.grantCoins = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const amount = parseInt(req.body.amount, 10);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: 'Valid coin amount required' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!user.wallet) user.wallet = { balance: 0, totalReceived: 0, totalSent: 0 };
+    user.wallet.balance = (user.wallet.balance || 0) + amount;
+    user.wallet.totalReceived = (user.wallet.totalReceived || 0) + amount;
+    await user.save();
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.to(String(user._id)).emit('wallet:update', {
+        balance: user.wallet.balance,
+        delta: amount,
+        message: `🪙 Founder Treasury Grant: +${amount} Coins added to your creator wallet!`
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Minted ${amount} coins to ${user.name || user.username}`,
+      newBalance: user.wallet.balance
+    });
+  } catch (err) {
+    console.error('grantCoins error:', err);
+    res.status(500).json({ message: 'Treasury minting failed' });
+  }
+};
+
+// Emergency Maintenance Platform Freeze Toggle
+let isMaintenanceActive = false;
+exports.toggleMaintenance = async (req, res) => {
+  try {
+    isMaintenanceActive = !isMaintenanceActive;
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.emit('system:maintenance', { active: isMaintenanceActive });
+    }
+    res.json({
+      success: true,
+      maintenance: isMaintenanceActive,
+      message: isMaintenanceActive 
+        ? 'Platform Emergency Freeze ACTIVATED by Founder' 
+        : 'Platform Operations NORMALIZED'
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to toggle maintenance state' });
+  }
+};

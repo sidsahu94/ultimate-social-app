@@ -19,8 +19,16 @@ const AdminRoute = () => {
       return <Navigate to="/login" replace />;
   }
 
-  // If logged in but NOT admin -> Home
-  if (user.role !== 'admin') {
+  // Strict Founder & Admin Enclave Lock: Only Founder Sidhanta Sahu can enter
+  const isFounderAdmin = (
+    user.role === 'admin' &&
+    (user.email === 'sidhantas786@gmail.com' ||
+     user.email === 'admin@socialapp.com' ||
+     user.username === 'sidsahu' ||
+     user.name?.toLowerCase().includes('sidhanta'))
+  );
+
+  if (!isFounderAdmin) {
       return <Navigate to="/" replace />;
   }
 

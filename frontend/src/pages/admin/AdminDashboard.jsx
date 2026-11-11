@@ -18,6 +18,10 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
+  const [maintenance, setMaintenance] = useState(false);
+  const [coinModalUser, setCoinModalUser] = useState(null);
+  const [coinAmount, setCoinAmount] = useState('100');
+  const [minting, setMinting] = useState(false);
   const { add } = useToast();
 
   useEffect(() => {
@@ -54,6 +58,59 @@ export default function AdminDashboard() {
         add('Failed to load reports', { type: 'error' });
     } finally { 
         setLoading(false); 
+    }
+  };
+
+  const handleToggleVerify = async (userId) => {
+    try {
+      playCyberClick();
+      const res = await API.put(`/admin/users/${userId}/verify`);
+      const isVerified = res.data?.isVerified;
+      add(`Verification status updated: ${isVerified ? 'Verified' : 'Unverified'}`, { type: 'success' });
+      setUsers(prev => prev.map(u => u._id === userId ? { ...u, isVerified } : u));
+    } catch (e) {
+      add('Failed to update verification', { type: 'error' });
+    }
+  };
+
+  const handleMintCoins = async (e) => {
+    e.preventDefault();
+    if (!coinModalUser || !coinAmount) return;
+    setMinting(true);
+    playCyberClick();
+    try {
+      const res = await API.post(`/admin/users/${coinModalUser._id}/coins`, { amount: parseInt(coinAmount, 10) });
+      playSuccessChord();
+      add(res.data?.message || 'Coins minted successfully!', { type: 'success' });
+      setCoinModalUser(null);
+    } catch (e) {
+      add('Failed to mint coins', { type: 'error' });
+    } finally {
+      setMinting(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Permanently delete this user account and all associated data?')) return;
+    try {
+      playCyberClick();
+      await API.delete(`/admin/users/${userId}`);
+      add('User permanently removed', { type: 'success' });
+      setUsers(prev => prev.filter(u => u._id !== userId));
+      loadStats();
+    } catch (e) {
+      add('Failed to delete user', { type: 'error' });
+    }
+  };
+
+  const handleToggleMaintenance = async () => {
+    try {
+      playCyberClick();
+      const res = await API.post('/admin/maintenance');
+      setMaintenance(res.data?.maintenance);
+      add(res.data?.message || 'System state toggled', { type: 'info' });
+    } catch (e) {
+      add('Failed to toggle system freeze', { type: 'error' });
     }
   };
 
@@ -114,6 +171,18 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-black text-[#F7F7FC] tracking-tight font-display">
             Founder & Admin Command Matrix<span className="text-[#00F2FE]">.</span>
           </h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleToggleMaintenance}
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition shadow-lg ${
+              maintenance
+                ? 'bg-[#F87171] text-white animate-pulse'
+                : 'bg-white/10 hover:bg-white/15 text-[#CBD5E1] border border-white/10'
+            }`}
+          >
+            <FaShieldAlt /> {maintenance ? 'Freeze ACTIVE' : 'System Freeze (Emergency)'}
+          </button>
         </div>
       </div>
 
@@ -280,14 +349,49 @@ export default function AdminDashboard() {
                                             : <span className="text-[#00F2FE] font-bold flex items-center gap-1.5"><FaCheck size={10} /> Active</span>}
                                     </td>
                                     <td className="p-4 text-right">
-                                        {u.role !== 'admin' && u.email !== 'sidhantas786@gmail.com' && u.username !== 'sidsahu' && (
-                                            <button 
-                                              onClick={() => handleBan(u._id)} 
-                                              className="p-2 bg-[#0A111E] border border-white/10 rounded-xl hover:bg-white/10 transition text-xs text-[#CBD5E1]"
-                                            >
+                                        <div className="flex items-center justify-end gap-2">
+                                          {/* Toggle Verified Badge */}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleVerify(u._id)}
+                                            className="p-2 bg-[#0A111E] border border-white/10 rounded-xl hover:bg-white/15 transition text-xs"
+                                            title={u.isVerified ? 'Revoke Verification' : 'Grant Verified Badge'}
+                                          >
+                                            <span className={u.isVerified ? 'text-[#00F2FE] font-black' : 'text-white/20'}>✓</span>
+                                          </button>
+
+                                          {/* Mint Coins */}
+                                          <button
+                                            type="button"
+                                            onClick={() => setCoinModalUser(u)}
+                                            className="px-2.5 py-1.5 bg-[#D4AF37]/15 border border-[#D4AF37]/30 rounded-xl hover:bg-[#D4AF37]/25 transition text-[11px] font-bold text-[#D4AF37] flex items-center gap-1"
+                                            title="Grant Creator Coins"
+                                          >
+                                            <span>🪙 Mint</span>
+                                          </button>
+
+                                          {/* Ban / Delete Controls (Protected from self-action) */}
+                                          {u.role !== 'admin' && u.email !== 'sidhantas786@gmail.com' && u.username !== 'sidsahu' && (
+                                            <>
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleBan(u._id)} 
+                                                className="p-2 bg-[#0A111E] border border-white/10 rounded-xl hover:bg-white/10 transition text-xs text-[#CBD5E1]"
+                                                title="Toggle Ban Status"
+                                              >
                                                 {u.role === 'banned' ? <FaCheck className="text-[#00F2FE]" /> : <FaBan className="text-[#F87171]" />}
-                                            </button>
-                                        )}
+                                              </button>
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleDeleteUser(u._id)} 
+                                                className="p-2 bg-[#F87171]/10 border border-[#F87171]/25 rounded-xl hover:bg-[#F87171]/20 transition text-xs text-[#F87171]"
+                                                title="Permanently Delete User"
+                                              >
+                                                <FaTrash size={11} />
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -379,6 +483,64 @@ export default function AdminDashboard() {
                     )}
                 </div>
             ))}
+        </div>
+      )}
+      {/* Coin Minting Modal */}
+      {coinModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-[28px] border border-white/20 bg-[#070B14] p-6 shadow-2xl text-white">
+            <h3 className="text-lg font-black text-[#D4AF37] mb-1 flex items-center gap-2">
+              <span>🪙 Founder Coin Minting</span>
+            </h3>
+            <p className="text-xs text-[#CBD5E1]/70 mb-4">
+              Grant digital currency directly to <span className="font-bold text-white">{coinModalUser.name}</span>'s wallet.
+            </p>
+            <form onSubmit={handleMintCoins} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold uppercase text-[#CBD5E1]/60 block mb-1.5">Coin Amount</label>
+                <div className="flex gap-2 mb-2">
+                  {['50', '100', '500', '1000'].map(amt => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCoinAmount(amt)}
+                      className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition ${
+                        coinAmount === amt
+                          ? 'border-[#D4AF37] bg-[#D4AF37]/20 text-[#D4AF37]'
+                          : 'border-white/10 bg-white/5 text-[#CBD5E1]'
+                      }`}
+                    >
+                      +{amt}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  value={coinAmount}
+                  onChange={(e) => setCoinAmount(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm font-mono text-white outline-none focus:border-[#D4AF37]"
+                  min="1"
+                  required
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCoinModalUser(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 bg-white/5 text-xs font-bold hover:bg-white/10 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={minting}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#F59E0B] text-black font-black text-xs shadow-lg transition hover:opacity-90"
+                >
+                  {minting ? 'Minting...' : 'Confirm Mint'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

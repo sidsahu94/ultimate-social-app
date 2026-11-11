@@ -46,13 +46,17 @@ exports.getMe = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const targetId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(targetId)) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+    let user;
+    if (targetId === "me" && req.user) {
+      user = await User.findById(req.user._id).select("-password").lean();
+    } else if (mongoose.Types.ObjectId.isValid(targetId)) {
+      user = await User.findById(targetId).select("-password").lean();
     }
-    let user = await User.findById(targetId).select('-password').lean();
-    
     if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+      user = await User.findOne({ username: targetId }).select("-password").lean();
+    }
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     if (req.user) {
@@ -125,8 +129,17 @@ exports.searchUsers = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const currentUser = await User.findById(req.params.id);
-    if (!currentUser) return res.status(404).json({ success: false, message: 'User not found' });
+    let targetParam = req.params.id;
+    if (targetParam === "me" && req.user) {
+      targetParam = String(req.user._id);
+    }
+    let currentUser;
+    if (mongoose.Types.ObjectId.isValid(targetParam)) {
+      currentUser = await User.findById(targetParam);
+    } else {
+      currentUser = await User.findOne({ username: targetParam });
+    }
+    if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
 
     // Hardware Enclave Lockdown: If target account is Founder/Admin, ONLY that exact authenticated user can modify it
     if (currentUser.role === 'admin' || currentUser.email === 'sidhantas786@gmail.com' || currentUser.email === 'admin@socialapp.com') {
@@ -175,7 +188,7 @@ exports.updateProfile = async (req, res) => {
     const merged = { ...(currentUser.toObject ? currentUser.toObject() : currentUser), ...updates };
     updates.profileCompletion = calculateCompletion(merged);
 
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
+    const user = await User.findByIdAndUpdate(currentUser._id, updates, { new: true }).select('-password');
     res.json({ success: true, data: user });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Update failed' });
