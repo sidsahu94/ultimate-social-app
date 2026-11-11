@@ -1,32 +1,34 @@
 // backend/utils/push.js
 const webpush = require('web-push');
 
-// 🔥 FIX: Read keys directly from environment variables
-// This ensures consistency across server restarts.
-const vapidKeys = {
-    publicKey: process.env.VAPID_PUBLIC_KEY,
-    privateKey: process.env.VAPID_PRIVATE_KEY
-};
+let publicKey = process.env.VAPID_PUBLIC_KEY;
+let privateKey = process.env.VAPID_PRIVATE_KEY;
 
-// Validation: Check if keys are present
-if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
-    console.error("❌ FATAL ERROR: VAPID Keys are missing in .env file.");
-    console.error("   Run 'npx web-push generate-vapid-keys' and add them to backend/.env");
-} else {
-    try {
-        webpush.setVapidDetails(
-            process.env.VAPID_EMAIL || 'mailto:admin@socialapp.com', // Use env email or fallback
-            vapidKeys.publicKey,
-            vapidKeys.privateKey
-        );
-        console.log("✅ VAPID Keys configured for Web Push");
-    } catch (err) {
-        console.error("❌ Error setting VAPID details:", err.message);
-    }
+if (!publicKey || !privateKey) {
+  try {
+    const generated = webpush.generateVAPIDKeys();
+    publicKey = generated.publicKey;
+    privateKey = generated.privateKey;
+    console.log("ℹ️ Auto-generated ephemeral VAPID keys for Web Push notifications");
+  } catch (err) {
+    console.warn("⚠️ Web Push VAPID generation fallback:", err.message);
+  }
 }
 
-// Export the configured webpush instance and the public key for the frontend
-module.exports = { 
-    webpush, 
-    publicKey: vapidKeys.publicKey 
+if (publicKey && privateKey) {
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_EMAIL || 'mailto:admin@socialapp.com',
+      publicKey,
+      privateKey
+    );
+    console.log("✅ VAPID Keys configured for Web Push");
+  } catch (err) {
+    console.warn("⚠️ Error configuring VAPID details:", err.message);
+  }
+}
+
+module.exports = {
+  webpush,
+  publicKey
 };
