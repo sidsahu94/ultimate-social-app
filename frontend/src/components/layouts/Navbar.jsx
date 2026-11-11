@@ -51,6 +51,7 @@ import usePWAInstall from '../../hooks/usePWAInstall';
 import { scrollToTop } from '../../utils/scrollUtils';
 import { useTheme } from '../../contexts/ThemeProvider';
 import Logo from '../ui/Logo';
+import { playSound } from '../../utils/soundEffects';
 
 const NavItem = ({ to, iconActive, iconInactive, label, active, badge = 0, currentTheme, onClick }) => (
   <Link
@@ -328,6 +329,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => {
+              playSound('install');
               if (isReady) installApp();
               else window.dispatchEvent(new CustomEvent('openInstallApp'));
             }}
@@ -451,6 +453,7 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={() => {
+                    playSound('install');
                     setShowMobileDrawer(false);
                     if (isReady) installApp();
                     else window.dispatchEvent(new CustomEvent('openInstallApp'));

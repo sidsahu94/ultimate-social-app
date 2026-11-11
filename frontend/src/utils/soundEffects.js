@@ -110,6 +110,28 @@ export const playQuantumScan = () => {
   } catch (_) {}
 };
 
+// Majestic affirmative chord for App installation & downloads
+export const playInstallChime = () => {
+  if (isMuted()) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const notes = [440, 554.37, 659.25, 880]; // A4, C#5, E5, A5
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.05);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime + idx * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.05 + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + idx * 0.05);
+      osc.stop(ctx.currentTime + idx * 0.05 + 0.36);
+    });
+  } catch (_) {}
+};
+
 // Unified dispatcher for all sound effects
 export const playSound = (soundType) => {
   switch (soundType) {
@@ -125,6 +147,8 @@ export const playSound = (soundType) => {
     case 'scan':
     case 'biometric':
       return playQuantumScan();
+    case 'install':
+      return playInstallChime();
     default:
       return playCyberClick();
   }

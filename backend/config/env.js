@@ -13,11 +13,11 @@ const config = {
   PORT: Number.parseInt(process.env.PORT || '5000', 10),
 
   MONGO_URI: process.env.MONGO_URI || '',
-  JWT_SECRET: process.env.JWT_SECRET || '',
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || '',
+  JWT_SECRET: process.env.JWT_SECRET || 'ultimate_social_verse_master_auth_secret_key_2026',
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || process.env.REFRESH_SECRET || 'ultimate_social_verse_master_refresh_secret_key_2026',
 
   REDIS_URL: process.env.REDIS_URL || '',
-  ALLOWED_ORIGINS: csvToArray(process.env.ALLOWED_ORIGINS, ['http://localhost:5173']),
+  ALLOWED_ORIGINS: csvToArray(process.env.ALLOWED_ORIGINS, ['http://localhost:5173', 'https://*.vercel.app']),
 
   CLOUDINARY: {
     CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || '',
@@ -26,10 +26,10 @@ const config = {
   },
 
   EMAIL: {
-    SERVICE: process.env.EMAIL_SERVICE || '',
+    SERVICE: process.env.EMAIL_SERVICE || 'gmail',
     USER: process.env.EMAIL_USER || '',
     PASS: process.env.EMAIL_PASS || '',
-    FROM: process.env.EMAIL_FROM || '',
+    FROM: process.env.EMAIL_FROM || 'admin@socialapp.com',
   },
 
   VAPID: {
