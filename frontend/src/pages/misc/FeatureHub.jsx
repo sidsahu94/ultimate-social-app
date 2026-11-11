@@ -1,6 +1,7 @@
 // frontend/src/pages/misc/FeatureHub.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   FaArrowRight,
   FaCompass,
@@ -163,6 +164,7 @@ const groups = [
         to: '/admin/dashboard',
         desc: 'Platform governance center.',
         icon: <FaShieldAlt />,
+        adminOnly: true,
       },
       {
         title: 'Command Center',
@@ -175,6 +177,8 @@ const groups = [
 ];
 
 export default function FeatureHub() {
+  const { user } = useSelector((s) => s.auth);
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 pb-24">
       <div className="mb-8 overflow-hidden rounded-[32px] border border-white/10 bg-[#070B14]/90 p-6 md:p-8 shadow-2xl backdrop-blur-xl">
@@ -209,7 +213,7 @@ export default function FeatureHub() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {group.items.map((item) => {
+              {group.items.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => {
                 const card = (
                   <div className="group h-full rounded-[24px] border border-white/10 bg-[#171A26]/70 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_12px_30px_rgba(29,78,216,0.18)]">
                     <div className="mb-4 flex items-center justify-between">
