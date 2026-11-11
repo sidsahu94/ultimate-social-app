@@ -46,12 +46,16 @@ API.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // 🔥 Global 5xx Error Handling (Server Crash/Error)
+    // Global 5xx Error Handling (Debounced to prevent alert spamming)
     if (error.response?.status >= 500) {
-      if (typeof window !== 'undefined') {
+      const now = Date.now();
+      const method = (originalRequest?.method || 'get').toLowerCase();
+      // Only notify for user mutations (POST/PUT/DELETE) and debounce to at most once per 10 seconds
+      if (typeof window !== 'undefined' && method !== 'get' && (!window._lastApiErrorTime || now - window._lastApiErrorTime > 10000)) {
+        window._lastApiErrorTime = now;
         window.dispatchEvent(
           new CustomEvent('api:error', {
-            detail: 'Server error. Please try again later.',
+            detail: 'Server synchronization in progress. Please retry in a moment.',
           })
         );
       }

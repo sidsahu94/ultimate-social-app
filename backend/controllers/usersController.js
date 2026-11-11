@@ -125,7 +125,7 @@ exports.searchUsers = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    currentUser = await User.findById(req.params.id);
+    const currentUser = await User.findById(req.params.id);
     if (!currentUser) return res.status(404).json({ success: false, message: 'User not found' });
 
     // Hardware Enclave Lockdown: If target account is Founder/Admin, ONLY that exact authenticated user can modify it
@@ -170,8 +170,9 @@ exports.updateProfile = async (req, res) => {
         updates.avatar = ''; 
     }
 
-    let currentUser = await User.findById(req.params.id);
-    const merged = { ...currentUser.toObject(), ...updates };
+    // User already loaded
+    const baseUser = currentUser;
+    const merged = { ...(currentUser.toObject ? currentUser.toObject() : currentUser), ...updates };
     updates.profileCompletion = calculateCompletion(merged);
 
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');

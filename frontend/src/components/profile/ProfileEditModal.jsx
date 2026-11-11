@@ -125,13 +125,13 @@ const ProfileEditModal = ({ isOpen, onClose, user, onUpdate }) => {
             
             addToast('Profile saved successfully!', { type: 'success' });
             
-            dispatch(setUser(res.data)); 
+            const updatedUser = res.data?.data || res.data?.user || res.data;
+            dispatch(setUser(updatedUser)); 
             
             if (onUpdate) {
-                onUpdate(res.data);
-            } else {
-                onClose();
+                onUpdate(updatedUser);
             }
+            onClose();
         } catch (err) {
             console.error('save profile err', err);
             addToast(err.userMessage || 'Failed to save profile', { type: 'error' });

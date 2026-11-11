@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaSyncAlt, FaTimes, FaRocket } from 'react-icons/fa';
 
-const APP_CURRENT_VERSION = 'v5.0.0-socialverse';
+const APP_CURRENT_VERSION = 'v5.1.0-socialverse';
 
 export default function UpdateNotificationBanner() {
   const [showUpdate, setShowUpdate] = useState(false);

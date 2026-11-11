@@ -2,8 +2,8 @@
   "short_name": "SocialVerse",
   "name": "SocialVerse ∞ — Beyond Social",
   "description": "Next-Gen Social Network with luxury themes, cinematic canvas, and 3D creative AI.",
-  "id": "/",
-  "start_url": "/",
+  "id": "/?v=2.0",
+  "start_url": "/?mode=standalone",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
@@ -12,39 +12,45 @@
   "categories": ["social", "entertainment", "multimedia"],
   "icons": [
     {
-      "src": "/socialverse-logo.jpg",
-      "type": "image/jpeg",
+      "src": "/icon-192.png",
+      "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "/socialverse-logo.jpg",
-      "type": "image/jpeg",
+      "src": "/icon-512.png",
+      "type": "image/png",
       "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180",
       "purpose": "any"
     },
     {
       "src": "/favicon.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
     {
       "name": "Feed",
       "url": "/",
-      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Reels",
       "url": "/reels",
-      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Explore",
       "url": "/explore",
-      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

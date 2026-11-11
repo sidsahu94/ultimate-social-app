@@ -42,7 +42,7 @@ export default function InstallAppModal({ isOpen, onClose }) {
     try {
       playSound('install');
       const appUrl = window.location.origin;
-      const urlContent = `[InternetShortcut]\r\nURL=${appUrl}\r\nIconIndex=0\r\nIconFile=${appUrl}/favicon.ico\r\nHotKey=0\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,11\r\n`;
+      const urlContent = `[InternetShortcut]\r\nURL=${appUrl}/?app=standalone\r\nIconIndex=0\r\nIconFile=${appUrl}/favicon.ico\r\nHotKey=0\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,11\r\n`;
       const blob = new Blob([urlContent], { type: 'application/internet-shortcut;charset=utf-8' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);

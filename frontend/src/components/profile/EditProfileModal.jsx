@@ -35,8 +35,9 @@ export default function EditProfileModal({ isOpen, onClose, user }) {
           headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      dispatch(updateAuthUser(res.data));
-      add("Profile updated", { type: 'success' });
+      const updatedUser = res.data?.data || res.data?.user || res.data;
+      dispatch(updateAuthUser(updatedUser));
+      add("Profile updated successfully!", { type: 'success' });
       onClose();
       window.location.reload(); 
     } catch (err) {

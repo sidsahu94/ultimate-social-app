@@ -34,108 +34,6 @@ const getNotificationLink = (n) => {
     }
 };
 
-// Rich Seed Notifications ensuring user activity is never an empty void
-const SEED_NOTIFICATIONS = [
-  {
-    _id: "notif_elena_like",
-    type: "like",
-    actor: {
-      _id: "demo_u_elena",
-      name: "Elena Vance",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-      isVerified: true
-    },
-    message: "liked your photo 'City lights, calm mind, and endless possibilities ✨'",
-    data: { link: "/" },
-    read: false,
-    createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_aarav_follow",
-    type: "follow",
-    actor: {
-      _id: "sugg_aarav",
-      name: "Aarav Deshmukh",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-      isVerified: true
-    },
-    message: "started following your creator profile",
-    data: { link: "/profile/sugg_aarav" },
-    read: false,
-    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_aman_comment",
-    type: "comment",
-    actor: {
-      _id: "demo_u_aman",
-      name: "Aman Verma",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-      isVerified: true
-    },
-    message: "commented: 'Incredible shot of the Sea Link!'",
-    data: { link: "/" },
-    read: false,
-    createdAt: new Date(Date.now() - 42 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_social_ai",
-    type: "system",
-    actor: {
-      _id: "system_ai",
-      name: "Social AI",
-      avatar: "/socialverse-logo.jpg",
-      isVerified: true
-    },
-    message: "Weekly Creator Report: Profile visibility increased +34% with Royal Aether!",
-    data: { link: "/analytics" },
-    read: false,
-    createdAt: new Date(Date.now() - 75 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_wallet_bonus",
-    type: "wallet",
-    actor: {
-      _id: "system_treasury",
-      name: "Creator Treasury",
-      avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200",
-      isVerified: true
-    },
-    message: "Daily Bonus: 50 Coins deposited to your creator wallet! 🪙",
-    data: { link: "/wallet" },
-    read: true,
-    createdAt: new Date(Date.now() - 180 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_marcus_tip",
-    type: "wallet",
-    actor: {
-      _id: "demo_u_marcus",
-      name: "Marcus Sterling",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200",
-      isVerified: true
-    },
-    message: "tipped 25 Coins on your latest reel! 💎",
-    data: { link: "/wallet" },
-    read: true,
-    createdAt: new Date(Date.now() - 360 * 60 * 1000).toISOString()
-  },
-  {
-    _id: "notif_arcade_rank",
-    type: "system",
-    actor: {
-      _id: "arcade_hub",
-      name: "Arcade Arena",
-      avatar: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200",
-      isVerified: true
-    },
-    message: "You climbed into the Cyber Snake Top 5 Leaderboard! 🐍🏆",
-    data: { link: "/games" },
-    read: true,
-    createdAt: new Date(Date.now() - 720 * 60 * 1000).toISOString()
-  }
-];
-
 export default function NotificationsPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -147,9 +45,10 @@ export default function NotificationsPage() {
         try {
             const r = await API.get('/notifications');
             const data = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-            setItems(data.length > 0 ? data : SEED_NOTIFICATIONS);
+            setItems(data);
         } catch (e) { 
-            setItems(SEED_NOTIFICATIONS);
+            console.warn('Notifications load error:', e?.message);
+            setItems([]);
         } finally {
             setLoading(false);
         }
