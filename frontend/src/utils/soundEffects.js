@@ -19,12 +19,12 @@ const getAudioContext = () => {
 
 const isMuted = () => {
   if (typeof window === 'undefined') return true;
-  return localStorage.getItem('socialo_sound_muted') === 'true';
+  return localStorage.getItem('socialverse_sound_muted') === 'true';
 };
 
 export const toggleSoundMute = () => {
   const current = isMuted();
-  localStorage.setItem('socialo_sound_muted', (!current).toString());
+  localStorage.setItem('socialverse_sound_muted', (!current).toString());
   return !current;
 };
 
@@ -153,3 +153,4 @@ export const playSound = (soundType) => {
       return playCyberClick();
   }
 };
+

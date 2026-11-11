@@ -7,7 +7,7 @@ const User = require('../models/User');
 const createAdmin = async () => {
   await mongoose.connect(process.env.MONGO_URI);
   
-  const email = process.env.ADMIN_EMAIL || 'admin@socialo.com';
+  const email = process.env.ADMIN_EMAIL || 'sidhantas786@gmail.com';
   const password = process.env.ADMIN_PASSWORD || 'admin123';
   
   // Check if exists
@@ -19,10 +19,10 @@ const createAdmin = async () => {
       admin.password = await bcrypt.hash(password, 12);
       await admin.save();
   } else {
-      console.log('Creating new Socialo admin...');
+      console.log('Creating new SocialVerse admin...');
       const hashed = await bcrypt.hash(password, 12);
       admin = await User.create({
-          name: 'Socialo Admin',
+          name: 'Sidhanta Sahu (Founder)',
           username: 'admin',
           email,
           password: hashed,

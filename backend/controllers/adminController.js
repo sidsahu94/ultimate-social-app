@@ -85,6 +85,10 @@ exports.banUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    if (user.role === 'admin' || user.email === 'sidhantas786@gmail.com' || user.username === 'sidsahu') {
+      return res.status(403).json({ message: 'Prohibited: Founder & Admin account cannot be banned.' });
+    }
+
     user.role = user.role === 'banned' ? 'user' : 'banned';
     await user.save();
 
@@ -102,6 +106,10 @@ exports.deleteUser = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role === 'admin' || user.email === 'sidhantas786@gmail.com' || user.username === 'sidsahu') {
+      return res.status(403).json({ message: 'Prohibited: Founder & Admin account cannot be deleted.' });
     }
 
     res.json({ message: 'User deleted permanently' });

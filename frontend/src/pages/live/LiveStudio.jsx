@@ -15,7 +15,7 @@ export default function LiveStudio() {
   const peersRef = useRef(new Map());
 
   const [room, setRoom] = useState(null);
-  const [title, setTitle] = useState('Socialo Live Session');
+  const [title, setTitle] = useState('SocialVerse Live Session');
   const [isLive, setIsLive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);

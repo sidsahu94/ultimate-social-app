@@ -77,13 +77,13 @@ const seedData = async () => {
 
   const initialUsers = [
     {
-      name: 'Alex Rivera',
-      username: 'admin',
-      email: 'admin@socialapp.com',
+      name: 'Sidhanta Sahu',
+      username: 'sidsahu',
+      email: 'sidhantas786@gmail.com',
       password: hashedPassword,
       avatar: CURATED_AVATARS[0],
       coverPhoto: CURATED_PHOTOS[0],
-      bio: 'Creative Director & Founder at Socialo. Designing the future of artistic human connection.',
+      bio: 'Creative Director & Founder at SocialVerse. Designing the future of artistic human connection.',
       location: 'San Francisco, CA',
       isVerified: true,
       role: 'admin',
@@ -107,7 +107,7 @@ const seedData = async () => {
     {
       name: 'Julian Hayes',
       username: 'julian',
-      email: 'julian@socialo.design',
+      email: 'julian@socialverse.design',
       password: hashedPassword,
       avatar: CURATED_AVATARS[2],
       coverPhoto: CURATED_PHOTOS[2],
@@ -121,7 +121,7 @@ const seedData = async () => {
     {
       name: 'Seraphina Lin',
       username: 'seraphina',
-      email: 'seraphina@socialo.ai',
+      email: 'seraphina@socialverse.ai',
       password: hashedPassword,
       avatar: CURATED_AVATARS[3],
       coverPhoto: CURATED_PHOTOS[3],
@@ -135,7 +135,7 @@ const seedData = async () => {
     {
       name: 'Marcus Sterling',
       username: 'sterling',
-      email: 'marcus@socialo.luxury',
+      email: 'marcus@socialverse.luxury',
       password: hashedPassword,
       avatar: CURATED_AVATARS[4],
       coverPhoto: CURATED_PHOTOS[4],
@@ -190,7 +190,7 @@ const seedData = async () => {
   // --- Posts & Content ---
   console.log('📸 Publishing Rich Editorial Posts...');
   const postTexts = [
-    'Golden hour reflecting through geometric facades. The balance between stillness and human energy is where luxury lives. #Architecture #Cinematic #Socialo',
+    'Golden hour reflecting through geometric facades. The balance between stillness and human energy is where luxury lives. #Architecture #Cinematic #SocialVerse',
     'Curating soundscapes for deep work at midnight. What soundtrack fuels your creativity right now? Drop your favorites below! 🎧 #DeepWork #Electronica #SoundDesign',
     'Simplicity is the ultimate sophistication. Finding beauty in clean lines, obsidian textures, and timeless craftsmanship. #ObsidianNoir #Design #Minimalism',
     'Exploring generative neural rendering with WebGL. The speed of real-time shaders in 2026 is truly boundary-breaking. #GenerativeArt #CreativeCoding #TechVision',
@@ -209,7 +209,7 @@ const seedData = async () => {
       user: author._id,
       content: postTexts[pIdx],
       images: [CURATED_PHOTOS[pIdx % CURATED_PHOTOS.length]],
-      hashtags: ['socialo', 'auroranoir', 'luxury', 'creative'],
+      hashtags: ['socialverse', 'auroranoir', 'luxury', 'creative'],
       likes: likers.map(l => l._id),
       likesCount: likers.length,
       createdAt: new Date(Date.now() - (pIdx * 3.5 * 3600 * 1000))
@@ -223,7 +223,7 @@ const seedData = async () => {
     const likers = createdUsers.filter(u => String(u._id) !== String(author._id)).slice(0, 3 + (i % 5));
     const post = await Post.create({
       user: author._id,
-      content: `${faker.lorem.paragraph()} #Trending #SocialoLife`,
+      content: `${faker.lorem.paragraph()} #Trending #SocialVerseLife`,
       images: i % 2 === 0 ? [CURATED_PHOTOS[(i + 4) % CURATED_PHOTOS.length]] : [],
       hashtags: ['trending', 'lifestyle', 'community'],
       likes: likers.map(l => l._id),
@@ -300,7 +300,7 @@ const seedData = async () => {
   // --- Reels ---
   console.log('🎬 Uploading High-Energy Reels...');
   const FAST_REEL_CLIPS = [
-    { url: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/dog.mp4', caption: 'Kinetic energy in full bloom! 🐕✨ #Joy #Momentum #SocialoCinema' },
+    { url: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/dog.mp4', caption: 'Kinetic energy in full bloom! 🐕✨ #Joy #Momentum #SocialVerseCinema' },
     { url: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/sea_turtle.mp4', caption: 'Azure currents & deep tranquility 🌊🐢 #OceanDrift #NatureArt' },
     { url: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/elephants.mp4', caption: 'Serengeti sovereigns under dusk 🐘🌅 #Wildlife #MajesticEarth' },
     { url: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/samples/cld-sample-video.mp4', caption: 'Precision cadence & fluid motion ⚡🏎️ #SpeedCraft #NoirVision' }
@@ -320,7 +320,7 @@ const seedData = async () => {
   console.log('💎 Cataloging Luxury Creator Marketplace Products...');
   const products = [
     { title: 'Obsidian Noir Lightroom Presets', price: 29.99, desc: '12 handcrafted cinematic cinema-grade LUTs and RAW camera profiles.', image: CURATED_PHOTOS[0] },
-    { title: 'Socialo VIP Founder Badge', price: 99.00, desc: 'Lifetime verified profile badge, golden chat sheen, and exclusive space hosting privileges.', image: CURATED_PHOTOS[1] },
+    { title: 'SocialVerse VIP Founder Badge', price: 99.00, desc: 'Lifetime verified profile badge, golden chat sheen, and exclusive space hosting privileges.', image: CURATED_PHOTOS[1] },
     { title: 'Ambient Modular Sound Pack (24-bit WAV)', price: 45.00, desc: 'Over 150 pristine analog synth pads, sub pulses, and field recordings.', image: CURATED_PHOTOS[3] },
     { title: 'Minimalist Titanium Pen & Journal', price: 120.00, desc: 'Precision machined aerospace-grade titanium pen with Italian leather notebook.', image: CURATED_PHOTOS[4] }
   ];
@@ -341,7 +341,7 @@ const seedData = async () => {
   console.log('🗓️ Scheduling Global Creative Events...');
   await Event.create({
     host: createdUsers[0]._id,
-    title: 'Socialo Global Creative Summit 2026',
+    title: 'SocialVerse Global Creative Summit 2026',
     description: 'An interactive virtual gathering exploring the nexus of generative AI, WebRTC, and artistic luxury storytelling.',
     date: new Date(Date.now() + 7 * 24 * 3600 * 1000),
     location: 'Metaspace Studio A & Virtual Live Stage',

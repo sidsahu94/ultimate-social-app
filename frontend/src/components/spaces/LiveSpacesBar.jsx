@@ -130,7 +130,7 @@ export default function LiveSpacesBar() {
                 <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#1D4ED8] to-[#00F2FE] text-white flex items-center justify-center shadow-[0_0_12px_rgba(100,223,223,0.5)]">
                   <FaBroadcastTower />
                 </div>
-                <h3 className="font-display text-lg font-bold text-[#F8FAFC]">Start a Socialo Space</h3>
+                <h3 className="font-display text-lg font-bold text-[#F8FAFC]">Start a SocialVerse Space</h3>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}

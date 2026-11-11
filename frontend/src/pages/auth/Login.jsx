@@ -195,7 +195,7 @@ export default function Login() {
                 {loading || isSubmitting ? (
                   <Spinner className="border-current" />
                 ) : (
-                  'Sign In to Socialo'
+                  'Sign In to SocialVerse'
                 )}
               </span>
             </button>

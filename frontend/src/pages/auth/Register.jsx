@@ -114,7 +114,7 @@ export default function Register() {
                 disabled={loading}
                 className="w-full py-3.5 px-6 rounded-[14px] bg-[#6558F5] text-white font-semibold hover:bg-[#5548e6] active:scale-[0.99] transition shadow-lg shadow-[#6558F5]/35 hover:shadow-[0_0_24px_rgba(101,88,245,0.45)] flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <span>{loading ? <Spinner className="border-current" /> : 'Create Socialo Account'}</span>
+                <span>{loading ? <Spinner className="border-current" /> : 'Create SocialVerse Account'}</span>
               </button>
            </form>
 

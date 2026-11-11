@@ -64,7 +64,7 @@ export default function LiveList() {
               Live Broadcasts
             </div>
             <h1 className="font-display text-3xl md:text-4xl font-black tracking-tight text-[#F7F7FC]">
-              Socialo Live<span className="text-[#00F2FE]">.</span>
+              SocialVerse Live<span className="text-[#00F2FE]">.</span>
             </h1>
             <p className="mt-2 max-w-lg text-sm text-[#CBD5E1]">
               Watch live creators, interact via real-time superchats, and start your own studio broadcast with peer-to-peer streaming.

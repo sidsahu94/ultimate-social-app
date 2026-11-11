@@ -83,25 +83,42 @@ const autoSeedIfEmpty = async (dbConnection) => {
     const User = require('../models/User');
     const Post = require('../models/Post');
 
-    const count = await User.countDocuments();
+    
+      // Assert Founder identity across admin records
+      await User.updateMany(
+        { $or: [{ email: 'admin@socialapp.com' }, { role: 'admin' }] },
+        {
+          $set: {
+            name: 'Sidhanta Sahu',
+            username: 'sidsahu',
+            bio: 'Founder & Chief Architect of SocialVerse ∞. Designing the next generation of luxury digital human connection.',
+            location: 'Odisha, India',
+            isVerified: true,
+            role: 'admin',
+            badges: ['founder', 'architect', 'vip', 'early-adopter', 'creator'],
+          }
+        }
+      );
+
+      const count = await User.countDocuments();
     if (count === 0) {
       logger.info('🌱 Empty database detected. Auto-seeding initial master accounts & posts...');
       const salt = await bcrypt.genSalt(10);
       // pre('save') hashes password automatically
 
       const adminUser = await User.create({
-        name: 'Alex Rivera',
-        username: 'admin',
-        email: 'admin@socialapp.com',
+        name: 'Sidhanta Sahu',
+        username: 'sidsahu',
+        email: 'sidhantas786@gmail.com',
         password: 'password123',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
         coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',
-        bio: 'Creative Director & Founder at Socialo. Designing the future of artistic human connection.',
-        location: 'San Francisco, CA',
+        bio: 'Founder & Chief Architect of SocialVerse ∞. Designing the next generation of luxury digital human connection.',
+        location: 'Odisha, India',
         isVerified: true,
         role: 'admin',
         wallet: { balance: 5000, totalReceived: 1200, totalSent: 300 },
-        badges: ['early-adopter', 'vip', 'creator'],
+        badges: ['founder', 'architect', 'vip', 'early-adopter', 'creator'],
       });
 
       const demoUser = await User.create({
@@ -122,9 +139,9 @@ const autoSeedIfEmpty = async (dbConnection) => {
       // Sample post
       await Post.create({
         user: adminUser._id,
-        content: 'Welcome to Socialo — The Ultimate Masterpiece Social Platform. Built with AURORA NOIR luxury aesthetics, end-to-end cryptographic encryption, and real-time audio lounges.',
+        content: 'Welcome to SocialVerse ∞ — The Ultimate Masterpiece Social Ecosystem. Built with AURORA NOIR luxury aesthetics, end-to-end cryptographic encryption, and real-time audio lounges.',
         images: ['https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000'],
-        hashtags: ['auroranoir', 'luxury', 'socialo'],
+        hashtags: ['auroranoir', 'luxury', 'socialverse'],
         likes: [demoUser._id],
         likeCount: 1,
       });

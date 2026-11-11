@@ -1,6 +1,6 @@
 // frontend/src/utils/security.js
 /**
- * SOCIALO HIGH-TECH SECURITY & CLIENT-SIDE E2EE UTILITY
+ * socialverse HIGH-TECH SECURITY & CLIENT-SIDE E2EE UTILITY
  * Powered by W3C Web Cryptography API (SubtleCrypto)
  * Standard: AES-GCM 256-bit with PBKDF2 (SHA-256) key derivation.
  */
@@ -25,8 +25,8 @@ export async function getOrCreateChatKey(chatId) {
   try {
     const enc = new TextEncoder();
     // Deterministic salt derived from chatId
-    const salt = enc.encode(`socialo_e2ee_salt_${chatId}_v1`);
-    const masterSecret = enc.encode(`socialo_session_key_${chatId}`);
+    const salt = enc.encode(`socialverse_e2ee_salt_${chatId}_v1`);
+    const masterSecret = enc.encode(`socialverse_session_key_${chatId}`);
 
     const baseKey = await window.crypto.subtle.importKey(
       'raw',

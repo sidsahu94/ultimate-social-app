@@ -289,7 +289,7 @@ export default function Marketplace() {
               <div className="border-b border-white/10 px-6 py-5 bg-[#171A26]/40">
                 <h3 className="text-xl font-bold text-[#F7F7FC]">List New Item</h3>
                 <p className="mt-1 text-xs text-[#CBD5E1]">
-                  Publish an exclusive product to the Socialo marketplace.
+                  Publish an exclusive product to the SocialVerse marketplace.
                 </p>
               </div>
 

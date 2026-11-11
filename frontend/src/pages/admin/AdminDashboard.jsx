@@ -108,11 +108,11 @@ export default function AdminDashboard() {
     <div className="max-w-6xl mx-auto p-4 md:p-6 min-h-screen pb-24">
       <div className="mb-8 pb-4 border-b border-white/10 flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#10B981] mb-1">
-            <FaShieldAlt /> System Governance
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#00F2FE] mb-1">
+            <FaShieldAlt className="animate-pulse" /> Founder & System Governance Enclave &bull; Sidhanta Sahu
           </div>
           <h1 className="text-3xl font-black text-[#F7F7FC] tracking-tight font-display">
-            Admin Command Center<span className="text-[#00F2FE]">.</span>
+            Founder & Admin Command Matrix<span className="text-[#00F2FE]">.</span>
           </h1>
         </div>
       </div>
@@ -280,7 +280,7 @@ export default function AdminDashboard() {
                                             : <span className="text-[#00F2FE] font-bold flex items-center gap-1.5"><FaCheck size={10} /> Active</span>}
                                     </td>
                                     <td className="p-4 text-right">
-                                        {u.role !== 'admin' && (
+                                        {u.role !== 'admin' && u.email !== 'sidhantas786@gmail.com' && u.username !== 'sidsahu' && (
                                             <button 
                                               onClick={() => handleBan(u._id)} 
                                               className="p-2 bg-[#0A111E] border border-white/10 rounded-xl hover:bg-white/10 transition text-xs text-[#CBD5E1]"

@@ -159,7 +159,7 @@ module.exports = (io) => {
     });
 
     // ===========================
-    // SOCIALO LIVE AUDIO SPACES EVENTS
+    // SOCIALVERSE LIVE AUDIO SPACES EVENTS
     // ===========================
     socket.on('space:join', ({ spaceId, user }) => {
       if (!spaceId) return;

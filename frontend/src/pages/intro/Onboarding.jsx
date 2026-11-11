@@ -14,6 +14,7 @@ import {
   FaUserCheck,
 } from 'react-icons/fa';
 import { playSound } from '../../utils/soundEffects';
+import Logo from '../../components/ui/Logo';
 
 const FEATURES = [
   {
@@ -90,19 +91,7 @@ export default function Onboarding() {
 
       {/* Header */}
       <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 overflow-hidden rounded-[14px] shadow-lg shadow-[#1D4ED8]/25 border border-[rgba(226,232,240,0.18)] bg-[#070B14]">
-            <img src="/socialo-logo.jpg" alt="Socialo" className="h-full w-full object-cover" />
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="font-display text-2xl font-black tracking-tight text-[#F8FAFC]">
-              Socialo<span className="text-[#D4AF37]">.</span>
-            </span>
-            <span className="text-[8.5px] font-bold tracking-[0.2em] uppercase text-[#CBD5E1]/70">
-              AURORA NOIR • MASTERPIECE
-            </span>
-          </div>
-        </div>
+        <Logo size={40} subtitle="BEYOND SOCIAL" />
 
         <button
           onClick={() => completeOnboarding('/explore')}
@@ -119,7 +108,7 @@ export default function Onboarding() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#1D4ED8]/30 bg-[#1D4ED8]/15 px-4 py-1.5 text-xs font-bold tracking-wider text-[#00F2FE] shadow-[0_0_15px_rgba(29,78,216,0.3)]"
         >
-          ✨ AURORA NOIR • THE NEXT-GEN CREATOR NETWORK
+          ✨ SOCIALVERSE ∞ • BEYOND SOCIAL ECOSYSTEM
         </motion.div>
 
         <motion.h1
@@ -140,7 +129,7 @@ export default function Onboarding() {
           transition={{ delay: 0.2 }}
           className="mx-auto mt-4 max-w-2xl text-sm sm:text-base text-[#CBD5E1]/80 leading-relaxed font-light"
         >
-          Experience Socialo — a fluid, artistic masterpiece built with cinematic Obsidian depth,
+          Experience SocialVerse ∞ — a fluid, artistic masterpiece built with cinematic depth,
           vibrant creator moments, real-time audio spaces, and instant creator tipping.
         </motion.p>
 
@@ -227,7 +216,7 @@ export default function Onboarding() {
 
       {/* Footer */}
       <footer className="relative z-10 text-center text-xs text-[#CBD5E1]/50">
-        Socialo Network &copy; {new Date().getFullYear()} &bull; Aurora Noir &bull; Expression &bull; All Rights Reserved
+        SocialVerse ∞ &copy; {new Date().getFullYear()} &bull; Beyond Social &bull; All Rights Reserved
       </footer>
     </div>
   );

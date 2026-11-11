@@ -32,7 +32,7 @@ exports.createStory = async (req, res) => {
     }
 
     if (!mediaUrl) {
-      const caption = req.body.caption || 'Socialo Story';
+      const caption = req.body.caption || 'SocialVerse Story';
       const color = req.body.color || '#6558F5';
       const encodedSvg = encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"><defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#0E0508;stop-opacity:1"/><stop offset="50%" style="stop-color:${color};stop-opacity:0.4"/><stop offset="100%" style="stop-color:#1A0B12;stop-opacity:1"/></linearGradient></defs><rect width="1080" height="1920" fill="url(#grad)"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#F7F7FC" font-size="52" font-family="sans-serif" font-weight="bold">${caption}</text></svg>`

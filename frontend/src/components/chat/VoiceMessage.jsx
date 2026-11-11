@@ -17,7 +17,7 @@ export default function VoiceMessage({ src, isMe }) {
       setTranscribing(true);
       setTimeout(() => {
         setTranscriptText(
-          "\"Hey! Just catching up on the latest Socialo drops. The performance is smooth—let's sync on the new exclusive release.\""
+          "\"Hey! Just catching up on the latest SocialVerse drops. The performance is smooth—let's sync on the new exclusive release.\""
         );
         setTranscribing(false);
       }, 500);

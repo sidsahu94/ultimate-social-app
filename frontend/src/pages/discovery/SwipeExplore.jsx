@@ -114,7 +114,7 @@ const Card = ({ profile, onSwipe, isTop }) => {
         <img src={getImageUrl(profile.avatar)} className="w-full h-full object-cover pointer-events-none" alt={profile.name} />
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#04070D]/95 via-[#04070D]/60 to-transparent p-6 pt-24">
           <h3 className="text-[#F7F7FC] text-2xl font-bold font-display">{profile.name}</h3>
-          <p className="text-[#CBD5E1] text-xs line-clamp-2 mt-1 leading-relaxed">{profile.bio || "Creator & storyteller on Socialo."}</p>
+          <p className="text-[#CBD5E1] text-xs line-clamp-2 mt-1 leading-relaxed">{profile.bio || "Creator & storyteller on SocialVerse."}</p>
         </div>
       </div>
       

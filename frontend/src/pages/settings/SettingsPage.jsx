@@ -344,7 +344,7 @@ export default function SettingsPage() {
                       <FaMobileAlt />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-[#F7F7FC]">Mobile Device (Socialo PWA)</span>
+                      <span className="text-xs font-bold text-[#F7F7FC]">Mobile Device (SocialVerse PWA)</span>
                       <p className="text-[10px] text-[#A5A9BB]">iOS / Android WebKit • Active 2h ago</p>
                     </div>
                   </div>
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                   <FaRocket className="text-[#00F2FE]" /> System &amp; Updates
                 </h3>
                 <p className="text-xs text-[#CBD5E1]/70 mt-1">
-                  Socialo Platform Telemetry, PWA caching, and release management.
+                  SocialVerse Platform Telemetry, PWA caching, and release management.
                 </p>
               </div>
               <span className="rounded-full bg-[#10B981]/15 border border-[#10B981]/30 px-3 py-1 font-mono text-xs font-black text-[#10B981] flex items-center gap-1.5">
@@ -450,7 +450,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={async () => {
-                      localStorage.setItem('socialo_app_version', 'v4.2.0-aetheria');
+                      localStorage.setItem('socialverse_app_version', 'v4.2.0-aetheria');
                       if ('caches' in window) {
                         const keys = await caches.keys();
                         await Promise.all(keys.map(k => caches.delete(k)));

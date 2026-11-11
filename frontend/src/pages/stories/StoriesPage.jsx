@@ -89,7 +89,7 @@ export default function StoriesPage() {
               <FaFire className="text-[#FF6B8A] animate-pulse" /> Ephemeral Chronicles
             </div>
             <h1 className="font-display text-3xl font-black tracking-tight text-[#F7F7FC]">
-              Socialo Stories<span className="text-[#00F2FE]">.</span>
+              SocialVerse Stories<span className="text-[#00F2FE]">.</span>
             </h1>
             <p className="mt-1 text-xs text-[#CBD5E1] max-w-lg leading-relaxed">
               Share authentic glimpses of your day with your community. Stories disappear after 24 hours.

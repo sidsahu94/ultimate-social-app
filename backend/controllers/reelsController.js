@@ -72,7 +72,7 @@ exports.feed = async (req, res) => {
           _id: 'demo1',
           videoUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,du_8,w_540,q_auto/dog.mp4',
           posterUrl: 'https://res.cloudinary.com/demo/video/upload/so_0,w_540,q_auto/dog.jpg',
-          caption: 'Golden hours & cinematic freedom ✨🐕 #SocialoMoments #CinematicNoir',
+          caption: 'Golden hours & cinematic freedom ✨🐕 #SocialVerseMoments #CinematicNoir',
           user: { name: 'Elena Rostova', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
           likes: ['user1', 'user2', 'user3'],
           comments: [1, 2]

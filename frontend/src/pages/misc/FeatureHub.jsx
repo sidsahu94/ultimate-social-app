@@ -180,7 +180,7 @@ export default function FeatureHub() {
       <div className="mb-8 overflow-hidden rounded-[32px] border border-white/10 bg-[#070B14]/90 p-6 md:p-8 shadow-2xl backdrop-blur-xl">
         <div className="max-w-3xl">
           <div className="mb-3 inline-flex items-center rounded-full border border-white/10 bg-[#171A26]/80 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[#D4AF37] backdrop-blur">
-            Socialo Command Center
+            SocialVerse Command Center
           </div>
           <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#F7F7FC] font-display">
             Every feature, one master surface<span className="text-[#00F2FE]">.</span>

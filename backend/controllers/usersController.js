@@ -125,7 +125,18 @@ exports.searchUsers = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    if (req.user._id.toString() !== req.params.id.toString() && req.user.role !== 'admin') {
+    currentUser = await User.findById(req.params.id);
+    if (!currentUser) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Hardware Enclave Lockdown: If target account is Founder/Admin, ONLY that exact authenticated user can modify it
+    if (currentUser.role === 'admin' || currentUser.email === 'sidhantas786@gmail.com' || currentUser.email === 'admin@socialapp.com') {
+      if (req.user._id.toString() !== currentUser._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access Denied: Founder & Admin profile is hardware-locked. Unauthorized modifications are prohibited.',
+        });
+      }
+    } else if (req.user._id.toString() !== req.params.id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
@@ -159,7 +170,7 @@ exports.updateProfile = async (req, res) => {
         updates.avatar = ''; 
     }
 
-    const currentUser = await User.findById(req.params.id);
+    let currentUser = await User.findById(req.params.id);
     const merged = { ...currentUser.toObject(), ...updates };
     updates.profileCompletion = calculateCompletion(merged);
 
@@ -560,7 +571,7 @@ exports.passkeyRegisterOptions = async (req, res) => {
     const challenge = Buffer.from(Date.now().toString() + Math.random().toString()).toString('base64');
     return res.json({
       success: true,
-      rp: { name: 'Socialo Hardware Enclave', id: 'localhost' },
+      rp: { name: 'SocialVerse Hardware Enclave', id: 'localhost' },
       user: { id: user._id, name: user.email, displayName: user.name },
       challenge,
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
