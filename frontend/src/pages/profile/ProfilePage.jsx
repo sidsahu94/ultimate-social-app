@@ -107,6 +107,9 @@ export default function ProfilePage() {
 
   const tab = searchParams.get("tab") || "posts";
   const [activeMediaTab, setActiveMediaTab] = useState("grid"); // 'grid' | 'reels' | 'videos' | 'tagged'
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   const effectiveId = id && id !== "me" ? id : (myId || loggedInUser?._id);
   const isMe = Boolean(
     !id ||
@@ -116,9 +119,6 @@ export default function ProfilePage() {
     (user?._id && myId && String(user._id) === String(myId)) ||
     (user?.username && loggedInUser?.username && String(user.username).toLowerCase() === String(loggedInUser.username).toLowerCase())
   );
-
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const [posts, setPosts] = useState([]);
   const [followers, setFollowers] = useState([]);
@@ -407,7 +407,7 @@ export default function ProfilePage() {
 
           {/* STORY HIGHLIGHTS (Screen 4: Travel, Coding, Trading, Life, More) */}
           <div className="mt-6 pt-4 border-t border-white/10">
-            <ProfileHighlights isMe={isMe} user={userProfile} />
+            <ProfileHighlights isMe={isMe} user={user || loggedInUser} />
           </div>
         </div>
 

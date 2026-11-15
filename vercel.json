@@ -3,7 +3,6 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": "vite",
-  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -25,6 +24,15 @@
   "headers": [
     {
       "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/registerSW.js",
       "headers": [
         {
           "key": "Cache-Control",
