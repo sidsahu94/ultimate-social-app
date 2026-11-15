@@ -59,11 +59,10 @@ export default function VerifyAccount() {
       
       add(isLogin ? 'Welcome back!' : 'Account verified! Welcome.', { type: 'success' });
       
-      // 3. Force Redirect to Home
-      // Using window.location to ensure a full refresh and socket reconnection
+      // 3. Smooth Redirect to Home
       setTimeout(() => {
-          window.location.href = '/'; 
-      }, 500);
+          navigate('/', { replace: true }); 
+      }, 300);
       
     } catch (err) {
       console.error("Verification error:", err);
