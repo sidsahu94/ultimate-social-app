@@ -28,7 +28,7 @@ export default function useInfiniteScroll(callback) {
           callbackRef.current();
         }
       },
-      { rootMargin: '250px' }
+      { rootMargin: '600px' }
     );
 
     observerRef.current.observe(node);

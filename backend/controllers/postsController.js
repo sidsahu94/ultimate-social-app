@@ -215,18 +215,55 @@ exports.getFeed = async (req, res) => {
             commentsCount: p.commentsCount || 0
         }));
 
-        const lastPost =
-            posts.length > 0 ? posts[posts.length - 1] : null;
+        let finalPosts = [...enrichedPosts];
+        const lastPost = posts.length > 0 ? posts[posts.length - 1] : null;
+        let nextCursorDate = lastPost ? lastPost.createdAt.toISOString() : null;
+        let nextCursorId = lastPost ? lastPost._id.toString() : null;
+
+        // --- REAL CONTINUOUS INFINITE DISCOVERY ---
+        if (finalPosts.length < limit && req.query.following !== 'true') {
+            const needed = limit - finalPosts.length;
+            const existingIds = finalPosts.map(p => p._id);
+
+            const discoveryPosts = await Post.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: existingIds },
+                        isArchived: { $ne: true },
+                        isFlagged: { $ne: true },
+                        isDraft: { $ne: true },
+                        $or: [{ group: null }, { group: { $exists: false } }]
+                    }
+                },
+                { $sample: { size: needed } }
+            ]);
+
+            if (discoveryPosts.length > 0) {
+                await Post.populate(discoveryPosts, {
+                    path: 'user',
+                    select: 'name username avatar isVerified badges'
+                });
+
+                const enrichedDiscovery = discoveryPosts.map((p) => ({
+                    ...p,
+                    isLiked: userId ? (p.likes || []).some((id) => String(id) === String(userId)) : false,
+                    isSaved: savedPostIds.has(String(p._id)),
+                    likesCount: p.likesCount || (p.likes || []).length,
+                    commentsCount: p.commentsCount || 0
+                }));
+
+                finalPosts = [...finalPosts, ...enrichedDiscovery];
+                const lastDiscovery = discoveryPosts[discoveryPosts.length - 1];
+                nextCursorDate = lastDiscovery?.createdAt ? new Date(lastDiscovery.createdAt).toISOString() : new Date().toISOString();
+                nextCursorId = lastDiscovery?._id ? lastDiscovery._id.toString() : new mongoose.Types.ObjectId().toString();
+            }
+        }
 
         res.json({
             success: true,
-            data: enrichedPosts,
-            nextCursorDate: lastPost
-                ? lastPost.createdAt.toISOString()
-                : null,
-            nextCursorId: lastPost
-                ? lastPost._id.toString()
-                : null
+            data: finalPosts,
+            nextCursorDate,
+            nextCursorId
         });
     } catch (err) {
         console.error('getFeed err', err);
