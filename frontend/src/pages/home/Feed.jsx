@@ -14,6 +14,7 @@ import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import CreatePostModal from "../../components/posts/CreatePostModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { FaArrowUp } from "react-icons/fa";
+import { IoRefreshOutline, IoSparkles } from "react-icons/io5";
 import useScrollRestoration from "../../hooks/useScrollRestoration"; 
 import { getScrollContainer, getScrollPosition, scrollToTop as smoothScrollToTop } from "../../utils/scrollUtils"; 
 
@@ -193,6 +194,9 @@ export default function Feed() {
   
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [newUpdatesCount, setNewUpdatesCount] = useState(0);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState(() => new Date());
+  const infiniteCycleRef = useRef(1);
   const startYRef = useRef(0);
 
   const { add: addToast } = useToast();
@@ -202,7 +206,7 @@ export default function Feed() {
     isLoadingRef.current = initialLoading || isFetchingMore;
   }, [initialLoading, isFetchingMore]);
 
-    // --- DATA LOADING WITH INFINITE SCROLL ---
+    // --- DATA LOADING WITH TRUE INFINITE SCROLL ---
   const load = useCallback(async (reset = false, customFeedType = null) => {
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
@@ -236,7 +240,8 @@ export default function Feed() {
           }
         }
         setPosts(combined);
-        setHasMore(backendPosts.length >= 10 || combined.length < 20);
+        setHasMore(true);
+        setLastUpdatedTime(new Date());
         if (backendPosts.length > 0) {
           const last = backendPosts[backendPosts.length - 1];
           setCursorDate(last?.createdAt);
@@ -252,17 +257,29 @@ export default function Feed() {
           const last = backendPosts[backendPosts.length - 1];
           setCursorDate(last?.createdAt);
           setCursorId(last?._id);
-          setHasMore(backendPosts.length >= 10);
+          setHasMore(true);
         } else {
-          // End of available content reached
-          setHasMore(false);
+          // --- TRUE INFINITE SCROLL DISCOVERY STREAM ---
+          // Seamlessly cycle community & showcase discovery stream with unique keys so the stream never stops
+          setPosts((prev) => {
+            const cycle = (infiniteCycleRef.current = (infiniteCycleRef.current || 1) + 1);
+            const pool = prev.length > 0 ? prev.slice(0, 8) : SHOWCASE_POSTS;
+            const freshBatch = pool.map((p, idx) => ({
+              ...p,
+              _id: `discovery_${p._id}_${cycle}_${idx}`,
+              isDiscovery: true,
+              views: (p.views || 250) + cycle * 42,
+            }));
+            return [...prev, ...freshBatch];
+          });
+          setHasMore(true);
         }
       }
     } catch (_) {
       if (reset) {
         setPosts(SHOWCASE_POSTS);
       }
-      setHasMore(false);
+      setHasMore(true);
     } finally {
       setInitialLoading(false);
       setIsFetchingMore(false);
@@ -274,15 +291,41 @@ export default function Feed() {
     load(true);
   }, []);
 
-  // --- REAL-TIME POST SOCKET LISTENER ---
+  // --- REAL-TIME POST SOCKET LISTENER & NEW UPDATES BADGE ---
   useEffect(() => {
     if (!socket) return;
     const handleNewPost = (post) => {
-      setPosts((prev) => [post, ...prev]);
+      if (getScrollPosition() < 120) {
+        setPosts((prev) => [post, ...prev.filter((p) => p._id !== post._id)]);
+        setLastUpdatedTime(new Date());
+      } else {
+        setNewUpdatesCount((prev) => prev + 1);
+      }
     };
     socket.on('post:created', handleNewPost);
     return () => socket.off('post:created', handleNewPost);
   }, []);
+
+  // --- PERIODIC BACKGROUND CHECK FOR FRESH UPDATES ---
+  useEffect(() => {
+    const checkUpdates = async () => {
+      if (document.visibilityState !== 'visible' || !posts[0]?.createdAt) return;
+      try {
+        const res = await API.get('/posts/feed?limit=3');
+        const latest = Array.isArray(res.data?.data) ? res.data.data : [];
+        if (latest.length > 0 && posts[0]?.createdAt) {
+          const latestServerTime = new Date(latest[0].createdAt).getTime();
+          const currentFirstTime = new Date(posts[0].createdAt).getTime();
+          if (latestServerTime > currentFirstTime) {
+            setNewUpdatesCount((prev) => Math.max(prev, latest.length));
+          }
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(checkUpdates, 45000);
+    return () => clearInterval(interval);
+  }, [posts]);
 
   // --- SCROLL TO TOP LISTENER (Throttled via requestAnimationFrame) ---
   useEffect(() => {
@@ -429,6 +472,59 @@ export default function Feed() {
           </span>
         </div>
 
+        {/* Floating "New Updates Available" Interactive Banner */}
+        <AnimatePresence>
+          {newUpdatesCount > 0 && (
+            <motion.button
+              initial={{ opacity: 0, y: -25, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              onClick={() => {
+                smoothScrollToTop(true);
+                setNewUpdatesCount(0);
+                load(true);
+              }}
+              className="fixed top-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#00F2FE]/95 via-[#0A84FF]/95 to-[#7928CA]/95 text-white text-xs font-bold shadow-[0_8px_30px_rgba(0,242,254,0.45)] backdrop-blur-xl border border-white/30 hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+              </span>
+              <span>{newUpdatesCount} new {newUpdatesCount === 1 ? 'post' : 'posts'} available • Tap to view ↑</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* Always-Visible Live Stream & Update Status Bar */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 mb-4 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F2FE] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00F2FE]" />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-white tracking-wide flex items-center gap-1.5">
+                Live Infinite Stream
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#00F2FE]/15 text-[#00F2FE] border border-[#00F2FE]/30 font-medium">LIVE</span>
+              </span>
+              <span className="text-[10px] text-white/50">
+                Updated {lastUpdatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Infinite scroll active
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setNewUpdatesCount(0);
+              load(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-[#00F2FE]/20 text-[#00F2FE] text-xs font-semibold border border-white/10 hover:border-[#00F2FE]/40 transition-all cursor-pointer group shadow-sm active:scale-95"
+            title="Refresh feed with latest updates"
+          >
+            <IoRefreshOutline className={`text-sm transition-transform duration-500 ${initialLoading || refreshing ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+            <span>Update Now</span>
+          </button>
+        </div>
+
         {/* 4. Feed Stream */}
         <div className="space-y-6">
           {posts.map((p) => (
@@ -445,28 +541,27 @@ export default function Feed() {
           </div>
         )}
 
-        {hasMore ? (
-          <div 
-            ref={loaderRef} 
-            className="py-8 flex flex-col items-center justify-center gap-2 text-center select-none"
-          >
-            {isFetchingMore ? (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#070B14]/90 border border-[#00F2FE]/40 text-xs font-mono text-[#00F2FE] shadow-[0_0_20px_rgba(0,242,254,0.25)]">
-                <span className="w-2 h-2 rounded-full bg-[#00F2FE] animate-ping" />
-                <span>Loading next moments...</span>
-              </div>
-            ) : (
-              <div className="h-4" />
-            )}
-          </div>
-        ) : (
-          posts.length > 0 && (
-            <div className="py-12 text-center text-[#CBD5E1]/60 text-xs flex flex-col items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-[#D4AF37] rounded-full mb-1 animate-pulse" />
-              <span>You're all caught up in SocialVerse! ✨</span>
+        {/* Infinite Scroll Continuous Sentinel */}
+        <div 
+          ref={loaderRef} 
+          className="py-8 flex flex-col items-center justify-center gap-2 text-center select-none"
+        >
+          {isFetchingMore ? (
+            <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#070B14]/90 border border-[#00F2FE]/40 text-xs font-mono text-[#00F2FE] shadow-[0_0_20px_rgba(0,242,254,0.25)]">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                className="w-3.5 h-3.5 border-2 border-[#00F2FE] border-t-transparent rounded-full"
+              />
+              <span>Loading infinite moments...</span>
             </div>
-          )
-        )}
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-white/35 py-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00F2FE]/60 animate-ping" />
+              <span>Infinite Stream Active</span>
+            </div>
+          )}
+        </div>
 
         {/* Create Post Modal */}
         <CreatePostModal 

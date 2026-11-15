@@ -44,12 +44,20 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose, onDele
     }
   };
 
-  // Mark active story viewed in backend
+  // Mark active story viewed in backend and localStorage
   useEffect(() => {
     if (!activeStory?._id) return;
     if (viewedStoriesRef.current.has(activeStory._id)) return;
 
     viewedStoriesRef.current.add(activeStory._id);
+    try {
+      const existing = JSON.parse(localStorage.getItem('socialverse_viewed_stories') || '[]');
+      if (!existing.includes(activeStory._id)) {
+        existing.push(activeStory._id);
+        localStorage.setItem('socialverse_viewed_stories', JSON.stringify(existing));
+      }
+    } catch (_) {}
+    window.dispatchEvent(new CustomEvent('story:viewed', { detail: { id: activeStory._id } }));
     API.post(`/stories/${activeStory._id}/view`).catch(() => {});
   }, [activeStory]);
 

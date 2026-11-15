@@ -46,16 +46,30 @@ API.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Global 5xx Error Handling (Debounced to prevent alert spamming)
+    // --- AUTOMATIC TRANSIENT ERROR RETRY (Render Cold Starts & Gateway Pauses) ---
+    const isTransient = !error.response || (error.response.status >= 500 && error.response.status <= 504);
+    const isAuthRoute = originalRequest?.url && (
+      originalRequest.url.includes('/auth/login') ||
+      originalRequest.url.includes('/auth/refresh')
+    );
+
+    if (originalRequest && isTransient && !isAuthRoute && (!originalRequest._retryCount || originalRequest._retryCount < 2)) {
+      originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+      const backoffDelay = originalRequest._retryCount * 1200; // 1.2s, 2.4s progressive delay
+      await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+      return API(originalRequest);
+    }
+
+    // Global 5xx Error Handling (Debounced, never alarms for GET requests)
     if (error.response?.status >= 500) {
       const now = Date.now();
       const method = (originalRequest?.method || 'get').toLowerCase();
-      // Only notify for user mutations (POST/PUT/DELETE) and debounce to at most once per 10 seconds
-      if (typeof window !== 'undefined' && method !== 'get' && (!window._lastApiErrorTime || now - window._lastApiErrorTime > 10000)) {
+      // Only notify for user mutations (POST/PUT/DELETE) and debounce to at most once per 15 seconds
+      if (typeof window !== 'undefined' && method !== 'get' && (!window._lastApiErrorTime || now - window._lastApiErrorTime > 15000)) {
         window._lastApiErrorTime = now;
         window.dispatchEvent(
           new CustomEvent('api:error', {
-            detail: 'Server synchronization in progress. Please retry in a moment.',
+            detail: 'Server is syncing data. Your request will process shortly.',
           })
         );
       }

@@ -1,5 +1,5 @@
 // frontend/src/components/stories/Stories.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IoAdd, IoEllipsisHorizontal } from 'react-icons/io5';
@@ -78,6 +78,13 @@ const DEMO_STORIES = [
 
 export default function Stories() {
   const [stories, setStories] = useState(DEMO_STORIES);
+  const [viewedStoryIds, setViewedStoryIds] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('socialverse_viewed_stories') || '[]'));
+    } catch (_) {
+      return new Set();
+    }
+  });
   const [editorFile, setEditorFile] = useState(null);
   const [viewIndex, setViewIndex] = useState(null);
   const user = useSelector((s) => s.auth?.user);
@@ -98,6 +105,37 @@ export default function Stories() {
   useEffect(() => {
     load();
   }, []);
+
+  // Listen for real-time story viewed events to update visual ring instantly
+  useEffect(() => {
+    const handleStoryViewed = (e) => {
+      const id = e.detail?.id;
+      if (id) {
+        setViewedStoryIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('story:viewed', handleStoryViewed);
+    return () => window.removeEventListener('story:viewed', handleStoryViewed);
+  }, []);
+
+  // Partition stories: Unviewed first (with radiant rotating rings), Viewed after (with subtle muted rings)
+  const sortedStories = useMemo(() => {
+    const unviewed = [];
+    const viewed = [];
+    stories.forEach((story) => {
+      const isAlreadyViewed = Boolean(story.isViewed || viewedStoryIds.has(story._id));
+      if (isAlreadyViewed) {
+        viewed.push({ ...story, isViewed: true });
+      } else {
+        unviewed.push({ ...story, isViewed: false });
+      }
+    });
+    return [...unviewed, ...viewed];
+  }, [stories, viewedStoryIds]);
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -167,10 +205,11 @@ export default function Stories() {
             </span>
           </div>
 
-          {/* 2. Friends Stories List */}
-          {stories.map((story, i) => {
+          {/* 2. Friends Stories List (Unviewed Radiant vs Viewed Muted) */}
+          {sortedStories.map((story, i) => {
             const avatarUrl = getImageUrl(story.user?.avatar);
             const firstName = story.user?.name ? story.user.name.split(' ')[0] : 'Story';
+            const isViewed = story.isViewed;
             const ringGradient =
               i % 3 === 0
                 ? `conic-gradient(from 0deg, ${currentTheme.color}, ${currentTheme.accent}, #F4D49A, ${currentTheme.color})`
@@ -185,32 +224,55 @@ export default function Stories() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.03 }}
                 onClick={() => setViewIndex(i)}
-                className="flex flex-col items-center gap-1.5 min-w-[68px] md:min-w-[72px] cursor-pointer group"
+                className="flex flex-col items-center gap-1.5 min-w-[68px] md:min-w-[72px] cursor-pointer group relative"
               >
-                <div
-                  className="relative h-[66px] w-[66px] md:h-[72px] md:w-[72px] rounded-full p-[2.5px] transition-transform duration-300 group-hover:scale-105"
-                  style={{
-                    boxShadow: `0 0 16px ${currentTheme.glow}`,
-                  }}
-                >
-                  {/* Rotating Gradient Ring */}
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 18 + i * 2, repeat: Infinity, ease: 'linear' }}
-                    className="absolute inset-0 rounded-full"
-                    style={{ background: ringGradient }}
-                  />
-
-                  <div className="relative h-full w-full rounded-full bg-[#04070D] p-[2px] overflow-hidden z-10">
-                    <img
-                      src={avatarUrl}
-                      alt={firstName}
-                      className="h-full w-full rounded-full object-cover transition-transform group-hover:scale-110"
+                {!isViewed ? (
+                  // --- UNVIEWED: VIBRANT ROTATING GRADIENT RING + GLOW + LIVE PULSE ---
+                  <div
+                    className="relative h-[66px] w-[66px] md:h-[72px] md:w-[72px] rounded-full p-[2.5px] transition-transform duration-300 group-hover:scale-105"
+                    style={{
+                      boxShadow: `0 0 16px ${currentTheme.glow || 'rgba(0,242,254,0.35)'}`,
+                    }}
+                  >
+                    {/* Rotating Gradient Ring */}
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 18 + i * 2, repeat: Infinity, ease: 'linear' }}
+                      className="absolute inset-0 rounded-full"
+                      style={{ background: ringGradient }}
                     />
-                  </div>
-                </div>
 
-                <span className="text-[11px] font-medium text-[#CBD5E1] group-hover:text-white transition-colors truncate w-16 text-center">
+                    {/* Unviewed Live Story Dot Badge */}
+                    <span className="absolute top-0 right-0 z-20 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-[#00F2FE] shadow-[0_0_8px_#00F2FE] border-2 border-[#04070D]" />
+
+                    <div className="relative h-full w-full rounded-full bg-[#04070D] p-[2px] overflow-hidden z-10">
+                      <img
+                        src={avatarUrl}
+                        alt={firstName}
+                        className="h-full w-full rounded-full object-cover transition-transform group-hover:scale-110"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // --- VIEWED: MUTED STATIC BORDER + DIMMED AVATAR (Instagram Style) ---
+                  <div className="relative h-[66px] w-[66px] md:h-[72px] md:w-[72px] rounded-full p-[2px] border border-white/20 bg-white/[0.03] transition-all duration-300 group-hover:border-white/40 group-hover:scale-105 shadow-sm">
+                    <div className="relative h-full w-full rounded-full bg-[#04070D] p-[1.5px] overflow-hidden">
+                      <img
+                        src={avatarUrl}
+                        alt={firstName}
+                        className="h-full w-full rounded-full object-cover opacity-70 group-hover:opacity-95 transition-opacity"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <span
+                  className={`text-[11px] truncate w-16 text-center transition-colors ${
+                    isViewed
+                      ? 'font-normal text-[#94A3B8]/75 group-hover:text-white'
+                      : 'font-semibold text-white tracking-tight'
+                  }`}
+                >
                   {firstName}
                 </span>
               </motion.div>
@@ -249,7 +311,7 @@ export default function Stories() {
         <AnimatePresence>
           {viewIndex !== null && (
             <StoryViewer
-              stories={stories}
+              stories={sortedStories}
               initialIndex={viewIndex}
               onClose={() => setViewIndex(null)}
             />

@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 
 import { useSocket } from './contexts/SocketContext';
 import { useToast } from './components/ui/ToastProvider';
+import API from './services/api';
 
 import Navbar from './components/layouts/Navbar';
 import MainLayout from './components/layouts/MainLayout';
@@ -205,6 +206,19 @@ function AppContent() {
     socket.on('notification', onNotification);
     return () => socket.off('notification', onNotification);
   }, [socket, addToast]);
+
+  // --- CLOUD WARMUP & KEEP-ALIVE (Prevents free tier dyno cold-starts during active use) ---
+  useEffect(() => {
+    const keepAlive = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        API.get('/health').catch(() => {});
+      }
+    };
+    // Initial warmup ping on mount + periodic ping every 3 minutes
+    keepAlive();
+    const interval = setInterval(keepAlive, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="app-layout-frame relative flex h-[100dvh] overflow-hidden bg-[#04070D] font-sans text-[#F8FAFC]">
