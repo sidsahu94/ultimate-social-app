@@ -199,8 +199,8 @@ export default function Feed() {
   const isLoadingRef = useRef(false);
 
   useEffect(() => {
-    isLoadingRef.current = loading;
-  }, [loading]);
+    isLoadingRef.current = initialLoading || isFetchingMore;
+  }, [initialLoading, isFetchingMore]);
 
     // --- DATA LOADING WITH INFINITE SCROLL ---
   const load = useCallback(async (reset = false, customFeedType = null) => {
