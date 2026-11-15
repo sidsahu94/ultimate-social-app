@@ -194,6 +194,7 @@ export default function Feed() {
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [newUpdatesCount, setNewUpdatesCount] = useState(0);
+  const loopCountRef = useRef(0);
   const startYRef = useRef(0);
 
   const { add: addToast } = useToast();
@@ -251,32 +252,39 @@ export default function Feed() {
       } else {
         if (backendPosts.length > 0) {
           setPosts((prev) => {
-            const seen = new Set(prev.map(p => p._id));
-            const fresh = backendPosts.filter(p => !seen.has(p._id));
+            const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
+            // Append real posts; if all posts have been viewed, cycle them in a continuous loop with unique keys
+            const existingIds = new Set(prev.map(p => p._id));
+            const fresh = backendPosts.map((p, idx) => {
+              if (existingIds.has(p._id)) {
+                return { ...p, _id: `${p._id}_loop_${loopIdx}_${idx}` };
+              }
+              return p;
+            });
             return [...prev, ...fresh];
           });
           if (nextDate && nextId) {
             setCursorDate(nextDate);
             setCursorId(nextId);
           } else {
-            const last = backendPosts[backendPosts.length - 1];
-            setCursorDate(last?.createdAt);
-            setCursorId(last?._id);
+            // Reached end of current cursor: reset cursor to cycle back from top
+            setCursorDate(null);
+            setCursorId(null);
           }
           setHasMore(true);
         } else {
-          // Continuous real stream fallback: fetch next batch from platform discovery
-          try {
-            const discRes = await API.get('/posts/explore?limit=10');
-            const discPosts = Array.isArray(discRes.data?.posts) ? discRes.data.posts : [];
-            if (discPosts.length > 0) {
-              setPosts((prev) => {
-                const seen = new Set(prev.map(p => p._id));
-                const fresh = discPosts.filter(p => !seen.has(p._id));
-                return [...prev, ...fresh];
-              });
-            }
-          } catch (_) {}
+          // If caught up to the end of available posts, loop existing posts smoothly
+          setPosts((prev) => {
+            const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
+            const pool = prev.length > 0 ? prev.slice(0, 10) : SHOWCASE_POSTS;
+            const looped = pool.map((p, idx) => ({
+              ...p,
+              _id: `${p._id}_loop_${loopIdx}_${idx}`,
+            }));
+            return [...prev, ...looped];
+          });
+          setCursorDate(null);
+          setCursorId(null);
           setHasMore(true);
         }
       }

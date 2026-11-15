@@ -586,6 +586,7 @@ export default function ReelsPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const containerRef = useRef(null);
+  const loopCountRef = useRef(0);
   const { add: addToast } = useToast();
   const { currentTheme } = useTheme();
 
@@ -654,6 +655,18 @@ export default function ReelsPage() {
     if (index !== activeIndex && index >= 0 && index < reels.length) {
       setActiveIndex(index);
     }
+    // Infinite loop extension: when approaching the end of current reels, append the next cycle
+    if (index >= reels.length - 2 && reels.length > 0) {
+      setReels((prev) => {
+        const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
+        const base = prev.slice(0, 8);
+        const looped = base.map((r, i) => ({
+          ...r,
+          _id: `${r._id}_loop_${loopIdx}_${i}`,
+        }));
+        return [...prev, ...looped];
+      });
+    }
   };
 
   const touchStartY = useRef(0);
@@ -666,11 +679,30 @@ export default function ReelsPage() {
     const deltaY = touchStartY.current - endY;
     if (Math.abs(deltaY) > 45) {
       const h = containerRef.current.clientHeight;
-      if (deltaY > 0 && activeIndex < reels.length - 1) {
-        containerRef.current.scrollTo({
-          top: (activeIndex + 1) * h,
-          behavior: "smooth",
-        });
+      if (deltaY > 0) {
+        if (activeIndex < reels.length - 1) {
+          containerRef.current.scrollTo({
+            top: (activeIndex + 1) * h,
+            behavior: "smooth",
+          });
+        } else {
+          // Seamless loop when swiping past the end
+          const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
+          const base = reels.slice(0, 8);
+          const looped = base.map((r, i) => ({
+            ...r,
+            _id: `${r._id}_loop_${loopIdx}_${i}`,
+          }));
+          setReels((prev) => [...prev, ...looped]);
+          setTimeout(() => {
+            if (containerRef.current) {
+              containerRef.current.scrollTo({
+                top: (activeIndex + 1) * h,
+                behavior: "smooth",
+              });
+            }
+          }, 50);
+        }
       } else if (deltaY < 0 && activeIndex > 0) {
         containerRef.current.scrollTo({
           top: (activeIndex - 1) * h,
@@ -683,9 +715,38 @@ export default function ReelsPage() {
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.addEventListener("scroll", handleScroll, { passive: true });
-  
+    return () => el && el.removeEventListener("scroll", handleScroll);
+  }, [activeIndex, reels.length]);
 
-  return () => el && el.removeEventListener("scroll", handleScroll);
+  // Arrow Key Navigation with Infinite Loop
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!containerRef.current) return;
+      const h = containerRef.current.clientHeight;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (activeIndex < reels.length - 1) {
+          containerRef.current.scrollTo({ top: (activeIndex + 1) * h, behavior: "smooth" });
+        } else {
+          const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
+          const base = reels.slice(0, 8);
+          const looped = base.map((r, i) => ({ ...r, _id: `${r._id}_loop_${loopIdx}_${i}` }));
+          setReels((prev) => [...prev, ...looped]);
+          setTimeout(() => {
+            if (containerRef.current) {
+              containerRef.current.scrollTo({ top: (activeIndex + 1) * h, behavior: "smooth" });
+            }
+          }, 50);
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (activeIndex > 0) {
+          containerRef.current.scrollTo({ top: (activeIndex - 1) * h, behavior: "smooth" });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeIndex, reels.length]);
 
 
