@@ -33,6 +33,7 @@ router.get('/blocked', protect, userController.getBlockedUsers);
 // ==========================================
 
 router.get('/search', userController.searchUsers);
+router.get('/top-creators', optionalAuth, userController.getTopCreators);
 router.get('/suggested', optionalAuth, (req, res, next) => {
   const followSuggestController = require('../controllers/followSuggestController');
   return followSuggestController.suggest(req, res, next);

@@ -154,6 +154,16 @@ export default function Marketplace() {
     }
   };
 
+  const handleBid = (item) => {
+    const sellerId = item.owner?._id || item.createdBy;
+    if (sellerId && String(sellerId) !== String(myId)) {
+      add(`Opening negotiation channel for "${item.title}"...`, { type: 'info' });
+      navigate(`/chat?userId=${sellerId}&initialMsg=${encodeURIComponent(`Hi, I'm interested in placing an offer for "${item.title}" (listed at ₹${item.price}).`)}`);
+    } else {
+      add(`Custom offer desk for "${item.title}": Listed at ₹${item.price}`, { type: 'info' });
+    }
+  };
+
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     const base =
@@ -265,6 +275,7 @@ export default function Marketplace() {
               <ProductCard
                 item={item}
                 onBuy={() => handleBuy(item)}
+                onBid={() => handleBid(item)}
                 onDelete={
                   filter === 'Mine' || String(item.createdBy) === String(myId)
                     ? () => handleDeleteItem(item._id)

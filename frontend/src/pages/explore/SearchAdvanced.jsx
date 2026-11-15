@@ -41,7 +41,7 @@ export default function SearchAdvanced() {
             placeholder="Search profiles, broadcasts, and #hashtags..."
           />
         </div>
-        <button className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold shadow-lg hover:opacity-95 transition">
+        <button type="submit" className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold shadow-lg hover:opacity-95 transition">
           Search
         </button>
       </form>

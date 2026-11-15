@@ -616,3 +616,30 @@ exports.passkeyRegisterVerify = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Verification failed' });
   }
 };
+
+exports.getTopCreators = async (req, res) => {
+  try {
+    const creators = await User.aggregate([
+      { $match: { isDeleted: { $ne: true }, role: { $ne: 'banned' } } },
+      {
+        $addFields: {
+          followerCount: { $size: { $ifNull: ['$followers', []] } },
+        },
+      },
+      { $sort: { followerCount: -1, createdAt: 1 } },
+      { $limit: 5 },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          avatar: 1,
+          followerCount: 1,
+          score: { $add: [{ $multiply: [{ $size: { $ifNull: ['$followers', []] } }, 15] }, 120] },
+        },
+      },
+    ]);
+    return res.json({ success: true, data: creators });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch top creators' });
+  }
+};

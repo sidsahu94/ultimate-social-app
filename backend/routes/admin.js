@@ -4,20 +4,19 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { protect, restrictTo } = require('../middleware/authMiddleware');
 
-// Hardware Enclave Lockdown: Only Founder Sidhanta Sahu can access admin routes
+// Hardware Enclave Lockdown: Strictly and exclusively Founder Sidhanta Sahu can access admin routes
 const founderEnclaveGuard = (req, res, next) => {
   const u = req.user;
   if (!u) return res.status(401).json({ message: 'Authentication required' });
-  const isFounder = (
+  const isFounderIdentity = (
     u.email === 'sidhantas786@gmail.com' ||
     u.email === 'admin@socialapp.com' ||
-    u.username === 'sidsahu' ||
-    u.role === 'admin'
+    u.username === 'sidsahu'
   );
-  if (!isFounder) {
+  if (u.role !== 'admin' || !isFounderIdentity) {
     return res.status(403).json({
       success: false,
-      message: 'Access Denied: Hardware Enclave Protection restricts administrative controls to Founder Sidhanta Sahu.'
+      message: 'Access Denied: Hardware Enclave Protection restricts administrative controls exclusively to Founder Sidhanta Sahu.'
     });
   }
   next();

@@ -70,6 +70,11 @@ const StoriesPage = lazy(() => import('./pages/stories/StoriesPage'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const CreatorPayouts = lazy(() => import('./pages/admin/CreatorPayouts'));
 const ModerationDashboard = lazy(() => import('./pages/admin/ModerationDashboard'));
+const ReportsPanel = lazy(() => import('./pages/admin/ReportsPanel'));
+const Nearby = lazy(() => import('./pages/nearby/Nearby'));
+const FollowersList = lazy(() => import('./pages/profile/FollowersList'));
+const RequestsPage = lazy(() => import('./pages/settings/RequestsPage'));
+const AiAvatar = lazy(() => import('./pages/profile/AiAvatar'));
 
 const NewsPage = lazy(() => import('./pages/apps/NewsPage'));
 const GroupsPage = lazy(() => import('./pages/groups/GroupsPage'));
@@ -270,11 +275,17 @@ function AppContent() {
                   <Route path="/command-center" element={<PageTransition><FeatureHub /></PageTransition>} />
                   <Route path="/discovery/follow-suggestions" element={<PageTransition><FollowSuggestions /></PageTransition>} />
                   <Route path="/scheduled-posts" element={<ProtectedRoute><PageTransition><ScheduledPosts /></PageTransition></ProtectedRoute>} />
+                  <Route path="/nearby" element={<ProtectedRoute><PageTransition><Nearby /></PageTransition></ProtectedRoute>} />
+                  <Route path="/profile/:id/followers" element={<PageTransition><FollowersList /></PageTransition>} />
+                  <Route path="/follow-requests" element={<ProtectedRoute><PageTransition><RequestsPage /></PageTransition></ProtectedRoute>} />
+                  <Route path="/requests" element={<Navigate to="/follow-requests" replace />} />
+                  <Route path="/ai-avatar" element={<ProtectedRoute><PageTransition><AiAvatar /></PageTransition></ProtectedRoute>} />
 
                   <Route element={<AdminRoute />}>
                     <Route path="/admin/dashboard" element={<PageTransition><AdminDashboard /></PageTransition>} />
                     <Route path="/admin/payouts" element={<PageTransition><CreatorPayouts /></PageTransition>} />
                     <Route path="/admin/moderation" element={<PageTransition><ModerationDashboard /></PageTransition>} />
+                    <Route path="/admin/reports" element={<PageTransition><ReportsPanel /></PageTransition>} />
                   </Route>
                 </Route>
 

@@ -86,7 +86,7 @@ export default function ScheduledPostsPage() {
             {files.length > 0 && <span className="text-xs text-[#00F2FE] font-semibold">{files.length} attached</span>}
           </div>
           
-          <button className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center gap-1.5">
+          <button type="submit" className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center gap-1.5">
             <FaClock size={11} /> Schedule Post
           </button>
         </div>

@@ -173,13 +173,13 @@ export default function SnakeGame({ onClose, onScoreSaved }) {
         {/* Mobile Controls */}
         <div className="mt-6 grid grid-cols-3 gap-2 max-w-[200px] mx-auto md:hidden">
             <div />
-            <button onPointerDown={() => setDir([-1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowUp /></button>
+            <button type="button" onClick={() => setDir([-1, 0])} onPointerDown={() => setDir([-1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowUp /></button>
             <div />
-            <button onPointerDown={() => setDir([0, -1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowLeft /></button>
+            <button type="button" onClick={() => setDir([0, -1])} onPointerDown={() => setDir([0, -1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowLeft /></button>
             <div className="flex items-center justify-center text-gray-500 text-xs font-bold">PAD</div>
-            <button onPointerDown={() => setDir([0, 1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowRight /></button>
+            <button type="button" onClick={() => setDir([0, 1])} onPointerDown={() => setDir([0, 1])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowRight /></button>
             <div />
-            <button onPointerDown={() => setDir([1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowDown /></button>
+            <button type="button" onClick={() => setDir([1, 0])} onPointerDown={() => setDir([1, 0])} className="p-4 bg-gray-700 rounded-lg active:bg-green-500 text-white"><FaArrowDown /></button>
             <div />
         </div>
 

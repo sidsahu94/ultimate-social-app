@@ -114,6 +114,7 @@ export default function CreateEventModal({ isOpen, onClose, onCreated }) {
           />
 
           <button 
+            type="submit"
             disabled={loading} 
             className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#1D4ED8] via-[#052E24] to-[#D4AF37] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(29,78,216,0.35)] hover:opacity-95 transition disabled:opacity-50"
           >

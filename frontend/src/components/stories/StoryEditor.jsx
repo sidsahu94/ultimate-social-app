@@ -1,21 +1,31 @@
 // frontend/src/components/stories/StoryEditor.jsx
-import React, { useState } from 'react';
-import { FaTimes, FaPaperPlane, FaFont, FaPalette, FaStar } from 'react-icons/fa'; // 🔥 Added FaStar
+import React, { useState, useRef } from 'react';
+import { FaTimes, FaPaperPlane, FaFont, FaStar } from 'react-icons/fa';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';
 import { compressImage } from '../../utils/compressor';
 
 const COLORS = ['#ffffff', '#000000', '#ff0055', '#00ccff', '#ffcc00'];
+const FONT_STYLES = ['font-sans', 'font-serif', 'font-mono', 'italic font-black'];
 
 export default function StoryEditor({ file, onClose, onPosted }) {
   const [caption, setCaption] = useState('');
   const [color, setColor] = useState('#ffffff');
-  const [isCloseFriends, setIsCloseFriends] = useState(false); // 🔥 NEW State
+  const [fontIndex, setFontIndex] = useState(0);
+  const [isCloseFriends, setIsCloseFriends] = useState(false);
   const [loading, setLoading] = useState(false);
+  const captionRef = useRef(null);
   const { add } = useToast();
 
   const previewUrl = file ? URL.createObjectURL(file) : null;
   const isVideo = file?.type.startsWith('video');
+
+  const cycleFontStyle = () => {
+    setFontIndex((prev) => (prev + 1) % FONT_STYLES.length);
+    if (captionRef.current) {
+      captionRef.current.focus();
+    }
+  };
 
   const handlePost = async () => {
     setLoading(true);
@@ -35,7 +45,6 @@ export default function StoryEditor({ file, onClose, onPosted }) {
       fd.append('caption', caption);
       fd.append('color', color); 
       
-      // 🔥 NEW: Send Privacy Flag
       if (isCloseFriends) {
         fd.append('privacy', 'close_friends');
       }
@@ -55,11 +64,18 @@ export default function StoryEditor({ file, onClose, onPosted }) {
     <div className="fixed inset-0 z-[100] bg-black flex flex-col">
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20">
-        <button onClick={onClose} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md">
+        <button onClick={onClose} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md hover:bg-black/60 transition">
           <FaTimes />
         </button>
-        <div className="flex gap-4">
-          <button className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md"><FaFont /></button>
+        <div className="flex gap-4 items-center">
+          <button 
+            type="button"
+            onClick={cycleFontStyle} 
+            title="Toggle Caption Typography"
+            className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md hover:bg-black/60 hover:text-[#00F2FE] transition"
+          >
+            <FaFont />
+          </button>
           <div className="flex gap-2 bg-black/40 p-1.5 rounded-full backdrop-blur-md">
             {COLORS.map(c => (
               <button 
@@ -78,37 +94,44 @@ export default function StoryEditor({ file, onClose, onPosted }) {
         {isVideo ? (
           <video src={previewUrl} autoPlay loop className="w-full h-full object-contain" />
         ) : (
-          <img src={previewUrl} className="w-full h-full object-contain" />
+          <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
         )}
         
         <div className="absolute bottom-32 w-full px-8 text-center">
           <input 
+            ref={captionRef}
             value={caption}
             onChange={e => setCaption(e.target.value)}
             placeholder="Add a caption..."
-            className="bg-black/50 text-white p-3 rounded-xl w-full text-center outline-none placeholder-gray-300 backdrop-blur-sm"
+            className={`bg-black/50 text-white p-3 rounded-xl w-full text-center outline-none placeholder-gray-300 backdrop-blur-sm ${FONT_STYLES[fontIndex]}`}
             style={{ color: color }}
           />
         </div>
       </div>
 
       {/* Footer */}
-      <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent absolute bottom-0 w-full flex justify-between items-center gap-4">
+      <div className="p-4 bg-black/40 backdrop-blur-md flex justify-between items-center z-20">
         
-        {/* 🔥 NEW: Close Friends Toggle */}
+        {/* Close Friends Toggle */}
         <button 
-            onClick={() => setIsCloseFriends(!isCloseFriends)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${isCloseFriends ? 'bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.6)]' : 'bg-white/20 text-white'}`}
+          onClick={() => setIsCloseFriends(!isCloseFriends)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full border transition ${
+            isCloseFriends 
+              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-bold' 
+              : 'border-white/20 text-gray-300 hover:bg-white/5'
+          }`}
         >
-            <FaStar /> {isCloseFriends ? 'Close Friends' : 'Everyone'}
+          <FaStar className={isCloseFriends ? 'text-emerald-400' : 'text-gray-400'} />
+          <span className="text-xs">Close Friends Only</span>
         </button>
 
+        {/* Share Button */}
         <button 
-          onClick={handlePost}
           disabled={loading}
-          className="bg-white text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition shadow-lg shadow-white/20"
+          onClick={handlePost} 
+          className="bg-white text-black px-6 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-gray-200 transition disabled:opacity-50"
         >
-          {loading ? 'Posting...' : <><FaPaperPlane /> Share</>}
+          <FaPaperPlane /> {loading ? 'Posting...' : 'Share Story'}
         </button>
       </div>
     </div>
