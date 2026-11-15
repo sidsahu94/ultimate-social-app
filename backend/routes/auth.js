@@ -25,6 +25,9 @@ const authController = require('../controllers/authController');
 // PUBLIC ROUTES
 // ==========================================
 
+// Check username availability
+router.get('/check-username', authController.checkUsername);
+
 // Register
 router.post(
   '/register',

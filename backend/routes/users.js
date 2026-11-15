@@ -24,6 +24,8 @@ router.put('/password', protect, userController.changePassword);
 
 // Settings & Preferences
 router.put('/status', protect, userController.updateStatus); 
+router.put('/note', protect, userController.updateDailyNote);
+router.get('/notes', protect, userController.getFeedNotes);
 router.put('/settings/notifications', protect, userController.updateSettings); 
 router.put('/close-friends', protect, userController.updateCloseFriends);
 router.get('/blocked', protect, userController.getBlockedUsers);

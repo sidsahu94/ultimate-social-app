@@ -182,6 +182,7 @@ export default function Feed() {
   const { user: currentUser } = useSelector((state) => state.auth);
 
   const [posts, setPosts] = useState(SHOWCASE_POSTS);
+  const [feedType, setFeedType] = useState('forYou');
   const [cursorDate, setCursorDate] = useState(null); 
   const [cursorId, setCursorId] = useState(null);     
   const [loading, setLoading] = useState(false);
@@ -201,7 +202,7 @@ export default function Feed() {
   }, [loading]);
 
     // --- DATA LOADING WITH INFINITE SCROLL ---
-  const load = useCallback(async (reset = false) => {
+  const load = useCallback(async (reset = false, customFeedType = null) => {
     if (isLoadingRef.current) return;
     setLoading(true);
     
@@ -212,7 +213,9 @@ export default function Feed() {
         if (cursorId) queryCursor += `&cursorId=${encodeURIComponent(cursorId)}`;
       }
 
-      const res = await API.get(`/posts/feed?limit=10${queryCursor}`);
+      const activeType = customFeedType !== null ? customFeedType : feedType;
+      const followingParam = activeType === 'following' ? '&following=true' : '';
+      const res = await API.get(`/posts/feed?limit=10${followingParam}${queryCursor}`);
       
       const raw = res.data;
       const backendPosts = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : (raw?.posts || []));
@@ -323,6 +326,13 @@ export default function Feed() {
     if (hasMore && !isLoadingRef.current) load(false);
   });
 
+  const handleFeedTypeChange = (type) => {
+    setFeedType(type);
+    setCursorDate(null);
+    setCursorId(null);
+    load(true, type);
+  };
+
   return (
     <div className="min-h-screen pb-24 md:pb-12">
       <div className="w-full"> 
@@ -365,6 +375,37 @@ export default function Feed() {
           onOpenModal={() => setOpenCreate(true)} 
           onSelectTab={(tab) => setCreateInitialTab(tab)}
         />
+
+        {/* Feed Scope Selector: For You vs Following */}
+        <div className="flex items-center justify-between gap-3 mb-4 mt-2 px-1">
+          <div className="flex items-center gap-1.5 p-1 bg-[#070B14]/80 border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
+            <button
+              type="button"
+              onClick={() => handleFeedTypeChange('forYou')}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${
+                feedType === 'forYou'
+                  ? 'bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white shadow-md'
+                  : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>✨ For You</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFeedTypeChange('following')}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${
+                feedType === 'following'
+                  ? 'bg-gradient-to-r from-[#1D4ED8] to-[#0F766E] text-white shadow-md'
+                  : 'text-[#CBD5E1]/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>👥 Following</span>
+            </button>
+          </div>
+          <span className="text-[10px] font-mono font-bold tracking-widest text-[#00F2FE] uppercase hidden sm:inline-block bg-[#00F2FE]/10 px-2.5 py-1 rounded-full border border-[#00F2FE]/20">
+            {feedType === 'following' ? 'Network Stream' : 'Neural Stream'}
+          </span>
+        </div>
 
         {/* 4. Feed Stream */}
         <div className="space-y-6">

@@ -179,7 +179,7 @@ export default function Navbar() {
     { to: '/reels', label: 'Reels', iconActive: <IoVideocam />, iconInactive: <IoVideocamOutline /> },
     { to: '/chat', label: 'Messages', iconActive: <IoChatbubbleEllipses />, iconInactive: <IoChatbubbleEllipsesOutline />, badge: msgCount > 0 ? msgCount : null },
     { to: '/notifications', label: 'Notifications', iconActive: <IoHeart />, iconInactive: <IoHeartOutline />, badge: activityCount > 0 ? activityCount : null },
-    { to: '/discovery/follow-suggestions', label: 'Groups', iconActive: <IoPeople />, iconInactive: <IoPeopleOutline /> },
+    { to: '/groups', label: 'Groups', iconActive: <IoPeople />, iconInactive: <IoPeopleOutline /> },
     { to: '/events', label: 'Events', iconActive: <IoCalendar />, iconInactive: <IoCalendarOutline /> },
     { to: '/saved', label: 'Saved', iconActive: <IoBookmark />, iconInactive: <IoBookmarkOutline /> },
     { to: '/memories', label: 'Memories', iconActive: <IoTime />, iconInactive: <IoTimeOutline /> },
@@ -188,6 +188,9 @@ export default function Navbar() {
 
   // Extended Previous App Features (Fully Preserved & Integrated)
   const studioFeatures = [
+    { to: '/creator-studio', label: 'Creator Studio', icon: <IoStatsChartOutline /> },
+    { to: '/support', label: 'Support & Help Desk', icon: <IoShieldCheckmarkOutline /> },
+    { to: '/nearby', label: 'Creators Nearby', icon: <IoCompassOutline /> },
     { to: '/live', label: 'Live Studio', icon: <IoVideocamOutline /> },
     { to: '/games', label: 'Games Arcade', icon: <IoGameControllerOutline /> },
     { to: '/wallet', label: 'Creator Wallet', icon: <IoWalletOutline /> },
@@ -195,7 +198,7 @@ export default function Navbar() {
     { to: '/discover', label: 'Swipe Discovery', icon: <IoFlameOutline /> },
     { to: '/feature-hub', label: 'Features Hub', icon: <IoGridOutline /> },
     { to: '/scheduled-posts', label: 'Scheduled Posts', icon: <IoTimeOutline /> },
-    { to: '/report', label: 'Safety Center', icon: <IoShieldCheckmarkOutline /> },
+    { to: '/discovery/follow-suggestions', label: 'Discover People', icon: <IoPeopleOutline /> },
     { to: '/settings', label: 'Settings', icon: <IoSettingsOutline /> },
   ];
 

@@ -129,10 +129,19 @@ exports.register = asyncHandler(async (req, res) => {
   const otp = generateSecureOTP();
   const otpHash = await bcrypt.hash(otp, 10);
 
+  let chosenUsername = generateUsername(safeName);
+  if (req.body.username) {
+    const customUser = String(req.body.username).trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    if (customUser.length >= 3) {
+      const isTaken = await User.findOne({ username: customUser });
+      if (!isTaken) chosenUsername = customUser;
+    }
+  }
+
   const user = await User.create({
     name: safeName,
     email: normalizedEmail,
-    username: generateUsername(safeName),
+    username: chosenUsername,
     password,
     isVerified: false,
     referredBy: referrer ? referrer._id : null,
@@ -520,4 +529,15 @@ exports.logoutAll = asyncHandler(async (req, res) => {
   }
   clearAuthCookie(res);
   return res.json({ success: true, message: 'All other sessions have been successfully revoked.' });
+});
+
+// 10) CHECK USERNAME AVAILABILITY
+exports.checkUsername = asyncHandler(async (req, res) => {
+  const raw = String(req.query.username || '').trim().toLowerCase();
+  if (!raw || raw.length < 3) {
+    return res.json({ success: true, available: false, message: 'Must be at least 3 characters' });
+  }
+  const clean = raw.replace(/[^a-z0-9_.]/g, '');
+  const existing = await User.findOne({ username: clean });
+  return res.json({ success: true, available: !existing, username: clean });
 });

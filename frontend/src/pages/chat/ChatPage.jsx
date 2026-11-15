@@ -10,6 +10,7 @@ import UserAvatar from '../../components/ui/UserAvatar';
 import CreateGroupModal from '../../components/chat/CreateGroupModal';
 import NewChatModal from '../../components/chat/NewChatModal';
 import ChatBox from '../../components/chat/ChatBox';
+import ChatNotesTray from '../../components/chat/ChatNotesTray';
 
 // Rich Seed Conversations ensuring Chat is never empty
 const SEED_CONVERSATIONS = [
@@ -282,6 +283,9 @@ export default function ChatPage() {
             />
           </div>
         </div>
+
+        {/* 24-hour Daily Notes Tray (Instagram-style status thoughts) */}
+        <ChatNotesTray onSelectUser={startNewChat} />
 
         <div className="flex-1 overflow-y-auto p-2">
           {filtered.length === 0 ? (

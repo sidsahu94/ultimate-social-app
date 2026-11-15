@@ -144,6 +144,12 @@ const userSchema = new mongoose.Schema(
     // --- Profile Visibility & Status ---
     privateProfile: { type: Boolean, default: false },
     userStatus: { type: String, default: 'online' },
+    dailyNote: {
+      text: { type: String, maxlength: 80, default: '' },
+      emoji: { type: String, default: '💭' },
+      createdAt: { type: Date, default: Date.now },
+      expiresAt: { type: Date }
+    },
     pinnedPost: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
     closeFriends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 

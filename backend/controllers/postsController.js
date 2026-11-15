@@ -156,10 +156,13 @@ exports.getFeed = async (req, res) => {
 
         if (userId) {
             const activeUserContext = await User.findById(userId)
-                .select('blockedUsers')
+                .select('blockedUsers following')
                 .lean();
 
-            if (activeUserContext?.blockedUsers?.length) {
+            if (req.query.following === 'true') {
+                const followingIds = (activeUserContext?.following || []).map(id => new mongoose.Types.ObjectId(id));
+                match.user = { $in: [...followingIds, new mongoose.Types.ObjectId(userId)] };
+            } else if (activeUserContext?.blockedUsers?.length) {
                 match.user = {
                     $nin: activeUserContext.blockedUsers
                 };

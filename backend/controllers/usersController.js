@@ -643,3 +643,47 @@ exports.getTopCreators = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to fetch top creators' });
   }
 };
+
+exports.updateDailyNote = async (req, res) => {
+  try {
+    const { text, emoji } = req.body;
+    const cleanText = String(text || '').trim().slice(0, 80);
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    user.dailyNote = {
+      text: cleanText,
+      emoji: emoji || '💭',
+      createdAt: new Date(),
+      expiresAt: cleanText ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null
+    };
+    await user.save();
+    return res.json({ success: true, data: user.dailyNote });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to update note' });
+  }
+};
+
+exports.getFeedNotes = async (req, res) => {
+  try {
+    const now = new Date();
+    const me = await User.findById(req.user._id).select('following dailyNote').lean();
+    const following = (me?.following || []).map(id => new mongoose.Types.ObjectId(id));
+
+    const usersWithNotes = await User.find({
+      $or: [
+        { _id: req.user._id },
+        { _id: { $in: following } }
+      ],
+      'dailyNote.text': { $exists: true, $ne: '' },
+      'dailyNote.expiresAt': { $gt: now }
+    })
+      .select('name username avatar dailyNote')
+      .limit(20)
+      .lean();
+
+    return res.json({ success: true, data: usersWithNotes });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch notes' });
+  }
+};

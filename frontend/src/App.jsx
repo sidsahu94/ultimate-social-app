@@ -75,6 +75,8 @@ const Nearby = lazy(() => import('./pages/nearby/Nearby'));
 const FollowersList = lazy(() => import('./pages/profile/FollowersList'));
 const RequestsPage = lazy(() => import('./pages/settings/RequestsPage'));
 const AiAvatar = lazy(() => import('./pages/profile/AiAvatar'));
+const CreatorStudio = lazy(() => import('./pages/creator/CreatorStudio'));
+const SupportCenter = lazy(() => import('./pages/support/SupportCenter'));
 
 const NewsPage = lazy(() => import('./pages/apps/NewsPage'));
 const GroupsPage = lazy(() => import('./pages/groups/GroupsPage'));
@@ -280,6 +282,10 @@ function AppContent() {
                   <Route path="/follow-requests" element={<ProtectedRoute><PageTransition><RequestsPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/requests" element={<Navigate to="/follow-requests" replace />} />
                   <Route path="/ai-avatar" element={<ProtectedRoute><PageTransition><AiAvatar /></PageTransition></ProtectedRoute>} />
+                  <Route path="/creator-studio" element={<ProtectedRoute><PageTransition><CreatorStudio /></PageTransition></ProtectedRoute>} />
+                  <Route path="/studio" element={<Navigate to="/creator-studio" replace />} />
+                  <Route path="/support" element={<PageTransition><SupportCenter /></PageTransition>} />
+                  <Route path="/help" element={<Navigate to="/support" replace />} />
 
                   <Route element={<AdminRoute />}>
                     <Route path="/admin/dashboard" element={<PageTransition><AdminDashboard /></PageTransition>} />
