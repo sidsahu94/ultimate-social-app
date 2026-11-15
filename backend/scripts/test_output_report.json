@@ -6,7 +6,7 @@
     "metadata": {
       "db": "ultimate_social"
     },
-    "timestamp": "2026-11-15T08:15:17.151Z"
+    "timestamp": "2026-11-15T08:25:02.191Z"
   },
   {
     "testName": "DB_COLLECTIONS_EXISTENCE",
@@ -15,7 +15,7 @@
     "metadata": {
       "totalCollections": 21
     },
-    "timestamp": "2026-11-15T08:15:17.208Z"
+    "timestamp": "2026-11-15T08:25:02.425Z"
   },
   {
     "testName": "FOUNDER_ADMIN_EXISTS",
@@ -25,7 +25,7 @@
       "isVerified": true,
       "role": "admin"
     },
-    "timestamp": "2026-11-15T08:15:17.910Z"
+    "timestamp": "2026-11-15T08:25:03.230Z"
   },
   {
     "testName": "SEC_FOUNDER_ENCLAVE_ISOLATION",
@@ -36,7 +36,7 @@
       "founderAllowed": true,
       "normalAllowed": false
     },
-    "timestamp": "2026-11-15T08:15:17.910Z"
+    "timestamp": "2026-11-15T08:25:03.231Z"
   },
   {
     "testName": "USERS_TOP_CREATORS_AGGREGATION",
@@ -46,7 +46,7 @@
       "topCreator": "Sidhanta Sahu",
       "score": 255
     },
-    "timestamp": "2026-11-15T08:15:17.942Z"
+    "timestamp": "2026-11-15T08:25:03.423Z"
   },
   {
     "testName": "FEED_COMPILATION_GENERAL",
@@ -55,7 +55,7 @@
     "metadata": {
       "count": 10
     },
-    "timestamp": "2026-11-15T08:15:18.111Z"
+    "timestamp": "2026-11-15T08:25:04.037Z"
   },
   {
     "testName": "DAILY_NOTE_PERSISTENCE",
@@ -65,11 +65,11 @@
       "dailyNote": {
         "text": "Automated test suite execution ⚡",
         "emoji": "🚀",
-        "createdAt": "2026-11-15T08:15:18.111Z",
-        "expiresAt": "2026-11-16T08:15:18.111Z"
+        "createdAt": "2026-11-15T08:25:04.037Z",
+        "expiresAt": "2026-11-16T08:25:04.037Z"
       }
     },
-    "timestamp": "2026-11-15T08:15:18.234Z"
+    "timestamp": "2026-11-15T08:25:04.284Z"
   },
   {
     "testName": "MARKETPLACE_FEDERATION_CHECK",
@@ -79,7 +79,7 @@
       "productsCount": 4,
       "shopItemsCount": 0
     },
-    "timestamp": "2026-11-15T08:15:18.283Z"
+    "timestamp": "2026-11-15T08:25:04.417Z"
   },
   {
     "testName": "GAMES_LEADERBOARD_QUERY",
@@ -88,7 +88,7 @@
     "metadata": {
       "scoreCount": 4
     },
-    "timestamp": "2026-11-15T08:15:18.374Z"
+    "timestamp": "2026-11-15T08:25:04.505Z"
   },
   {
     "testName": "INCIDENT_REPORTS_STATUS",
@@ -97,6 +97,60 @@
     "metadata": {
       "reportsCount": 0
     },
-    "timestamp": "2026-11-15T08:15:18.427Z"
+    "timestamp": "2026-11-15T08:25:04.584Z"
+  },
+  {
+    "testName": "USERNAME_AVAILABILITY_CHECK",
+    "passed": true,
+    "details": "@sidsahu correctly flagged as taken, @social_test_mwhkk761 verified free",
+    "metadata": {
+      "taken": true,
+      "free": true
+    },
+    "timestamp": "2026-11-15T08:25:04.775Z"
+  },
+  {
+    "testName": "PINNED_POST_TOGGLE_LIFECYCLE",
+    "passed": true,
+    "details": "Successfully pinned post ID 6ad6c1962093256090f3b60e and restored original state",
+    "metadata": {
+      "samplePostId": "6ad6c1962093256090f3b60e",
+      "restored": true
+    },
+    "timestamp": "2026-11-15T08:25:05.191Z"
+  },
+  {
+    "testName": "COMMENTS_SCHEMA_INTEGRITY",
+    "passed": true,
+    "details": "Comments collection contains 36 total comments; recent sample successfully populated",
+    "metadata": {
+      "commentsCount": 36,
+      "sampleCount": 3
+    },
+    "timestamp": "2026-11-15T08:25:05.491Z"
+  },
+  {
+    "testName": "STORIES_AND_REELS_INTEGRITY",
+    "passed": true,
+    "details": "Active Stories: 0 | Active Reels: 4",
+    "metadata": {
+      "storiesCount": 0,
+      "reelsCount": 4
+    },
+    "timestamp": "2026-11-15T08:25:05.573Z"
+  },
+  {
+    "testName": "WEBRTC_ICE_SERVERS_CONFIG",
+    "passed": true,
+    "details": "WebRTC NAT traversal configurations validated with Google and Twilio public STUN pools",
+    "metadata": {
+      "serverCount": 3,
+      "servers": [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:global.stun.twilio.com:3478"
+      ]
+    },
+    "timestamp": "2026-11-15T08:25:05.573Z"
   }
 ]

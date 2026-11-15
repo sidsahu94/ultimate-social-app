@@ -1,7 +1,7 @@
 // frontend/src/components/posts/PostActionSheet.jsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FaEdit, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaExclamationTriangle, FaThumbtack } from 'react-icons/fa';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';
 import ReportModal from '../ui/ReportModal';
@@ -12,15 +12,26 @@ export default function PostActionSheet({ post, isMine, onClose }) {
   const [showReport, setShowReport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
+  const handlePin = async () => {
+    try {
+      const res = await API.put('/users/pin', { postId: post._id });
+      const isPinned = !!res.data?.data?.pinnedPost;
+      add(isPinned ? 'Broadcast pinned to top of profile!' : 'Broadcast unpinned', { type: 'success' });
+      onClose();
+    } catch (e) {
+      add('Failed to pin post', { type: 'error' });
+    }
+  };
+
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this post?")) return;
+    if (!confirm('Are you sure you want to delete this post?')) return;
     try {
       await API.delete(`/posts/${post._id}`);
-      add("Post deleted", { type: 'success' });
+      add('Post deleted', { type: 'success' });
       window.dispatchEvent(new CustomEvent('postDeleted', { detail: post._id }));
       onClose();
     } catch (e) {
-      add("Failed to delete", { type: 'error' });
+      add('Failed to delete', { type: 'error' });
     }
   };
 
@@ -28,10 +39,10 @@ export default function PostActionSheet({ post, isMine, onClose }) {
     <>
       <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xl" onClick={onClose}>
         <motion.div 
-          initial={{ y: "100%" }} 
+          initial={{ y: '100%' }} 
           animate={{ y: 0 }} 
-          exit={{ y: "100%" }} 
-          onClick={e => e.stopPropagation()}
+          exit={{ y: '100%' }} 
+          onClick={(e) => e.stopPropagation()}
           className="absolute bottom-0 left-0 right-0 bg-[#070B14]/95 border-t border-white/15 rounded-t-3xl overflow-hidden shadow-2xl max-w-md mx-auto backdrop-blur-2xl"
         >
           <div className="p-3.5 border-b border-white/5 flex justify-center">
@@ -41,6 +52,12 @@ export default function PostActionSheet({ post, isMine, onClose }) {
           <div className="p-2 space-y-1">
             {isMine ? (
               <>
+                <button 
+                  onClick={handlePin} 
+                  className="w-full p-4 flex items-center gap-3.5 hover:bg-white/5 rounded-2xl transition font-medium text-xs text-[#F4D49A]"
+                >
+                  <FaThumbtack className="text-[#F4D49A]" size={14} /> Pin to Profile
+                </button>
                 <button 
                   onClick={() => setShowEdit(true)} 
                   className="w-full p-4 flex items-center gap-3.5 hover:bg-white/5 rounded-2xl transition font-medium text-xs text-[#F7F7FC]"

@@ -264,6 +264,18 @@ export default function ProfilePage() {
               className="relative shrink-0 cursor-pointer group"
               onClick={() => setViewAvatar(true)}
             >
+              {/* Floating 24h Daily Note Thought Bubble (Instagram Style) */}
+              {user?.dailyNote?.text && (
+                <div 
+                  onClick={(e) => { e.stopPropagation(); navigate('/chat'); }}
+                  className="absolute -top-7 left-1/2 -translate-x-1/2 z-30 max-w-[160px] bg-[#070B14]/95 border border-[#00F2FE]/40 text-xs text-white px-3 py-1 rounded-full shadow-[0_0_20px_rgba(0,242,254,0.3)] backdrop-blur-xl flex items-center gap-1.5 animate-bounce cursor-pointer hover:border-[#00F2FE]"
+                  title="View / Reply to 24h Thought"
+                >
+                  <span>{user.dailyNote.emoji || '💭'}</span>
+                  <span className="truncate font-medium text-[11px]">{user.dailyNote.text}</span>
+                </div>
+              )}
+
               {/* Animated iridescent spectrum ring matching Screen 4 */}
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-[3px] shadow-[0_0_24px_rgba(255,107,138,0.35)] transition-transform duration-500 group-hover:scale-105 overflow-hidden">
                 <motion.div
