@@ -1,25 +1,46 @@
 // frontend/src/hooks/useInfiniteScroll.js
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 export default function useInfiniteScroll(callback) {
-  const observer = useRef();
+  const observerRef = useRef(null);
+  const callbackRef = useRef(callback);
+  const targetNodeRef = useRef(null);
 
-  const ref = (node) => {
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  const setRef = useCallback((node) => {
+    // Prevent reconnecting and re-evaluating intersection if DOM node has not changed
+    if (targetNodeRef.current === node) return;
+    targetNodeRef.current = node;
+
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
     if (!node) return;
-    
-    // 1. Disconnect existing observer to avoid duplicates
-    if (observer.current) observer.current.disconnect();
 
-    // 2. Create new observer with FRESH callback closure
-    observer.current = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        callback();
+    observerRef.current = new IntersectionObserver(
+      ([entry]) => {
+        if (entry && entry.isIntersecting && callbackRef.current) {
+          callbackRef.current();
+        }
+      },
+      { rootMargin: '250px' }
+    );
+
+    observerRef.current.observe(node);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
       }
-    }, { rootMargin: '200px' });
+    };
+  }, []);
 
-    // 3. Observe
-    observer.current.observe(node);
-  };
-
-  return ref;
+  return setRef;
 }

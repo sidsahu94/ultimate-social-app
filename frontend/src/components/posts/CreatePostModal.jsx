@@ -52,12 +52,20 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
   const { add } = useToast();
   const currentUser = useSelector((s) => s.auth?.user);
 
-  // Auto-restore saved draft
+  // Auto-restore saved draft & Escape key listener
   useEffect(() => {
     if (!initialData && isOpen && !text) {
       const savedDraft = localStorage.getItem('socialverse_draft_post');
       if (savedDraft) setText(savedDraft);
     }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
   // Auto-save draft
@@ -237,10 +245,14 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+    <div 
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+      onClick={onClose}
+    >
       <motion.div 
         initial={{ scale: 0.95, opacity: 0 }} 
         animate={{ scale: 1, opacity: 1 }} 
+        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl bg-[#070B14] border border-[rgba(226,232,240,0.16)] rounded-[24px] shadow-[0_24px_80px_rgba(0,0,0,0.85)] overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar text-[#F8FAFC]"
       >
         {/* Header */}

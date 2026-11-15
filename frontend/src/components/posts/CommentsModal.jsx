@@ -101,6 +101,14 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
             setHasMore(true);
             loadComments(true);
         }
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, postId]);
 
     const submit = async (e) => {
@@ -199,11 +207,15 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-2xl animate-fade-in">
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-2xl animate-fade-in"
+          onClick={onClose}
+        >
             <motion.div 
               initial={{ y: 25, opacity: 0, scale: 0.98 }} 
               animate={{ y: 0, opacity: 1, scale: 1 }} 
               exit={{ y: 25, opacity: 0, scale: 0.98 }}
+              onClick={(e) => e.stopPropagation()}
               className="w-full max-w-lg bg-[#070B14]/95 border border-white/15 rounded-[32px] flex flex-col max-h-[85vh] shadow-[0_25px_80px_rgba(0,0,0,0.9)] overflow-hidden backdrop-blur-3xl"
             >
                 {/* Header */}

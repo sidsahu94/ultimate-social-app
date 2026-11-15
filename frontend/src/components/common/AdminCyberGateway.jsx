@@ -41,6 +41,14 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
       setIsScanning(false);
       setIsAuthenticating(false);
     }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
   const addLog = (text) => {
@@ -153,12 +161,16 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl"
+      onClick={onClose}
+    >
       <motion.div
         initial={{ scale: 0.92, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.92, opacity: 0, y: 20 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-xl overflow-hidden rounded-[28px] border border-[#00F2FE]/40 bg-[#04070D] p-6 md:p-8 text-[#F8FAFC] shadow-[0_0_80px_rgba(0,242,254,0.2)] ring-1 ring-white/10"
       >
         {/* Holographic grid and ambient glows */}

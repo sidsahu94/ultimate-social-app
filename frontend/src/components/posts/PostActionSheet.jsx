@@ -42,8 +42,16 @@ export default function PostActionSheet({ post, isMine, onClose }) {
           initial={{ y: '100%' }} 
           animate={{ y: 0 }} 
           exit={{ y: '100%' }} 
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.6 }}
+          onDragEnd={(e, info) => {
+            if (info.offset.y > 50 || info.velocity.y > 250) {
+              onClose();
+            }
+          }}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 bg-[#070B14]/95 border-t border-white/15 rounded-t-3xl overflow-hidden shadow-2xl max-w-md mx-auto backdrop-blur-2xl"
+          className="absolute bottom-0 left-0 right-0 bg-[#070B14]/95 border-t border-white/15 rounded-t-3xl overflow-hidden shadow-2xl max-w-md mx-auto backdrop-blur-2xl touch-pan-x"
         >
           <div className="p-3.5 border-b border-white/5 flex justify-center">
             <div className="w-12 h-1.5 bg-white/20 rounded-full" />

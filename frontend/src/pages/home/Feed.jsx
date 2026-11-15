@@ -185,7 +185,8 @@ export default function Feed() {
   const [feedType, setFeedType] = useState('forYou');
   const [cursorDate, setCursorDate] = useState(null); 
   const [cursorId, setCursorId] = useState(null);     
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const [createInitialTab, setCreateInitialTab] = useState('post');
   const [hasMore, setHasMore] = useState(true);
@@ -204,7 +205,12 @@ export default function Feed() {
     // --- DATA LOADING WITH INFINITE SCROLL ---
   const load = useCallback(async (reset = false, customFeedType = null) => {
     if (isLoadingRef.current) return;
-    setLoading(true);
+    isLoadingRef.current = true;
+    if (reset) {
+      setInitialLoading(true);
+    } else {
+      setIsFetchingMore(true);
+    }
     
     try {
       let queryCursor = '';
@@ -230,7 +236,12 @@ export default function Feed() {
           }
         }
         setPosts(combined);
-        setHasMore(true);
+        setHasMore(backendPosts.length >= 10 || combined.length < 20);
+        if (backendPosts.length > 0) {
+          const last = backendPosts[backendPosts.length - 1];
+          setCursorDate(last?.createdAt);
+          setCursorId(last?._id);
+        }
       } else {
         if (backendPosts.length > 0) {
           setPosts((prev) => {
@@ -238,36 +249,26 @@ export default function Feed() {
             const fresh = backendPosts.filter(p => !seen.has(p._id));
             return [...prev, ...fresh];
           });
-          setHasMore(true);
+          const last = backendPosts[backendPosts.length - 1];
+          setCursorDate(last?.createdAt);
+          setCursorId(last?._id);
+          setHasMore(backendPosts.length >= 10);
         } else {
-          // Dynamic algorithmic continuous stream
-          setPosts((prev) => {
-            const pageOffset = prev.length;
-            const discoveryBatch = SHOWCASE_POSTS.map((sp, idx) => ({
-              ...sp,
-              _id: `disc_${pageOffset}_${sp._id}_${Date.now()}_${idx}`,
-              createdAt: new Date(Date.now() - (pageOffset * 3600000 + idx * 1800000)).toISOString()
-            }));
-            return [...prev, ...discoveryBatch];
-          });
-          setHasMore(true);
+          // End of available content reached
+          setHasMore(false);
         }
-      }
-
-      if (backendPosts.length >= 10) {
-        const last = backendPosts[backendPosts.length - 1];
-        setCursorDate(last?.createdAt);
-        setCursorId(last?._id);
       }
     } catch (_) {
       if (reset) {
         setPosts(SHOWCASE_POSTS);
       }
-      setHasMore(true);
+      setHasMore(false);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setIsFetchingMore(false);
+      isLoadingRef.current = false;
     }
-  }, [cursorDate, cursorId]);
+  }, [cursorDate, cursorId, feedType]);
 
   useEffect(() => {
     load(true);
@@ -430,39 +431,41 @@ export default function Feed() {
 
         {/* 4. Feed Stream */}
         <div className="space-y-6">
-          <AnimatePresence>
-            {posts.map((p) => (
-              <motion.div
-                key={p._id || p.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                layout
-              >
-                <PostCard post={p} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          {posts.map((p) => (
+            <div key={p._id || p.id}>
+              <PostCard post={p} />
+            </div>
+          ))}
         </div>
 
-        {loading && (
+        {initialLoading && posts.length === 0 && (
           <div className="mt-6 space-y-6">
             <SkeletonPost />
             <SkeletonPost />
           </div>
         )}
 
-        {hasMore && !loading && (
-          <div ref={loaderRef} className="h-24 flex items-center justify-center text-[#CBD5E1]/60 text-xs font-mono">
-            Loading next moments...
+        {hasMore ? (
+          <div 
+            ref={loaderRef} 
+            className="py-8 flex flex-col items-center justify-center gap-2 text-center select-none"
+          >
+            {isFetchingMore ? (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#070B14]/90 border border-[#00F2FE]/40 text-xs font-mono text-[#00F2FE] shadow-[0_0_20px_rgba(0,242,254,0.25)]">
+                <span className="w-2 h-2 rounded-full bg-[#00F2FE] animate-ping" />
+                <span>Loading next moments...</span>
+              </div>
+            ) : (
+              <div className="h-4" />
+            )}
           </div>
-        )}
-
-        {!hasMore && posts.length > 0 && (
-          <div className="py-12 text-center text-[#CBD5E1]/60 text-xs flex flex-col items-center gap-2">
-            <div className="w-2 h-2 bg-[#D4AF37] rounded-full mb-1 animate-pulse"></div>
-            You're all caught up in SocialVerse! ✨
-          </div>
+        ) : (
+          posts.length > 0 && (
+            <div className="py-12 text-center text-[#CBD5E1]/60 text-xs flex flex-col items-center gap-2">
+              <div className="w-2.5 h-2.5 bg-[#D4AF37] rounded-full mb-1 animate-pulse" />
+              <span>You're all caught up in SocialVerse! ✨</span>
+            </div>
+          )
         )}
 
         {/* Create Post Modal */}

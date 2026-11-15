@@ -33,7 +33,15 @@ export default function ChatNotesTray({ onSelectUser }) {
 
   useEffect(() => {
     loadNotes();
-  }, []);
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showModal) {
+        setShowModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
 
   const handleSaveNote = async () => {
     if (!noteText.trim() && !myNote?.text) return;
@@ -113,8 +121,14 @@ export default function ChatNotesTray({ onSelectUser }) {
 
       {/* Note Creation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#070B14] border border-white/10 rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+        <div 
+          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div 
+            className="w-full max-w-sm bg-[#070B14] border border-white/10 rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setShowModal(false)}
               className="absolute top-4 right-4 text-[#CBD5E1]/60 hover:text-white p-1 rounded-full"

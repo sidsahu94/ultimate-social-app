@@ -35,7 +35,14 @@ export default function InstallAppModal({ isOpen, onClose }) {
     } else {
       setPlatform('desktop');
     }
-  }, []);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   // 1-Click Desktop Shortcut Generator & Downloader
   const handleDownloadDesktopShortcut = () => {
@@ -79,11 +86,15 @@ export default function InstallAppModal({ isOpen, onClose }) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        onClick={onClose}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
           className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/20 bg-[#070B14] p-6 shadow-2xl backdrop-blur-2xl text-white"
           style={{
             borderColor: currentTheme.border || 'rgba(255, 255, 255, 0.2)',

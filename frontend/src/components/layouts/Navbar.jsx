@@ -122,6 +122,16 @@ export default function Navbar() {
   const [activityCount, setActivityCount] = useState(0);
   const [showMoreFeatures, setShowMoreFeatures] = useState(false);
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
+  // Close mobile drawer on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showMobileDrawer) {
+        setShowMobileDrawer(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showMobileDrawer]);
 
   useEffect(() => {
     if (location.pathname.startsWith('/chat')) {
@@ -411,22 +421,39 @@ export default function Navbar() {
           ========================================================================= */}
       <AnimatePresence>
         {showMobileDrawer && (
-          <div className="fixed inset-0 z-50 flex md:hidden bg-black/80 backdrop-blur-md">
+          <div 
+            className="fixed inset-0 z-50 flex md:hidden bg-black/80 backdrop-blur-md transition-opacity"
+            onClick={() => setShowMobileDrawer(false)}
+          >
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 280 }}
-              className="w-4/5 max-w-xs h-full bg-[#070B14] border-r border-white/15 p-5 flex flex-col shadow-2xl overflow-y-auto"
+              drag="x"
+              dragConstraints={{ left: -320, right: 0 }}
+              dragElastic={{ left: 0.25, right: 0 }}
+              onDragEnd={(e, info) => {
+                // Allows swiping or flicking left to close
+                if (info.offset.x < -45 || info.velocity.x < -200) {
+                  setShowMobileDrawer(false);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4/5 max-w-xs h-full bg-[#070B14] border-r border-white/15 p-5 flex flex-col shadow-2xl overflow-y-auto relative touch-pan-y"
             >
               <div className="flex items-center justify-between pb-4 border-b border-white/10">
                 <Logo size={34} subtitle="Beyond Social" />
-                <button
-                  onClick={() => setShowMobileDrawer(false)}
-                  className="p-1 text-white/60 hover:text-white rounded-full"
-                >
-                  <IoClose size={22} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-white/40 font-mono tracking-wider">Slide ←</span>
+                  <button
+                    onClick={() => setShowMobileDrawer(false)}
+                    className="p-1.5 text-white/70 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Close navigation"
+                  >
+                    <IoClose size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Navigation Items */}

@@ -1,5 +1,5 @@
 // frontend/src/components/profile/MyQR.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useSelector } from 'react-redux';
 import { FaTimes, FaCopy, FaShareAlt, FaCheck, FaQrcode } from 'react-icons/fa';
@@ -11,6 +11,16 @@ export default function MyQR({ user: propUser, onClose }) {
   const user = propUser || authUser;
   const { add: addToast } = useToast();
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   if (!user) return null;
 
@@ -38,8 +48,14 @@ export default function MyQR({ user: propUser, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="relative w-full max-w-sm rounded-[32px] border border-white/10 bg-[#070B14]/95 p-6 shadow-2xl backdrop-blur-2xl text-center animate-in fade-in zoom-in duration-200">
+    <div 
+      className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="relative w-full max-w-sm rounded-[32px] border border-white/10 bg-[#070B14]/95 p-6 shadow-2xl backdrop-blur-2xl text-center animate-in fade-in zoom-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
