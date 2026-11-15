@@ -60,6 +60,7 @@ const PostCard = forwardRef(({ post }, ref) => {
   const [muted, setMuted] = useState(true);
   const [showTipModal, setShowTipModal] = useState(false);
 
+  const cleanPostId = post?._id ? String(post._id).split('_loop_')[0] : post?._id;
   const isMine = post.user?._id === user?._id;
   const isPaywalledLocked =
     Boolean(localPost.isPaywalled) &&
@@ -71,7 +72,7 @@ const PostCard = forwardRef(({ post }, ref) => {
     try {
       setIsUnlocking(true);
       playCyberClick();
-      const res = await API.post('/posts/' + post._id + '/unlock');
+      const res = await API.post('/posts/' + cleanPostId + '/unlock');
       playSuccessChord();
       toast('VIP Content unlocked!', { type: 'success' });
       setLocalPost((prev) => ({
@@ -113,7 +114,7 @@ const PostCard = forwardRef(({ post }, ref) => {
           timer = setTimeout(() => {
             if (!viewedPostsSession.has(post._id)) {
               viewedPostsSession.add(post._id);
-              API.post(`/posts/${post._id}/view`).catch(() => {});
+              API.post(`/posts/${cleanPostId}/view`).catch(() => {});
             }
           }, 800);
         } else if (timer) {
@@ -183,7 +184,7 @@ const PostCard = forwardRef(({ post }, ref) => {
     }
 
     try {
-      await API.put(`/posts/like/${post._id}`);
+      await API.put(`/posts/like/${cleanPostId}`);
     } catch {
       setIsLiked(prev);
       setLikeCount((c) => (prev ? c + 1 : c - 1));
@@ -202,7 +203,7 @@ const PostCard = forwardRef(({ post }, ref) => {
     setIsSaved(!prev);
 
     try {
-      const res = await API.post(`/posts/${post._id}/bookmark`);
+      const res = await API.post(`/posts/${cleanPostId}/bookmark`);
       const savedState = res.data?.saved ?? !prev;
       setIsSaved(savedState);
       toast(savedState ? "Saved" : "Removed from saved", { type: "success" });
@@ -215,7 +216,7 @@ const PostCard = forwardRef(({ post }, ref) => {
     const data = {
       title: `Post by ${post.user.name}`,
       text: post.content,
-      url: `${window.location.origin}/post/${post._id}`,
+      url: `${window.location.origin}/post/${cleanPostId}`,
     };
 
     if (navigator.share) {
@@ -248,7 +249,7 @@ const PostCard = forwardRef(({ post }, ref) => {
       });
       toast("Vote recorded!", { type: "success" });
       if (post._id && !String(post._id).startsWith("showcase")) {
-        await API.post(`/polls/${post._id}/vote/${index}`);
+        await API.post(`/polls/${cleanPostId}/vote/${index}`);
       }
     } catch (_) {}
   };
@@ -638,7 +639,7 @@ const PostCard = forwardRef(({ post }, ref) => {
 
             {/* Sapphire Elite Comment Button */}
             <button 
-              onClick={() => window.dispatchEvent(new CustomEvent("openComments", { detail: post._id }))}
+              onClick={() => window.dispatchEvent(new CustomEvent("openComments", { detail: cleanPostId }))}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-200 hover:bg-[#1D4ED8]/15 hover:text-[#3B82F6] group/btn active:scale-95 cursor-pointer"
             >
               <div className="transition-all duration-200 group-hover/btn:scale-110">

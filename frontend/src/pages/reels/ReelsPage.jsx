@@ -166,9 +166,10 @@ const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
           .then(() => setIsPlaying(true))
           .catch(() => setIsPlaying(false));
       }
-      if (reel._id && !String(reel._id).startsWith("demo")) {
+      const cleanId = reel._id ? String(reel._id).split('_loop_')[0] : reel._id;
+      if (cleanId && !cleanId.startsWith("demo")) {
         viewTimer = setTimeout(() => {
-          API.post(`/reels/view/${reel._id}`).catch(() => {});
+          API.post(`/reels/view/${cleanId}`).catch(() => {});
         }, 3000);
       }
     } else if (videoRef.current) {
@@ -587,6 +588,7 @@ export default function ReelsPage() {
 
   const containerRef = useRef(null);
   const loopCountRef = useRef(0);
+  const initialReelsRef = useRef([]);
   const { add: addToast } = useToast();
   const { currentTheme } = useTheme();
 
@@ -599,8 +601,11 @@ export default function ReelsPage() {
       const res = await API.get("/reels/feed");
       const payload = res?.data?.data || res?.data;
       const list = Array.isArray(payload) ? payload : [];
-      setReels(list.length > 0 ? list : DEMO_REELS);
+      const baseList = list.length > 0 ? list : DEMO_REELS;
+      initialReelsRef.current = baseList;
+      setReels(baseList);
     } catch (e) {
+      initialReelsRef.current = DEMO_REELS;
       setReels(DEMO_REELS);
     }
   };
@@ -659,11 +664,14 @@ export default function ReelsPage() {
     if (index >= reels.length - 2 && reels.length > 0) {
       setReels((prev) => {
         const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
-        const base = prev.slice(0, 8);
-        const looped = base.map((r, i) => ({
-          ...r,
-          _id: `${r._id}_loop_${loopIdx}_${i}`,
-        }));
+        const base = initialReelsRef.current.length > 0 ? initialReelsRef.current : (prev.length > 0 ? prev.slice(0, 8) : DEMO_REELS);
+        const looped = base.map((r, i) => {
+          const cleanId = String(r._id).split('_loop_')[0];
+          return {
+            ...r,
+            _id: `${cleanId}_loop_${loopIdx}_${i}`,
+          };
+        });
         return [...prev, ...looped];
       });
     }
@@ -688,11 +696,14 @@ export default function ReelsPage() {
         } else {
           // Seamless loop when swiping past the end
           const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
-          const base = reels.slice(0, 8);
-          const looped = base.map((r, i) => ({
-            ...r,
-            _id: `${r._id}_loop_${loopIdx}_${i}`,
-          }));
+          const base = initialReelsRef.current.length > 0 ? initialReelsRef.current : (reels.length > 0 ? reels.slice(0, 8) : DEMO_REELS);
+          const looped = base.map((r, i) => {
+            const cleanId = String(r._id).split('_loop_')[0];
+            return {
+              ...r,
+              _id: `${cleanId}_loop_${loopIdx}_${i}`,
+            };
+          });
           setReels((prev) => [...prev, ...looped]);
           setTimeout(() => {
             if (containerRef.current) {
@@ -729,8 +740,14 @@ export default function ReelsPage() {
           containerRef.current.scrollTo({ top: (activeIndex + 1) * h, behavior: "smooth" });
         } else {
           const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
-          const base = reels.slice(0, 8);
-          const looped = base.map((r, i) => ({ ...r, _id: `${r._id}_loop_${loopIdx}_${i}` }));
+          const base = initialReelsRef.current.length > 0 ? initialReelsRef.current : (reels.length > 0 ? reels.slice(0, 8) : DEMO_REELS);
+          const looped = base.map((r, i) => {
+            const cleanId = String(r._id).split('_loop_')[0];
+            return {
+              ...r,
+              _id: `${cleanId}_loop_${loopIdx}_${i}`,
+            };
+          });
           setReels((prev) => [...prev, ...looped]);
           setTimeout(() => {
             if (containerRef.current) {
@@ -749,12 +766,11 @@ export default function ReelsPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeIndex, reels.length]);
 
-
-
   const handleToggleLikeReel = async (reelId) => {
     try {
-      if (reelId && !String(reelId).startsWith("demo")) {
-        await API.put(`/posts/like/${reelId}`);
+      const cleanId = reelId ? String(reelId).split('_loop_')[0] : reelId;
+      if (cleanId && !cleanId.startsWith("demo")) {
+        await API.put(`/posts/like/${cleanId}`);
       }
     } catch (_) {}
   };

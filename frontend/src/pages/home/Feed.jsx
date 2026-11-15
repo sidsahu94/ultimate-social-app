@@ -254,10 +254,11 @@ export default function Feed() {
           setPosts((prev) => {
             const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
             // Append real posts; if all posts have been viewed, cycle them in a continuous loop with unique keys
-            const existingIds = new Set(prev.map(p => p._id));
+            const existingBaseIds = new Set(prev.map(p => String(p._id).split('_loop_')[0]));
             const fresh = backendPosts.map((p, idx) => {
-              if (existingIds.has(p._id)) {
-                return { ...p, _id: `${p._id}_loop_${loopIdx}_${idx}` };
+              const cleanId = String(p._id).split('_loop_')[0];
+              if (existingBaseIds.has(cleanId)) {
+                return { ...p, _id: `${cleanId}_loop_${loopIdx}_${idx}` };
               }
               return p;
             });
@@ -277,10 +278,13 @@ export default function Feed() {
           setPosts((prev) => {
             const loopIdx = (loopCountRef.current = (loopCountRef.current || 0) + 1);
             const pool = prev.length > 0 ? prev.slice(0, 10) : SHOWCASE_POSTS;
-            const looped = pool.map((p, idx) => ({
-              ...p,
-              _id: `${p._id}_loop_${loopIdx}_${idx}`,
-            }));
+            const looped = pool.map((p, idx) => {
+              const cleanId = String(p._id).split('_loop_')[0];
+              return {
+                ...p,
+                _id: `${cleanId}_loop_${loopIdx}_${idx}`,
+              };
+            });
             return [...prev, ...looped];
           });
           setCursorDate(null);

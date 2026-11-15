@@ -13,12 +13,31 @@ const API = axios.create({
 });
 
 // --- REQUEST INTERCEPTOR ---
-// Attaches the short-lived Access Token to every request
+// Attaches the short-lived Access Token to every request and sanitizes loop keys
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Automatically strip continuous loop suffixes (_loop_\d+_\d+) so backend always gets pure ObjectIds
+    if (config.url && config.url.includes('_loop_')) {
+      config.url = config.url.replace(/_loop_[^/?#&]+/g, '');
+    }
+    if (config.params) {
+      for (const key of Object.keys(config.params)) {
+        if (typeof config.params[key] === 'string' && config.params[key].includes('_loop_')) {
+          config.params[key] = config.params[key].replace(/_loop_[^/?#&]+/g, '');
+        }
+      }
+    }
+    if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+      for (const key of Object.keys(config.data)) {
+        if (typeof config.data[key] === 'string' && config.data[key].includes('_loop_')) {
+          config.data[key] = config.data[key].replace(/_loop_[^/?#&]+/g, '');
+        }
+      }
     }
     return config;
   },

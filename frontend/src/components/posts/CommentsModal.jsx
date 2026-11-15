@@ -14,6 +14,7 @@ import { playSound } from "../../utils/soundEffects";
 const QUICK_EMOJIS = ['❤️', '🔥', '👏', '✨', '💎', '🙌', '💯', '😍', '🚀'];
 
 const CommentsModal = ({ postId, isOpen, onClose }) => {
+    const cleanPostId = postId ? String(postId).split('_loop_')[0] : postId;
     const [post, setPost] = useState(null);
     const [loading, setLoading] = useState(false);
     const [content, setContent] = useState("");
@@ -30,14 +31,14 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
     // Socket Logic
     useEffect(() => {
         if (!postId) return;
-        socket.emit('joinRoom', { room: `post:${postId}` });
+        socket.emit('joinRoom', { room: `post:${cleanPostId}` });
         
         const onNewComment = (newComment) => {
             if (newComment.user?._id === myId || newComment.user === myId) {
                 return;
             }
 
-            if (newComment.post === postId || (post && post._id === postId)) {
+            if (newComment.post === cleanPostId || (post && (post._id === cleanPostId || post._id === postId))) {
                 setPost(prev => ({
                     ...prev,
                     comments: [newComment, ...(prev?.comments || [])],
@@ -66,7 +67,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
         if (isReset) setLoading(true);
 
         try {
-            const res = await API.get(`/comments/${postId}?page=${p}`);
+            const res = await API.get(`/comments/${cleanPostId}?page=${p}`);
             const payload = res.data?.data || res.data;
             const newComments = Array.isArray(payload) ? payload : [];
             
@@ -84,7 +85,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
         } catch(e) {
             if (isReset) {
                 try {
-                    const r = await API.get(`/posts/${postId}`);
+                    const r = await API.get(`/posts/${cleanPostId}`);
                     const postPayload = r.data?.data || r.data;
                     setPost(postPayload);
                     setHasMore(false); 
