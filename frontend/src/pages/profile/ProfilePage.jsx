@@ -23,14 +23,16 @@ import { FaHeart, FaComment } from "react-icons/fa";
 
 import API from "../../services/api";
 import FollowButton from "../../components/profile/FollowButton";
-import ProfileEditModal from "../../components/profile/ProfileEditModal";
-import CreatePostModal from "../../components/posts/CreatePostModal";
-import Lightbox from "../../components/ui/Lightbox";
 import UserAvatar from "../../components/ui/UserAvatar";
 import { getImageUrl } from "../../utils/imageUtils";
 import ProfileHighlights from "../../components/profile/ProfileHighlights";
-import MyQR from "../../components/profile/MyQR";
-import ScanQR from "../../components/profile/ScanQR";
+
+// Lazy-load heavyweight profile modals on demand to keep profile initial bundle featherlight
+const ProfileEditModal = React.lazy(() => import("../../components/profile/ProfileEditModal"));
+const CreatePostModal = React.lazy(() => import("../../components/posts/CreatePostModal"));
+const Lightbox = React.lazy(() => import("../../components/ui/Lightbox"));
+const MyQR = React.lazy(() => import("../../components/profile/MyQR"));
+const ScanQR = React.lazy(() => import("../../components/profile/ScanQR"));
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useTheme } from "../../contexts/ThemeProvider";
@@ -534,40 +536,42 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Modals */}
-      {editOpen && (
-        <ProfileEditModal
-          isOpen={editOpen}
-          user={user || loggedInUser}
-          onClose={() => setEditOpen(false)}
-          onUpdate={(updated) => {
-            setUser(updated);
-            setEditOpen(false);
-          }}
-          onUpdated={(updated) => {
-            setUser(updated);
-            setEditOpen(false);
-          }}
-        />
-      )}
+      {/* Modals (Dynamically Loaded) */}
+      <React.Suspense fallback={null}>
+        {editOpen && (
+          <ProfileEditModal
+            isOpen={editOpen}
+            user={user || loggedInUser}
+            onClose={() => setEditOpen(false)}
+            onUpdate={(updated) => {
+              setUser(updated);
+              setEditOpen(false);
+            }}
+            onUpdated={(updated) => {
+              setUser(updated);
+              setEditOpen(false);
+            }}
+          />
+        )}
 
-      {createPostOpen && (
-        <CreatePostModal
-          open={createPostOpen}
-          onClose={() => setCreatePostOpen(false)}
-          onPostCreated={(p) => setPosts((prev) => [p, ...prev])}
-        />
-      )}
+        {createPostOpen && (
+          <CreatePostModal
+            open={createPostOpen}
+            onClose={() => setCreatePostOpen(false)}
+            onPostCreated={(p) => setPosts((prev) => [p, ...prev])}
+          />
+        )}
 
-      {viewAvatar && (
-        <Lightbox
-          images={[getImageUrl(user?.avatar || loggedInUser?.avatar, "avatar")]}
-          onClose={() => setViewAvatar(false)}
-        />
-      )}
+        {viewAvatar && (
+          <Lightbox
+            images={[getImageUrl(user?.avatar || loggedInUser?.avatar, "avatar")]}
+            onClose={() => setViewAvatar(false)}
+          />
+        )}
 
-      {qrOpen && <MyQR user={user || loggedInUser} onClose={() => setQrOpen(false)} />}
-      {qrScannerOpen && <ScanQR onClose={() => setQrScannerOpen(false)} />}
+        {qrOpen && <MyQR user={user || loggedInUser} onClose={() => setQrOpen(false)} />}
+        {qrScannerOpen && <ScanQR onClose={() => setQrScannerOpen(false)} />}
+      </React.Suspense>
     </div>
   );
 }

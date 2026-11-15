@@ -212,5 +212,6 @@ PostSchema.index({ hashtags: 1 });
 PostSchema.index({ createdAt: -1 });
 PostSchema.index({ user: 1, createdAt: -1 });
 PostSchema.index({ score: -1, createdAt: -1 });
+PostSchema.index({ isArchived: 1, isDraft: 1, createdAt: -1 });
 
 module.exports = mongoose.models.Post || mongoose.model('Post', PostSchema);

@@ -9,8 +9,8 @@ import UserAvatar from '../ui/UserAvatar';
 import { generateCaption, generateSmartTags, AI_TONES } from '../../utils/aiGenerator';
 import { compressImage } from '../../utils/compressor'; 
 
-// 🔥 Import Safety Check
-import { checkImageSafety } from '../../utils/contentSafety';
+// Dynamic Content Safety Check loaded on demand only
+
 
 const FILTERS = [
   { name: 'Normal', val: '' },
@@ -115,6 +115,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
             const isUnsafe = await new Promise((resolve) => {
                 img.onload = async () => {
                     try {
+                        const { checkImageSafety } = await import('../../utils/contentSafety');
                         const result = await checkImageSafety(img);
                         resolve(result);
                     } catch (error) {

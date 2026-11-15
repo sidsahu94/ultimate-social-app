@@ -7,9 +7,55 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'pwa-192x192.png', 'pwa-512x512.png', 'socialverse-logo.jpg'],
+      includeAssets: [
+        'favicon.ico',
+        'apple-touch-icon.png',
+        'icon-192.png',
+        'icon-512.png',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+        'socialverse-logo.jpg'
+      ],
       workbox: {
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+        // Enforce strict limit on precache to prevent choking user bandwidth & memory on load
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // NEVER precache large neural network model shards or sourcemaps in service worker
+        globIgnores: [
+          '**/group1-shard*',
+          '**/model*.min.js*',
+          '**/ai-models-*.js',
+          '**/*.map'
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/images\.unsplash\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'unsplash-images',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cloudinary-media',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'SocialVerse ∞ — Beyond Social',
@@ -44,7 +90,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // 🔥 FIX: Proxy local uploads to backend
       '/uploads': {
         target: 'http://localhost:5000',
         changeOrigin: true,
@@ -59,6 +104,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            // Isolate AI/TensorFlow models into their own lazy chunk so they never bloat initial load
+            if (id.includes('@tensorflow') || id.includes('nsfwjs')) {
+              return 'ai-models';
+            }
             if (id.includes('react/') || id.includes('react-dom/') || id.includes('react-router-dom') || id.includes('react-redux') || id.includes('@reduxjs/toolkit')) {
               return 'react-core';
             }
@@ -67,6 +116,9 @@ export default defineConfig({
             }
             if (id.includes('chart.js') || id.includes('react-chartjs-2')) {
               return 'charts';
+            }
+            if (id.includes('qrcode.react') || id.includes('react-qr-code') || id.includes('react-qr-reader')) {
+              return 'qr-tools';
             }
             if (id.includes('lucide-react') || id.includes('react-icons')) {
               return 'icons';

@@ -10,15 +10,17 @@ import { useToast } from './components/ui/ToastProvider';
 
 import Navbar from './components/layouts/Navbar';
 import MainLayout from './components/layouts/MainLayout';
-import PostModal from './components/posts/PostModal';
-import CommentsModal from './components/posts/CommentsModal';
-import CreatePostModal from './components/posts/CreatePostModal';
-import IncomingCallModal from './components/common/IncomingCallModal';
-import CommandPalette from './components/common/CommandPalette';
-import InstallAppModal from './components/common/InstallAppModal';
-import AdminCyberGateway from './components/common/AdminCyberGateway';
 import UpdateNotificationBanner from './components/common/UpdateNotificationBanner';
 import CinematicEnvironmentalBackdrop from './components/common/CinematicEnvironmentalBackdrop';
+
+// Lazy-load heavyweight overlay modals to optimize initial bundle size & boot time
+const PostModal = lazy(() => import('./components/posts/PostModal'));
+const CommentsModal = lazy(() => import('./components/posts/CommentsModal'));
+const CreatePostModal = lazy(() => import('./components/posts/CreatePostModal'));
+const IncomingCallModal = lazy(() => import('./components/common/IncomingCallModal'));
+const CommandPalette = lazy(() => import('./components/common/CommandPalette'));
+const InstallAppModal = lazy(() => import('./components/common/InstallAppModal'));
+const AdminCyberGateway = lazy(() => import('./components/common/AdminCyberGateway'));
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AdminRoute from './components/common/AdminRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -302,22 +304,46 @@ function AppContent() {
           </ErrorBoundary>
         </Suspense>
 
-        <CreatePostModal
-          isOpen={openCreate}
-          onClose={() => setOpenCreate(false)}
-          initialData={createContent}
-          onPosted={() => {
-            setOpenCreate(false);
-            setCreateContent(null);
-          }}
-        />
-        <CommentsModal postId={commentPostId} isOpen={!!commentPostId} onClose={() => setCommentPostId(null)} />
-        <PostModal postId={viewPostId} isOpen={!!viewPostId} onClose={() => setViewPostId(null)} />
-        <IncomingCallModal />
+        {openCreate && (
+          <Suspense fallback={null}>
+            <CreatePostModal
+              isOpen={openCreate}
+              onClose={() => setOpenCreate(false)}
+              initialData={createContent}
+              onPosted={() => {
+                setOpenCreate(false);
+                setCreateContent(null);
+              }}
+            />
+          </Suspense>
+        )}
+        {commentPostId && (
+          <Suspense fallback={null}>
+            <CommentsModal postId={commentPostId} isOpen={!!commentPostId} onClose={() => setCommentPostId(null)} />
+          </Suspense>
+        )}
+        {viewPostId && (
+          <Suspense fallback={null}>
+            <PostModal postId={viewPostId} isOpen={!!viewPostId} onClose={() => setViewPostId(null)} />
+          </Suspense>
+        )}
+        <Suspense fallback={null}>
+          <IncomingCallModal />
+        </Suspense>
         <UpdateNotificationBanner />
-        <CommandPalette onOpenAdminPortal={() => setShowAdminPortal(true)} />
-        <AdminCyberGateway isOpen={showAdminPortal} onClose={() => setShowAdminPortal(false)} />
-        <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
+        <Suspense fallback={null}>
+          <CommandPalette onOpenAdminPortal={() => setShowAdminPortal(true)} />
+        </Suspense>
+        {showAdminPortal && (
+          <Suspense fallback={null}>
+            <AdminCyberGateway isOpen={showAdminPortal} onClose={() => setShowAdminPortal(false)} />
+          </Suspense>
+        )}
+        {showInstallModal && (
+          <Suspense fallback={null}>
+            <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
+          </Suspense>
+        )}
       </main>
     </div>
   );

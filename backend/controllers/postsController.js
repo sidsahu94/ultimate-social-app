@@ -186,7 +186,7 @@ exports.getFeed = async (req, res) => {
         const posts = await Post.find(match)
             .sort({ createdAt: -1, _id: -1 })
             .select(
-                'content images videos user createdAt likesCount commentsCount likes hashtags mentions group views metadata'
+                'content images videos mediaUrl poll isPaywalled unlockedBy user createdAt likesCount commentsCount likes hashtags mentions group views metadata'
             )
             .limit(limit)
             .populate(
@@ -279,7 +279,7 @@ exports.getPostsByUser = async (req, res) => {
             const totalPosts = await Post.countDocuments(query); 
             const posts = await Post.find(query)
                 .sort({ createdAt: -1, _id: -1 })
-                .select('content images videos user createdAt likesCount commentsCount likes hashtags mentions views metadata')
+                .select('content images videos mediaUrl poll isPaywalled unlockedBy user createdAt likesCount commentsCount likes hashtags mentions views metadata')
                 .skip(page * limit)
                 .limit(limit)
                 .populate('user', 'name username avatar isVerified');
@@ -297,7 +297,7 @@ exports.getPostsByUser = async (req, res) => {
 
         const posts = await Post.find(query)
             .sort({ createdAt: -1, _id: -1 })
-            .select('content images videos user createdAt likesCount commentsCount likes hashtags mentions views metadata')
+            .select('content images videos mediaUrl poll isPaywalled unlockedBy user createdAt likesCount commentsCount likes hashtags mentions views metadata')
             .limit(limit)
             .populate('user', 'name username avatar isVerified');
 
@@ -350,7 +350,7 @@ exports.searchPosts = async (req, res) => {
 
         const results = await Post.find(query)
             .sort({ createdAt: -1, _id: -1 })
-            .select('content images videos user createdAt likesCount commentsCount likes hashtags mentions views metadata')
+            .select('content images videos mediaUrl poll isPaywalled unlockedBy user createdAt likesCount commentsCount likes hashtags mentions views metadata')
             .limit(limit)
             .populate('user', 'name username avatar');
 

@@ -31,6 +31,9 @@ import PostActionSheet from "./PostActionSheet";
 import { getImageUrl } from "../../utils/imageUtils";
 import { playCyberClick, playHeartPop, playSuccessChord } from "../../utils/soundEffects";
 
+// Global session registry to prevent redundant network view calls on scrolls & re-renders
+const viewedPostsSession = new Set();
+
 const PostCard = forwardRef(({ post }, ref) => {
   const { user } = useSelector((s) => s.auth);
   const { add: toast } = useToast();
@@ -52,6 +55,7 @@ const PostCard = forwardRef(({ post }, ref) => {
 
   // Video State
   const videoRef = useRef(null);
+  const internalCardRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [showTipModal, setShowTipModal] = useState(false);
@@ -96,10 +100,36 @@ const PostCard = forwardRef(({ post }, ref) => {
     setIsSaved(Boolean(post.isSaved || post.saved));
   }, [post, user?._id]);
 
-  // View Counter Effect
+  // View Counter Effect (Deduplicated per session & throttled to viewport visibility)
   useEffect(() => {
-    API.post(`/posts/${post._id}/view`).catch(() => {});
-  }, [post._id]);
+    if (!post?._id || viewedPostsSession.has(post._id)) return;
+    const el = internalCardRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+
+    let timer = null;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !viewedPostsSession.has(post._id)) {
+          timer = setTimeout(() => {
+            if (!viewedPostsSession.has(post._id)) {
+              viewedPostsSession.add(post._id);
+              API.post(`/posts/${post._id}/view`).catch(() => {});
+            }
+          }, 800);
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [post?._id]);
 
 
 
@@ -256,7 +286,11 @@ const PostCard = forwardRef(({ post }, ref) => {
   return (
     <>
       <motion.div 
-        ref={ref}
+        ref={(node) => {
+          internalCardRef.current = node;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
+        }}
         initial={{ opacity: 0, y: 16 }} 
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -16 }}
@@ -686,4 +720,4 @@ const PostCard = forwardRef(({ post }, ref) => {
 });
 
 PostCard.displayName = 'PostCard';
-export default PostCard;
+export default React.memo(PostCard);

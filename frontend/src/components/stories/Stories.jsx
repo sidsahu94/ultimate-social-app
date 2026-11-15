@@ -4,10 +4,11 @@ import { useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IoAdd, IoEllipsisHorizontal } from 'react-icons/io5';
 import API from '../../services/api';
-import StoryEditor from './StoryEditor';
-import StoryViewer from './StoryViewer';
 import { getImageUrl } from '../../utils/imageUtils';
 import { useTheme } from '../../contexts/ThemeProvider';
+
+const StoryEditor = React.lazy(() => import('./StoryEditor'));
+const StoryViewer = React.lazy(() => import('./StoryViewer'));
 
 const DEMO_STORIES = [
   {
@@ -232,27 +233,29 @@ export default function Stories() {
       </div>
 
       {/* Story Editor Modal */}
-      {editorFile && (
-        <StoryEditor
-          file={editorFile}
-          onClose={() => setEditorFile(null)}
-          onPosted={() => {
-            setEditorFile(null);
-            load();
-          }}
-        />
-      )}
-
-      {/* Fullscreen Story Viewer */}
-      <AnimatePresence>
-        {viewIndex !== null && (
-          <StoryViewer
-            stories={stories}
-            initialIndex={viewIndex}
-            onClose={() => setViewIndex(null)}
+      <React.Suspense fallback={null}>
+        {editorFile && (
+          <StoryEditor
+            file={editorFile}
+            onClose={() => setEditorFile(null)}
+            onPosted={() => {
+              setEditorFile(null);
+              load();
+            }}
           />
         )}
-      </AnimatePresence>
+
+        {/* Fullscreen Story Viewer */}
+        <AnimatePresence>
+          {viewIndex !== null && (
+            <StoryViewer
+              stories={stories}
+              initialIndex={viewIndex}
+              onClose={() => setViewIndex(null)}
+            />
+          )}
+        </AnimatePresence>
+      </React.Suspense>
     </>
   );
 }

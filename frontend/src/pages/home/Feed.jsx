@@ -192,7 +192,7 @@ export default function Feed() {
   
   const [showTopBtn, setShowTopBtn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [startY, setStartY] = useState(0);
+  const startYRef = useRef(0);
 
   const { add: addToast } = useToast();
   const isLoadingRef = useRef(false);
@@ -283,10 +283,22 @@ export default function Feed() {
     return () => socket.off('post:created', handleNewPost);
   }, []);
 
-  // --- SCROLL TO TOP LISTENER ---
+  // --- SCROLL TO TOP LISTENER (Throttled via requestAnimationFrame) ---
   useEffect(() => {
     const container = getScrollContainer();
-    const checkScroll = () => setShowTopBtn(getScrollPosition() > 400);
+    let ticking = false;
+
+    const checkScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          const isScrolled = getScrollPosition() > 400;
+          setShowTopBtn((prev) => (prev !== isScrolled ? isScrolled : prev));
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
     container.addEventListener('scroll', checkScroll, { passive: true });
     window.addEventListener('scroll', checkScroll, { passive: true });
     return () => {
@@ -297,30 +309,39 @@ export default function Feed() {
 
   const handleScrollToTop = () => smoothScrollToTop(true);
 
-  // --- PULL TO REFRESH ---
-  const handleTouchStart = (e) => {
-    if (getScrollPosition() <= 0) setStartY(e.touches[0].clientY);
-  };
-
-  const handleTouchMove = (e) => {
-    const y = e.touches[0].clientY;
-    if (getScrollPosition() <= 0 && y - startY > 70 && !refreshing) {
-      setRefreshing(true);
-      if (navigator.vibrate) navigator.vibrate(50);
-      load(true).then(() => {
-        setTimeout(() => setRefreshing(false), 800);
-      });
-    }
-  };
+  // --- PULL TO REFRESH (Hardware Accelerated & Zero Redundant Re-renders) ---
+  const loadRef = useRef(load);
+  const refreshingRef = useRef(refreshing);
+  useEffect(() => {
+    loadRef.current = load;
+    refreshingRef.current = refreshing;
+  }, [load, refreshing]);
 
   useEffect(() => {
-    document.body.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.body.addEventListener('touchmove', handleTouchMove, { passive: true });
-    return () => {
-      document.body.removeEventListener('touchstart', handleTouchStart);
-      document.body.removeEventListener('touchmove', handleTouchMove);
+    const onTouchStart = (e) => {
+      if (getScrollPosition() <= 0) startYRef.current = e.touches[0].clientY;
     };
-  }, [startY, refreshing, load]);
+
+    const onTouchMove = (e) => {
+      const y = e.touches[0].clientY;
+      if (getScrollPosition() <= 0 && y - startYRef.current > 70 && !refreshingRef.current) {
+        setRefreshing(true);
+        if (navigator.vibrate) navigator.vibrate(50);
+        if (loadRef.current) {
+          loadRef.current(true).finally(() => {
+            setTimeout(() => setRefreshing(false), 600);
+          });
+        }
+      }
+    };
+
+    document.body.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.body.addEventListener('touchmove', onTouchMove, { passive: true });
+    return () => {
+      document.body.removeEventListener('touchstart', onTouchStart);
+      document.body.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
 
   const loaderRef = useInfiniteScroll(() => {
     if (hasMore && !isLoadingRef.current) load(false);
