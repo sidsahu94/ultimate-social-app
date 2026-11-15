@@ -34,7 +34,7 @@ exports.createRoom = async (req, res) => {
 exports.getIceServers = async (req, res) => {
   try {
     const domain = process.env.METERED_DOMAIN || 'ultimatesocialapp.metered.live';
-    const apiKey = process.env.METERED_API_KEY || '0ec94b4ba5088a157a189ce2005843619ed8';
+    const apiKey = process.env.METERED_API_KEY;
 
     if (domain && apiKey) {
       const response = await fetch(`https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`);

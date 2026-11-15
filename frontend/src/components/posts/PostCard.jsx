@@ -521,13 +521,13 @@ const PostCard = forwardRef(({ post }, ref) => {
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B] text-[11px] text-white shadow ring-2 ring-[#070B14]">😮</span>
             </div>
             <span className="font-bold text-white/90 font-display">
-              {likeCount > 0 ? (likeCount >= 1000 ? (likeCount / 1000).toFixed(1) + 'K' : likeCount) : "2.4K"}
+              {likeCount > 0 ? (likeCount >= 1000 ? (likeCount / 1000).toFixed(1) + 'K' : likeCount) : 0}
             </span>
           </div>
           <div className="flex items-center gap-2 text-[#CBD5E1]/70 text-[11px] font-medium">
-            <span>{post.comments?.length || 198} Comments</span>
+            <span>{post.commentsCount ?? (post.comments?.length || 0)} Comments</span>
             <span>•</span>
-            <span>{post.sharesCount || 76} Shares</span>
+            <span>{post.sharesCount || 0} Shares</span>
           </div>
         </div>
 

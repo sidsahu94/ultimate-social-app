@@ -53,27 +53,30 @@ export const fetchMe = createAsyncThunk("auth/fetchMe", async (_, thunkAPI) => {
 // Used for optimistic UI updates (e.g. Profile Edit, Wallet Balance update)
 export const updateAuthUser = createAsyncThunk(
     "auth/updateUser", 
-    async (userData, thunkAPI) => {
+    async (userData) => {
         return userData; // Passes data directly to the reducer
     }
 );
 
 // --- SLICE ---
 
+const hasToken = typeof window !== 'undefined' && !!localStorage.getItem("token");
+
 const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: null,
-    loading: false, 
+    loading: false,
+    isLoading: hasToken,
     error: null,
-    // Start checking auth only if a token exists in storage
-    checkingAuth: !!localStorage.getItem("token"), 
+    checkingAuth: hasToken, 
   },
   reducers: {
     logout: (state) => {
       state.user = null;
       state.error = null;
       state.loading = false;
+      state.isLoading = false;
       state.checkingAuth = false;
       
       // Full Cleanup: Clear all local and session cache scopes
@@ -81,61 +84,70 @@ const authSlice = createSlice({
       sessionStorage.clear();
     },
     clearError: (state) => { 
-        state.error = null; 
+      state.error = null; 
     },
     setUser: (state, action) => { 
-        state.user = action.payload; 
-        state.checkingAuth = false;
-        if (action.payload?._id) {
-          localStorage.setItem("meId", action.payload._id);
-        }
+      state.user = action.payload; 
+      state.checkingAuth = false;
+      state.isLoading = false;
+      state.loading = false;
+      if (action.payload?._id) {
+        localStorage.setItem("meId", action.payload._id);
+      }
     },
   },
   extraReducers: (builder) => {
     builder
       // --- Login User ---
       .addCase(loginUser.pending, (state) => { 
-          state.loading = true; 
-          state.error = null; 
+        state.loading = true; 
+        state.isLoading = true;
+        state.error = null; 
       })
       .addCase(loginUser.fulfilled, (state, action) => { 
-          state.loading = false; 
-          state.user = action.payload; 
-          state.checkingAuth = false; 
-          state.error = null; 
+        state.loading = false; 
+        state.isLoading = false;
+        state.user = action.payload; 
+        state.checkingAuth = false; 
+        state.error = null; 
       })
       .addCase(loginUser.rejected, (state, action) => { 
-          state.loading = false; 
-          state.user = null;
-          state.error = action.payload; 
-          state.checkingAuth = false; 
+        state.loading = false; 
+        state.isLoading = false;
+        state.user = null;
+        state.error = action.payload; 
+        state.checkingAuth = false; 
       })
       
       // --- Fetch Me (Session Check) ---
       .addCase(fetchMe.pending, (state) => { 
-          state.checkingAuth = true; 
+        state.checkingAuth = true; 
+        state.isLoading = true;
       })
       .addCase(fetchMe.fulfilled, (state, action) => { 
-          state.user = action.payload || null; 
-          state.checkingAuth = false; 
-          state.error = null;
+        state.user = action.payload || null; 
+        state.checkingAuth = false; 
+        state.isLoading = false;
+        state.loading = false;
+        state.error = null;
       })
       .addCase(fetchMe.rejected, (state, action) => { 
-          state.user = null; 
-          state.checkingAuth = false; 
-          
-          if (action.payload === 401) {
-              localStorage.clear();
-              sessionStorage.clear();
-          }
+        state.user = null; 
+        state.checkingAuth = false; 
+        state.isLoading = false;
+        state.loading = false;
+        
+        if (action.payload === 401) {
+          localStorage.clear();
+          sessionStorage.clear();
+        }
       })
 
       // --- Manual Update ---
       .addCase(updateAuthUser.fulfilled, (state, action) => {
-          if (state.user) {
-              // Merge new data into existing user object
-              state.user = { ...state.user, ...action.payload };
-          }
+        if (state.user) {
+          state.user = { ...state.user, ...action.payload };
+        }
       });
   }
 });

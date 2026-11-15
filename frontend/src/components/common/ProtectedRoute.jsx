@@ -4,15 +4,13 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const ProtectedRoute = ({ children }) => {
-  // Grab both 'user' and 'isLoading' from your Redux auth slice
-  // (Make sure your auth slice sets isLoading to true on initial app load)
-  const { user, isLoading } = useSelector(s => s.auth);
+  const { user, loading, checkingAuth, isLoading } = useSelector(s => s.auth);
   const location = useLocation();
 
   // 1. The Hydration Barrier:
-  // Show the premium OLED loader while Redux is checking local storage / validating the token.
-  // This absolutely prevents the infinite redirect loop.
-  if (isLoading) {
+  // Show the premium OLED loader while Redux is checking local storage / validating token.
+  const isHydrating = Boolean(loading || checkingAuth || isLoading);
+  if (isHydrating) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <motion.div 
@@ -26,8 +24,6 @@ const ProtectedRoute = ({ children }) => {
 
   // 2. The Auth Check & Deep Link redirect
   if (!user) {
-    // 🔥 FIX: Pass 'state' with where they came from (deep linking support)
-    // When Login succeeds, it will read location.state.from and redirect there.
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   

@@ -1,8 +1,8 @@
 // frontend/src/components/common/AdminCyberGateway.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { setUser } from '../../redux/slices/authSlice';
 import API from '../../services/api';
 import { useToast } from '../ui/ToastProvider';
@@ -12,7 +12,6 @@ import {
   FaFingerprint,
   FaTimes,
   FaKey,
-  FaCheckCircle,
   FaLock,
   FaMicrochip
 } from 'react-icons/fa';
@@ -33,6 +32,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { add: addToast } = useToast();
+  const currentUser = useSelector((s) => s.auth?.user);
 
   useEffect(() => {
     if (!isOpen) {
@@ -47,58 +47,58 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
     setLogs((prev) => [...prev.slice(-4), text]);
   };
 
-  const handleTerminalAuth = async (isBiometric = false) => {
+  const handleTerminalAuth = async (enteredKey = null) => {
     setIsAuthenticating(true);
     playQuantumScan();
-    addLog('> SCANNING THUMB IMPRESSION HARDWARE SENSOR...');
-
-    // Try native WebAuthn biometric prompt if supported
-    if (isBiometric && window.PublicKeyCredential && navigator.credentials) {
-      try {
-        addLog('> INVOKING NATIVE WEBAUTHN BIOMETRIC SENSOR...');
-        // Non-blocking credential check or simulated enclave handshake
-      } catch (_) {}
-    }
+    addLog('> SCANNING HARDWARE ENCLAVE & VERIFYING FOUNDER CREDENTIALS...');
 
     try {
-      // Authenticate founder & admin securely
-      let res;
-      try {
-        res = await API.post('/auth/login', {
-          email: 'sidhantas786@gmail.com',
-          password: 'password123'
+      let authUser = null;
+
+      if (enteredKey) {
+        // Authenticate with user-provided credentials against the backend API
+        addLog('> VERIFYING CREDENTIALS WITH CENTRAL IDENTITY MATRIX...');
+        const emailToTry = currentUser?.email || 'sidhantas786@gmail.com';
+        const res = await API.post('/auth/login', {
+          email: emailToTry,
+          password: enteredKey
         });
-      } catch (_) {
-        // Fallback to legacy seed email if not yet updated in remote mongo
-        res = await API.post('/auth/login', {
-          email: 'admin@socialapp.com',
-          password: 'password123'
-        });
+
+        const payload = res.data?.data || res.data;
+        const { token, refreshToken, user: rawUser } = payload || {};
+
+        if (token) localStorage.setItem('token', token);
+        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+        if (rawUser?._id) localStorage.setItem('meId', rawUser._id);
+
+        authUser = rawUser;
+      } else {
+        // Biometric Enclave Verification: Check active token with founder protected route
+        addLog('> VALIDATING CRYPTOGRAPHIC FOUNDER HARDWARE CERTIFICATE...');
+        const res = await API.get('/admin/stats');
+        if (!res.data) throw new Error('Enclave clearance failed');
+        authUser = currentUser;
       }
 
-      const payload = res.data?.data || res.data;
-      const { token, refreshToken, user: rawUser } = payload || {};
+      // Verify that the authenticated account is indeed Founder Sidhanta Sahu
+      const isFounder = (
+        authUser?.role === 'admin' &&
+        (authUser?.email === 'sidhantas786@gmail.com' ||
+         authUser?.email === 'admin@socialapp.com' ||
+         authUser?.username === 'sidsahu' ||
+         authUser?.name?.toLowerCase().includes('sidhanta'))
+      );
 
-      // Ensure user profile reflects real Founder identity
-      const authUser = {
-        ...rawUser,
-        name: 'Sidhanta Sahu',
-        username: 'sidsahu',
-        role: 'admin',
-        bio: 'Founder & Chief Architect of SocialVerse ∞. Designing the future of luxury digital human connection.',
-        location: 'Odisha, India',
-        isVerified: true,
-        badges: ['founder', 'architect', 'vip', 'verified'],
-      };
+      if (!isFounder) {
+        throw new Error('Access Denied: Only Founder Sidhanta Sahu is authorized.');
+      }
 
-      if (token) localStorage.setItem('token', token);
-      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-      if (authUser?._id) localStorage.setItem('meId', authUser._id);
-
-      if (authUser) dispatch(setUser(authUser));
+      if (authUser) {
+        dispatch(setUser(authUser));
+      }
 
       playSuccessChord();
-      addLog('> [SUCCESS] THUMBPRINT MATCH: WELCOME FOUNDER SIDHANTA SAHU');
+      addLog('> [SUCCESS] FOUNDER CLEARANCE VERIFIED: WELCOME SIDHANTA SAHU');
       addToast('🛡️ Biometric Verified: Welcome Founder Sidhanta Sahu', {
         type: 'success'
       });
@@ -108,9 +108,11 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
         navigate('/admin/dashboard', { replace: true });
       }, 700);
     } catch (err) {
-      addLog('> [ERROR] BIOMETRIC REJECTED: UNAUTHORIZED USER');
-      addToast('Access Denied: Only Founder Sidhanta Sahu is authorized.', { type: 'error' });
+      const errMsg = err?.response?.data?.message || err.message || 'Access Denied: Unauthorized Key';
+      addLog(`> [ERROR] CLEARANCE REJECTED: ${errMsg.toUpperCase()}`);
+      addToast(errMsg, { type: 'error' });
       setIsAuthenticating(false);
+      setPasskey('');
     }
   };
 
@@ -123,14 +125,14 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
 
     let p = 0;
     scanTimerRef.current = setInterval(() => {
-      p += 12;
+      p += 14;
       setScanProgress(p);
       if (p >= 100) {
         clearInterval(scanTimerRef.current);
         setIsScanning(false);
-        handleTerminalAuth(true);
+        handleTerminalAuth(null);
       }
-    }, 90);
+    }, 80);
   };
 
   const stopBiometricHold = () => {
@@ -145,20 +147,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
   const submitPasskey = (e) => {
     e.preventDefault();
     if (!passkey.trim()) return;
-    const cleanKey = passkey.trim();
-    if (
-      cleanKey === 'SOCIALVERSE-FOUNDER-2026' || 
-      cleanKey === 'SIDHANTA-SAHU-2026' || 
-      cleanKey === 'sidhantas786@gmail.com' ||
-      cleanKey === 'password123' ||
-      cleanKey === 'admin@socialapp.com'
-    ) {
-      handleTerminalAuth(false);
-    } else {
-      addLog(`> ACCESS DENIED: UNAUTHORIZED ATTEMPT LOGGED`);
-      addToast('Access Denied: Unauthorized Key', { type: 'error' });
-      setPasskey('');
-    }
+    handleTerminalAuth(passkey.trim());
   };
 
   if (!isOpen) return null;
@@ -207,7 +196,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
               playCyberClick();
               onClose();
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-[#CBD5E1]/60 hover:bg-white/10 hover:text-white transition"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-[#CBD5E1]/60 hover:bg-white/10 hover:text-white transition cursor-pointer"
           >
             <FaTimes />
           </button>
@@ -275,7 +264,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
             </div>
 
             <p className="mt-3 text-[11px] font-semibold text-[#CBD5E1]">
-              {isScanning ? `Verifying Hardware: ${scanProgress}%` : 'Press & Hold Thumb to Login'}
+              {isScanning ? `Verifying Hardware: ${scanProgress}%` : 'Press & Hold Thumb to Verify'}
             </p>
           </div>
 
@@ -286,7 +275,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
           >
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-widest text-[#CBD5E1]/60 mb-2">
-                Founder Master Key
+                Founder Master Key / Password
               </span>
               <div className="relative mt-1">
                 <input
@@ -299,7 +288,7 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
                 <FaKey className="absolute right-3.5 top-3 text-[#CBD5E1]/40 text-xs" />
               </div>
               <p className="mt-2 text-[10px] text-[#CBD5E1]/50">
-                Encrypted hardware lock. Only Founder Sidhanta Sahu has administrative authorization.
+                Cryptographic authentication against secure founder records.
               </p>
             </div>
 

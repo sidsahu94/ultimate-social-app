@@ -51,6 +51,7 @@ import usePWAInstall from '../../hooks/usePWAInstall';
 import { scrollToTop } from '../../utils/scrollUtils';
 import { useTheme } from '../../contexts/ThemeProvider';
 import Logo from '../ui/Logo';
+import API from '../../services/api';
 import { playSound } from '../../utils/soundEffects';
 
 const NavItem = ({ to, iconActive, iconInactive, label, active, badge = 0, currentTheme, onClick }) => (
@@ -117,8 +118,8 @@ export default function Navbar() {
   const { isReady, installApp } = usePWAInstall();
   const { currentTheme } = useTheme();
 
-  const [msgCount, setMsgCount] = useState(5);
-  const [activityCount, setActivityCount] = useState(7);
+  const [msgCount, setMsgCount] = useState(0);
+  const [activityCount, setActivityCount] = useState(0);
   const [showMoreFeatures, setShowMoreFeatures] = useState(false);
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
 
@@ -130,6 +131,16 @@ export default function Navbar() {
       setActivityCount(0);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    API.get('/notifications/unread-count')
+      .then((res) => {
+        const count = res.data?.unreadCount || res.data?.data?.unreadCount || 0;
+        setActivityCount(Number(count) || 0);
+      })
+      .catch(() => {});
+  }, [user?._id]);
 
   useEffect(() => {
     if (!socket) return;

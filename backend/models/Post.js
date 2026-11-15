@@ -161,6 +161,35 @@ const PostSchema = new Schema(
       default: '',
     },
 
+    poll: {
+      question: {
+        type: String,
+        trim: true,
+      },
+      options: [
+        {
+          text: {
+            type: String,
+            trim: true,
+          },
+          count: {
+            type: Number,
+            default: 0,
+          },
+          votes: [
+            {
+              type: Schema.Types.ObjectId,
+              ref: 'User',
+            },
+          ],
+        },
+      ],
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
     metadata: {
       type: Schema.Types.Mixed,
       default: {},

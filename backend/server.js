@@ -84,15 +84,31 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com"],
-      mediaSrc: ["'self'", "https://res.cloudinary.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://res.cloudinary.com",
+        "https://images.unsplash.com",
+        "https://plus.unsplash.com",
+        "https://lh3.googleusercontent.com",
+        "https://avatars.githubusercontent.com",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com"
+      ],
+      mediaSrc: ["'self'", "https://res.cloudinary.com", "blob:", "data:"],
       connectSrc: [
-        "'self'", "ws:", "wss:", 
-        "https://ultimate-social-app.onrender.com", 
-        "wss://ultimate-social-app.onrender.com", 
-        "https://newsdata.io", "https://www.googleapis.com"
+        "'self'",
+        "ws:",
+        "wss:",
+        "https://ultimate-social-app.onrender.com",
+        "wss://ultimate-social-app.onrender.com",
+        "https://ultimate-social-app.vercel.app",
+        "https://newsdata.io",
+        "https://www.googleapis.com"
       ],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
@@ -260,11 +276,13 @@ const walletRoutes = require('./routes/wallet');
 const spacesRoutes = require('./routes/spaces');
 const eventsRoutes = require('./routes/events');
 const gamesRoutes = require('./routes/games');
+const groupsRoutes = require('./routes/groups');
 
 // Mount Sub-routers on top of the API root router topology
 apiRouter.use('/spaces', spacesRoutes);
 apiRouter.use('/events', eventsRoutes);
 apiRouter.use('/games', gamesRoutes);
+apiRouter.use('/groups', groupsRoutes);
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/apps', appsRoutes);

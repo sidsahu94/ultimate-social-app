@@ -16,7 +16,7 @@ const MessageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'poll', 'system'],
+      enum: ['text', 'poll', 'system', 'voice', 'media', 'audio', 'video', 'image'],
       default: 'text',
     },
     pollOptions: [

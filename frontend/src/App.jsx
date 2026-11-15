@@ -72,6 +72,7 @@ const CreatorPayouts = lazy(() => import('./pages/admin/CreatorPayouts'));
 const ModerationDashboard = lazy(() => import('./pages/admin/ModerationDashboard'));
 
 const NewsPage = lazy(() => import('./pages/apps/NewsPage'));
+const GroupsPage = lazy(() => import('./pages/groups/GroupsPage'));
 const MarketPage = lazy(() => import('./pages/apps/MarketPage'));
 const Onboarding = lazy(() => import('./pages/intro/Onboarding'));
 
@@ -100,11 +101,12 @@ function LoadingShell() {
 }
 
 const RootRoute = () => {
-  const { user, isLoading } = useSelector((s) => s.auth);
+  const { user, loading, checkingAuth, isLoading } = useSelector((s) => s.auth);
   const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
 
+  const isHydrating = Boolean(loading || checkingAuth || isLoading);
+  if (isHydrating) return <LoadingShell />;
   if (!hasSeenOnboarding) return <Navigate to="/welcome" replace />;
-  if (isLoading) return <LoadingShell />;
   if (!user) return <Navigate to="/login" replace />;
   return <Feed />;
 };
@@ -239,7 +241,7 @@ function AppContent() {
                   <Route path="/notifications" element={<ProtectedRoute><PageTransition><NotificationsPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/saved" element={<ProtectedRoute><PageTransition><SavedPage /></PageTransition></ProtectedRoute>} />
                   <Route path="/memories" element={<ProtectedRoute><PageTransition><MemoriesPage /></PageTransition></ProtectedRoute>} />
-                  <Route path="/groups" element={<PageTransition><FollowSuggestions /></PageTransition>} />
+                  <Route path="/groups" element={<PageTransition><GroupsPage /></PageTransition>} />
                   <Route path="/drafts" element={<ProtectedRoute><PageTransition><DraftsPage /></PageTransition></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProtectedRoute><PageTransition><ProfilePage /></PageTransition></ProtectedRoute>} />

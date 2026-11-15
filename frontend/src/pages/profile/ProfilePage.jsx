@@ -407,7 +407,7 @@ export default function ProfilePage() {
 
           {/* STORY HIGHLIGHTS (Screen 4: Travel, Coding, Trading, Life, More) */}
           <div className="mt-6 pt-4 border-t border-white/10">
-            <ProfileHighlights isMe={isMe} onAddHighlight={() => setCreatePostOpen(true)} />
+            <ProfileHighlights isMe={isMe} user={userProfile} />
           </div>
         </div>
 

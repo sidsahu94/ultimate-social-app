@@ -141,8 +141,8 @@ async function buildIndexes() {
     safeCreateIndex(LiveStream.collection, { host: 1, isLive: 1 }, { name: 'host_isLive' }),
 
     // Follow requests
-    safeCreateIndex(FollowRequest.collection, { receiver: 1, status: 1, createdAt: -1 }, { name: 'receiver_status_createdAt_desc' }),
-    safeCreateIndex(FollowRequest.collection, { sender: 1, receiver: 1 }, { unique: true, name: 'sender_receiver_unique' }),
+    safeCreateIndex(FollowRequest.collection, { to: 1, status: 1, createdAt: -1 }, { name: 'to_status_createdAt_desc' }),
+    safeCreateIndex(FollowRequest.collection, { from: 1, to: 1 }, { unique: true, name: 'from_to_unique' }),
   ];
 
   await Promise.all(tasks);

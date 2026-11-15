@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 // Ensure both protect and optionalAuth are imported from your auth middleware
-const { protect, optionalAuth } = require('../middleware/authMiddleware');
+const { protect, optionalAuth, restrictTo } = require('../middleware/authMiddleware');
 const upload = require('../utils/multer');
 
 const extraController = require('../controllers/extraController');
@@ -37,7 +37,7 @@ router.get('/reels', extraController.getReels);
 router.get('/shop/items', extraController.getShopItems);
 
 // Incident Reports (Admin / Moderation)
-router.get('/reports', optionalAuth, async (req, res) => {
+router.get('/reports', protect, restrictTo('admin'), async (req, res) => {
   try {
     const Report = require('../models/Report');
     let reports = await Report.find()
@@ -66,7 +66,7 @@ router.get('/reports', optionalAuth, async (req, res) => {
   }
 });
 
-router.post('/reports/:id/handle', protect, async (req, res) => {
+router.post('/reports/:id/handle', protect, restrictTo('admin'), async (req, res) => {
   try {
     const Report = require('../models/Report');
     const { action } = req.body;

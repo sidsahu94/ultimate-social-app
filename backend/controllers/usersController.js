@@ -297,7 +297,7 @@ exports.followToggle = async (req, res) => {
       return res.json({ message: "Unfollowed successfully", isFollowing: false });
     } else {
       if (targetUser.privateProfile) {
-        const existingReq = await FollowRequest.findOne({ sender: myId, receiver: targetId, status: 'pending' });
+        const existingReq = await FollowRequest.findOne({ from: myId, to: targetId, status: 'pending' });
         if (existingReq) {
           return res.status(400).json({ message: "Follow request already sent" });
         }

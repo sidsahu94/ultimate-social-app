@@ -71,7 +71,7 @@ const ensureProductionIndexes = async (dbConnection) => {
     await dbConnection.collection('posts').createIndex({ hashtags: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('transactions').createIndex({ user: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('transactions').createIndex({ idempotencyKey: 1 }, { unique: true, background: true });
-    await dbConnection.collection('messages').createIndex({ chatRoom: 1, createdAt: -1 }, { background: true });
+    await dbConnection.collection('messages').createIndex({ chat: 1, createdAt: -1 }, { background: true });
     logger.info(' ==> Performance Optimization Matrix Indexes established successfully across target entities.');
   } catch (err) {
     logger.error(`Failed to assert required index arrays across collection objects: ${err.message}`);

@@ -46,7 +46,8 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
   // AI Creator Studio State
   const [selectedTone, setSelectedTone] = useState('obsidian');
   const [showAiStudio, setShowAiStudio] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState('1:1'); // '1:1' | '4:5' | '16:9'
+  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // '1:1' | '4:5' | '16:9'
 
   const { add } = useToast();
   const currentUser = useSelector((s) => s.auth?.user);
@@ -500,8 +501,38 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
                       />
                     )}
                   </div>
-                  <button className="text-[#D4AF37] hover:bg-white/[0.06] p-2 rounded-full transition"><FaPoll /></button>
-                  <button className="text-[#CBD5E1] hover:bg-white/[0.06] p-2 rounded-full transition"><FaSmile /></button>
+                  <div className="relative">
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-10 right-0 z-30 flex flex-wrap gap-1.5 p-2 bg-[#04070D] border border-white/10 rounded-xl shadow-2xl max-w-xs">
+                        {['🔥', '✨', '💎', '🚀', '👑', '💯', '❤️', '🙌', '💡', '⚡', '😍', '👏'].map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setText((prev) => (prev ? prev + ' ' + emoji : emoji))}
+                            className="text-lg hover:scale-125 transition-transform p-1 cursor-pointer"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button 
+                      type="button"
+                      onClick={() => setActiveTab('poll')}
+                      title="Create Poll"
+                      className="text-[#D4AF37] hover:bg-white/[0.06] p-2 rounded-full transition cursor-pointer"
+                    >
+                      <FaPoll />
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setShowEmojiPicker((prev) => !prev)}
+                      title="Insert Emoji"
+                      className="text-[#CBD5E1] hover:bg-white/[0.06] p-2 rounded-full transition cursor-pointer"
+                    >
+                      <FaSmile />
+                    </button>
+                  </div>
                 </div>
               </div>
             </>

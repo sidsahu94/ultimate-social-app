@@ -385,7 +385,7 @@ exports.googleLogin = asyncHandler(async (req, res) => {
 
 // 5) REFRESH TOKEN
 exports.refresh = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies?.jwt || req.body?.refreshToken || req.headers['x-refresh-token'];
+  const refreshToken = req.cookies?.refreshToken || req.cookies?.jwt || req.body?.refreshToken || req.headers['x-refresh-token'];
 
   if (!refreshToken) {
     return res.status(401).json({ success: false, message: 'No token provided' });

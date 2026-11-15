@@ -1,6 +1,7 @@
 // frontend/src/components/posts/CreatePostInline.jsx
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { 
   IoImageOutline, 
   IoVideocamOutline, 
@@ -16,8 +17,13 @@ import { useTheme } from '../../contexts/ThemeProvider';
 export default function CreatePostInline({ onOpenModal, onSelectTab }) {
   const { user } = useSelector((s) => s.auth);
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
 
   const handleAction = (tabName) => {
+    if (tabName === 'live') {
+      navigate('/live/studio');
+      return;
+    }
     if (onSelectTab) onSelectTab(tabName);
     if (onOpenModal) onOpenModal();
   };
@@ -83,7 +89,7 @@ export default function CreatePostInline({ onOpenModal, onSelectTab }) {
             <span>Reel</span>
           </button>
 
-          {/* Live */}
+          {/* Live (Navigates to Live Studio) */}
           <button
             type="button"
             onClick={() => handleAction('live')}
@@ -110,7 +116,7 @@ export default function CreatePostInline({ onOpenModal, onSelectTab }) {
           {/* Feeling */}
           <button
             type="button"
-            onClick={() => handleAction('feeling')}
+            onClick={() => handleAction('post')}
             className="hidden md:flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#CBD5E1] transition-all hover:bg-white/5 hover:text-white cursor-pointer"
           >
             <IoHappyOutline className="text-sm text-[#FBBF24]" />
