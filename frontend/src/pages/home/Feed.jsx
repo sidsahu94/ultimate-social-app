@@ -483,9 +483,6 @@ export default function Feed() {
               <span>👥 Following</span>
             </button>
           </div>
-          <span className="text-[10px] font-mono font-bold tracking-widest text-[#00F2FE] uppercase hidden sm:inline-block bg-[#00F2FE]/10 px-2.5 py-1 rounded-full border border-[#00F2FE]/20">
-            {feedType === 'following' ? 'Network Stream' : 'Neural Stream'}
-          </span>
         </div>
 
         {/* Floating "New Updates Available" Interactive Banner */}

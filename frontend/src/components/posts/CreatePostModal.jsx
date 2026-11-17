@@ -117,11 +117,14 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     const file = selectedFiles[0];
     setFiles(selectedFiles);
 
-    // Instant zero-copy object URL preview
+    // Instant zero-copy object URL preview with immediate FileReader base64 fallback
     try {
       const instantUrl = URL.createObjectURL(file);
       setPreviewUrl(instantUrl);
-    } catch (_) {
+    } catch (_) {}
+
+    // Concurrently generate persistent Base64 Data URL for 100% mobile WebView compatibility
+    if (file && typeof FileReader !== 'undefined') {
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (ev.target?.result) setPreviewUrl(ev.target.result);
@@ -444,11 +447,20 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
                           src={previewUrl} 
                           className={`h-full w-full ${aspectRatio === '1:1' ? 'object-cover' : 'object-contain'} transition-all duration-300`}
                           style={{ filter: filter }}
-                          alt="Selected media preview"
+                          alt=""
                           onError={(e) => {
                             if (files[0] && !e.currentTarget.dataset.retried) {
                               e.currentTarget.dataset.retried = 'true';
-                              try { e.currentTarget.src = URL.createObjectURL(files[0]); } catch (_) {}
+                              try {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  if (ev.target?.result) {
+                                    e.currentTarget.src = ev.target.result;
+                                    setPreviewUrl(ev.target.result);
+                                  }
+                                };
+                                reader.readAsDataURL(files[0]);
+                              } catch (_) {}
                             }
                           }}
                         />

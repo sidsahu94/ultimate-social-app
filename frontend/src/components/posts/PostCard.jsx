@@ -360,7 +360,7 @@ const PostCard = forwardRef(({ post }, ref) => {
         </div>
 
         {/* === PREMIUM MEDIA SECTION === */}
-        {((post.images && post.images.length > 0) || post.mediaUrl || (post.videos && post.videos.length > 0)) && (
+        {((post.images && post.images.some(Boolean)) || post.mediaUrl || (post.videos && post.videos.some(Boolean))) && (
           <div className="relative overflow-hidden rounded-[20px] border border-[rgba(226,232,240,0.15)] my-4 aspect-video bg-black/40 z-10 cursor-pointer group/media" onDoubleClick={handleDoubleTap}>
             {/* Dark Red Heart Explosion Overlay */}
             <AnimatePresence>
@@ -379,8 +379,8 @@ const PostCard = forwardRef(({ post }, ref) => {
             </AnimatePresence>
 
             {/* --- IMAGE RENDER (CAROUSEL) --- */}
-            {((post.images && post.images.length > 0) || post.mediaUrl) && (() => {
-              const imgList = (post.images && post.images.length > 0) ? post.images : (post.mediaUrl ? [post.mediaUrl] : []);
+            {((post.images && post.images.some(Boolean)) || post.mediaUrl) && (() => {
+              const imgList = (post.images && post.images.length > 0) ? post.images.filter(Boolean) : (post.mediaUrl ? [post.mediaUrl] : []);
               const currentImg = imgList[activeImgIdx] || imgList[0];
               return (
                 <div className="relative w-full h-full">

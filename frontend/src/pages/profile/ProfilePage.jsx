@@ -475,7 +475,7 @@ export default function ProfilePage() {
           ) : (
             <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
               {displayGridPosts.map((post, idx) => {
-                const img = post.image || post.images?.[0] || post.mediaUrl;
+                const img = post.image || (post.images && post.images.find(Boolean)) || post.mediaUrl;
                 const isCarousel = post.isCarousel || (post.images && post.images.length > 1);
 
                 return (

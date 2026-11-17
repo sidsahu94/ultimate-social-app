@@ -210,13 +210,17 @@ exports.getFeed = async (req, res) => {
         }
 
         if (cursorDate && cursorId) {
+            const cleanCursorId = String(cursorId).split('_loop_')[0];
+            const parsedOid = mongoose.Types.ObjectId.isValid(cleanCursorId)
+                ? new mongoose.Types.ObjectId(cleanCursorId)
+                : cleanCursorId;
             match.$and = [
                 {
                     $or: [
                         { createdAt: { $lt: new Date(cursorDate) } },
                         {
                             createdAt: new Date(cursorDate),
-                            _id: { $lt: cursorId }
+                            _id: { $lt: parsedOid }
                         }
                     ]
                 }

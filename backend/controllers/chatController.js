@@ -528,7 +528,6 @@ exports.votePoll = async (req, res) => {
     await message.save();
 
     const populated = await Message.findById(messageId).populate(messagePopulate);
-    const chat = await Chat.findById(message.chat).select('participants');
     await emitToChat(req, chat, 'message:updated', {
       chatId: String(message.chat),
       messageId: message._id,

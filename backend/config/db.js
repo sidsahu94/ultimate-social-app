@@ -34,8 +34,8 @@ const connectDatabase = async () => {
       logger.info('Connecting to MongoDB Atlas Cluster...');
       const DBConnectionInstance = await mongoose.connect(targetUri, configOptions);
       logger.info(`✅ MongoDB Atlas Core Persistence Layer Online: ${DBConnectionInstance.connection.host}`);
-      ensureProductionIndexes(DBConnectionInstance.connection);
-      autoSeedIfEmpty(DBConnectionInstance.connection);
+      await ensureProductionIndexes(DBConnectionInstance.connection);
+      await autoSeedIfEmpty(DBConnectionInstance.connection);
       return DBConnectionInstance;
     } catch (err) {
       logger.warn(`Remote MongoDB connection failed (${err.message}). Trying verified production cluster...`);
@@ -43,8 +43,8 @@ const connectDatabase = async () => {
         try {
           const fallbackInstance = await mongoose.connect(VERIFIED_ATLAS_URI, configOptions);
           logger.info(`✅ MongoDB Atlas Core Persistence Layer Online (Verified Cluster): ${fallbackInstance.connection.host}`);
-          ensureProductionIndexes(fallbackInstance.connection);
-          autoSeedIfEmpty(fallbackInstance.connection);
+          await ensureProductionIndexes(fallbackInstance.connection);
+          await autoSeedIfEmpty(fallbackInstance.connection);
           return fallbackInstance;
         } catch (fErr) {
           logger.error(`Verified cluster connection failed: ${fErr.message}`);
@@ -55,7 +55,7 @@ const connectDatabase = async () => {
     try {
       const DBConnectionInstance = await mongoose.connect(targetUri, configOptions);
       logger.info(`✅ Local MongoDB Core Persistence Layer Online: ${DBConnectionInstance.connection.host}`);
-      ensureProductionIndexes(DBConnectionInstance.connection);
+      await ensureProductionIndexes(DBConnectionInstance.connection);
       return DBConnectionInstance;
     } catch (err) {
       logger.warn(`Local MongoDB service unavailable (${err.message}). Activating embedded database engine...`);
@@ -94,6 +94,12 @@ const connectDatabase = async () => {
 
 const ensureProductionIndexes = async (dbConnection) => {
   try {
+    if (dbConnection.readyState !== 1) {
+      await new Promise((resolve) => {
+        if (dbConnection.readyState === 1) return resolve();
+        dbConnection.once('open', resolve);
+      });
+    }
     await dbConnection.collection('posts').createIndex({ hashtags: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('users').createIndex({ email: 1 }, { unique: true, background: true });
     await dbConnection.collection('users').createIndex({ username: 1 }, { unique: true, background: true });
@@ -106,7 +112,7 @@ const ensureProductionIndexes = async (dbConnection) => {
     );
     logger.info(' ==> Performance Optimization Matrix Indexes established successfully across target entities.');
   } catch (err) {
-    logger.error(`Failed to assert required index arrays across collection objects: ${err.message}`);
+    logger.warn(`Notice during index verification: ${err.message}`);
   }
 };
 
