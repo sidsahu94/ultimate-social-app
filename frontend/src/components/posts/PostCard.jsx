@@ -16,7 +16,8 @@ import {
   IoVolumeHigh,
   IoEyeOutline,
   IoChevronBack,
-  IoChevronForward
+  IoChevronForward,
+  IoLanguageOutline
 } from "react-icons/io5";
 import { motion, AnimatePresence } from "framer-motion";
 import API from "../../services/api";
@@ -163,8 +164,8 @@ const PostCard = forwardRef(({ post }, ref) => {
       return;
     }
     try {
-      const res = await API.post('/translate', { text: post.content, targetLang: 'en' });
-      const translated = res.data?.translatedText || res.data?.translation || post.content;
+      const res = await API.post('/translate', { text: post.content, to: 'en', targetLang: 'en' });
+      const translated = res.data?.translatedText || res.data?.text || res.data?.translation || post.content;
       setTranslatedText(translated);
       setIsTranslated(true);
     } catch (_) {
@@ -336,8 +337,21 @@ const PostCard = forwardRef(({ post }, ref) => {
 
         {/* === CONTENT TEXT === */}
         {post.content && (
-          <div className="pb-3 text-[15px] leading-relaxed text-[#F8FAFC]/95 whitespace-pre-wrap relative z-10 selection:bg-[#1D4ED8]/40">
+          <div className="pb-2 text-[15px] leading-relaxed text-[#F8FAFC]/95 whitespace-pre-wrap relative z-10 selection:bg-[#1D4ED8]/40">
             {renderContent(isTranslated && translatedText ? translatedText : post.content)}
+          </div>
+        )}
+
+        {post.content && post.content.trim().length > 3 && (
+          <div className="pb-3 relative z-10 flex items-center">
+            <button
+              type="button"
+              onClick={handleToggleTranslate}
+              className="text-[11px] font-semibold text-[#00F2FE]/80 hover:text-[#00F2FE] flex items-center gap-1.5 transition cursor-pointer hover:underline"
+            >
+              <IoLanguageOutline size={14} />
+              <span>{isTranslated ? 'Show Original' : 'Translate'}</span>
+            </button>
           </div>
         )}
         
@@ -376,6 +390,10 @@ const PostCard = forwardRef(({ post }, ref) => {
                     className="w-full h-full object-cover transition-transform duration-700 group-hover/media:scale-[1.01]"
                     loading="lazy"
                     decoding="async"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=85";
+                    }}
                     onClick={() => setLightboxImg(currentImg)}
                   />
 
@@ -509,7 +527,7 @@ const PostCard = forwardRef(({ post }, ref) => {
                   const votes = opt.votes?.length || 0;
                   const percent = totalVotes === 0 ? 0 : Math.round((votes / totalVotes) * 100);
                   const hasVoted = opt.votes?.includes(user?._id);
-                  const isClosed = new Date(localPost.poll.expiresAt) < new Date();
+                  const isClosed = localPost.poll.expiresAt ? (new Date(localPost.poll.expiresAt) < new Date()) : false;
 
                   return (
                     <button
@@ -541,7 +559,7 @@ const PostCard = forwardRef(({ post }, ref) => {
               </div>
 
               <div className="mt-3 text-right text-[10px] text-[#CBD5E1]/70 font-semibold uppercase tracking-wider">
-                {totalVotes} votes • {new Date(localPost.poll.expiresAt) < new Date() ? "Ended" : "Live"}
+                {totalVotes} votes • {localPost.poll.expiresAt && new Date(localPost.poll.expiresAt) < new Date() ? "Ended" : "Live"}
               </div>
             </div>
           </div>

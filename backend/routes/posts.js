@@ -8,6 +8,7 @@ const path = require('path');
 const postsController = require('../controllers/postsController');
 const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const validateContent = require('../middleware/validateContent');
+const { aiLimiter } = require('../middleware/rateLimit');
 const upload = require('../utils/multer');
 
 // ==========================================
@@ -191,7 +192,8 @@ router.post(
 
 router.post(
   '/ai/compose',
-  optionalAuth,
+  protect,
+  aiLimiter,
   aiCompose
 );
 

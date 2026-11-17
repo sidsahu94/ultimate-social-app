@@ -19,6 +19,7 @@ import { playCyberClick, playQuantumScan, playSuccessChord } from '../../utils/s
 
 export default function AdminCyberGateway({ isOpen, onClose }) {
   const [passkey, setPasskey] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [scanProgress, setScanProgress] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -66,7 +67,10 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
       if (enteredKey) {
         // Authenticate with user-provided credentials against the backend API
         addLog('> VERIFYING CREDENTIALS WITH CENTRAL IDENTITY MATRIX...');
-        const emailToTry = currentUser?.email || 'sidhantas786@gmail.com';
+        const emailToTry = currentUser?.email || adminEmail.trim();
+        if (!emailToTry) {
+          throw new Error('Please provide the Founder/Admin email address.');
+        }
         const res = await API.post('/auth/login', {
           email: emailToTry,
           password: enteredKey
@@ -91,10 +95,8 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
       // Verify that the authenticated account is indeed Founder Sidhanta Sahu
       const isFounder = (
         authUser?.role === 'admin' &&
-        (authUser?.email === 'sidhantas786@gmail.com' ||
-         authUser?.email === 'admin@socialapp.com' ||
-         authUser?.username === 'sidsahu' ||
-         authUser?.name?.toLowerCase().includes('sidhanta'))
+        (authUser?.isFounder === true ||
+         authUser?.email?.toLowerCase() === 'teamuniversal49@gmail.com')
       );
 
       if (!isFounder) {
@@ -289,6 +291,17 @@ export default function AdminCyberGateway({ isOpen, onClose }) {
               <span className="block text-[10px] font-bold uppercase tracking-widest text-[#CBD5E1]/60 mb-2">
                 Founder Master Key / Password
               </span>
+              {!currentUser?.email && (
+                <div className="relative mt-1 mb-2">
+                  <input
+                    type="email"
+                    placeholder="Founder Admin Email..."
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full rounded-xl bg-[#04070D] border border-white/15 px-3.5 py-2 font-mono text-xs text-[#F8FAFC] placeholder-[#CBD5E1]/40 focus:border-[#00F2FE] focus:outline-none transition"
+                  />
+                </div>
+              )}
               <div className="relative mt-1">
                 <input
                   type="password"

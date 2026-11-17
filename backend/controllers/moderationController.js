@@ -28,7 +28,12 @@ exports.action = async (req,res)=>{
     await Post.findByIdAndUpdate(r.targetId, { isFlagged:true });
   }
   if (action === 'ban' && r.targetType === 'user') {
-    await User.findByIdAndUpdate(r.targetId, { role: 'banned' });
+    await User.findByIdAndUpdate(r.targetId, { role: 'banned', isBanned: true, refreshToken: null });
+    const io = req.app.get('io') || global.io;
+    if (io && r.targetId) {
+      io.to(r.targetId.toString()).emit('auth:banned', { message: 'Your account has been banned' });
+      io.in(r.targetId.toString()).disconnectSockets(true);
+    }
   }
   req.app.get('io')?.emit('mod:report-updated', r);
   res.json(r);

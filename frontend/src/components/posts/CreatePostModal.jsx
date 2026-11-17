@@ -109,54 +109,40 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     }
   }, [isOpen, initialData]);
 
-  // 🔥 Handle File Selection with NSFW Check
-  const handleFileSelect = async (e, type) => {
-    const selectedFiles = Array.from(e.target.files);
+  // 🔥 Handle File Selection with Reliable Instant Preview
+  const handleFileSelect = (e, type) => {
+    const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
     const file = selectedFiles[0];
+    setFiles(selectedFiles);
 
-    if (type === 'image') {
-      setFiles(selectedFiles);
-
-      // Instant synchronous preview
-      try {
-        const instantUrl = URL.createObjectURL(file);
-        setPreviewUrl(instantUrl);
-      } catch (_) {}
-
-      // Resilient base64 FileReader fallback
+    // Instant zero-copy object URL preview
+    try {
+      const instantUrl = URL.createObjectURL(file);
+      setPreviewUrl(instantUrl);
+    } catch (_) {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        if (ev.target.result) setPreviewUrl(ev.target.result);
+        if (ev.target?.result) setPreviewUrl(ev.target.result);
       };
       reader.readAsDataURL(file);
+    }
 
-      // Asynchronous non-blocking safety check
-      setLoading(true);
-      try {
+    // Background safety check without locking submit
+    if (type === 'image') {
+      import('../../utils/contentSafety').then(({ checkImageSafety }) => {
         const img = new Image();
         img.onload = async () => {
           try {
-            const { checkImageSafety } = await import('../../utils/contentSafety');
             const isUnsafe = await checkImageSafety(img);
             if (isUnsafe) {
-              add("Image blocked: Contains inappropriate content.", { type: 'error' });
-              e.target.value = "";
-              setFiles([]);
-              setPreviewUrl(null);
+              add("Warning: Image flagged by content safety filter.", { type: 'warning' });
             }
           } catch (_) {}
-          setLoading(false);
         };
-        img.onerror = () => setLoading(false);
         img.src = URL.createObjectURL(file);
-      } catch (_) {
-        setLoading(false);
-      }
-    } else {
-      setFiles(selectedFiles);
-      setPreviewUrl(URL.createObjectURL(file));
+      }).catch(() => {});
     }
   };
 
@@ -229,11 +215,12 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
          fd.append('unlockPrice', unlockPrice); 
          
          for (const f of files) {
-             const processed = await compressImage(f);
+             let processed = f;
+             try { processed = await compressImage(f); } catch (_) { processed = f; }
              fd.append('media', processed, f.name || 'image.jpg');
          }
 
-         await API.post('/posts', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+         await API.post('/posts', fd);
       }
 
       if (!isSaveDraft) {

@@ -371,7 +371,7 @@ export default function AdminDashboard() {
                                           </button>
 
                                           {/* Ban / Delete Controls (Protected from self-action) */}
-                                          {u.role !== 'admin' && u.email !== 'sidhantas786@gmail.com' && u.username !== 'sidsahu' && (
+                                          {u.role !== 'admin' && u.email !== 'teamuniversal49@gmail.com' && u.username !== 'sidsahu' && (
                                             <>
                                               <button 
                                                 type="button"

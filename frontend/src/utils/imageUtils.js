@@ -38,7 +38,7 @@ export const getImageUrl = (url, variant = 'feed') => {
   }
 
   const backendUrl = import.meta.env.PROD 
-    ? '' // In prod, relative paths are handled by the server
+    ? (normalized.startsWith('/uploads') ? 'https://ultimate-social-app.onrender.com' : '')
     : 'http://localhost:5000';
 
   return `${backendUrl}${normalized}`;

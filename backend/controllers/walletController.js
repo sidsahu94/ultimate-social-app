@@ -123,16 +123,10 @@ exports.tip = async (req, res) => {
     // 1. Fetch Sender & Verify PIN (Read Operation)
     const sender = await User.findById(req.user._id).select('+walletPin wallet');
     if (!sender.walletPin) {
-      if (req.body.newPin && String(req.body.newPin).length === 6 && !isNaN(req.body.newPin)) {
-        sender.walletPin = await bcrypt.hash(String(req.body.newPin), 10);
-        await sender.save();
-      } else {
-        return fail(res, 'Please set a 6-digit Wallet PIN first', 403);
-      }
-    } else {
-      const isPinValid = await bcrypt.compare(String(pin || ''), sender.walletPin);
-      if (!isPinValid) return fail(res, 'Incorrect PIN', 401);
+      return fail(res, 'Please configure your 6-digit Wallet PIN via Settings before sending tips', 403);
     }
+    const isPinValid = await bcrypt.compare(String(pin || ''), sender.walletPin);
+    if (!isPinValid) return fail(res, 'Incorrect PIN', 401);
 
     if (sender.wallet.balance < numAmount) return fail(res, 'Insufficient balance');
 

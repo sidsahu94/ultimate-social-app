@@ -12,11 +12,13 @@ exports.getStats = async (req, res) => {
       Report.countDocuments({ status: 'open' }),
     ]);
 
+    const mongoose = require('mongoose');
+    const clusterHost = mongoose.connection?.host || 'atlas.mongodb.net';
     const memUsage = process.memoryUsage();
     const telemetry = {
-      clusterHost: 'ac-rp5wdv0-shard-00-01.8fcmyqk.mongodb.net',
-      clusterRegion: 'AWS Mumbai (ap-south-1)',
-      persistenceState: 'MongoDB Atlas Core Online',
+      clusterHost,
+      clusterRegion: process.env.CLUSTER_REGION || 'AWS Primary Region',
+      persistenceState: mongoose.connection?.readyState === 1 ? 'MongoDB Atlas Core Online' : 'Connecting',
       nodeVersion: process.version,
       uptimeSeconds: Math.floor(process.uptime()),
       heapUsedMb: Math.round(memUsage.heapUsed / 1024 / 1024),
@@ -85,11 +87,21 @@ exports.banUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.role === 'admin' || user.email === 'sidhantas786@gmail.com' || user.username === 'sidsahu') {
+    if (user.role === 'admin' || user.email === 'teamuniversal49@gmail.com' || user.username === 'sidsahu') {
       return res.status(403).json({ message: 'Prohibited: Founder & Admin account cannot be banned.' });
     }
 
-    user.role = user.role === 'banned' ? 'user' : 'banned';
+    const isNowBanned = user.role !== 'banned';
+    user.role = isNowBanned ? 'banned' : 'user';
+    user.isBanned = isNowBanned;
+    if (isNowBanned) {
+      user.refreshToken = null;
+      const io = req.app.get('io') || global.io;
+      if (io) {
+        io.to(user._id.toString()).emit('auth:banned', { message: 'Your account has been banned' });
+        io.in(user._id.toString()).disconnectSockets(true);
+      }
+    }
     await user.save();
 
     res.json({ message: `User status updated to ${user.role}`, user });
@@ -108,7 +120,7 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.role === 'admin' || user.email === 'sidhantas786@gmail.com' || user.username === 'sidsahu') {
+    if (user.role === 'admin' || user.email === 'teamuniversal49@gmail.com' || user.username === 'sidsahu') {
       return res.status(403).json({ message: 'Prohibited: Founder & Admin account cannot be deleted.' });
     }
 
@@ -176,7 +188,12 @@ exports.handleReport = async (req, res) => {
       await Post.findByIdAndDelete(report.targetPost);
       await Comment.deleteMany({ post: report.targetPost });
     } else if (action === 'ban_user' && report.targetUser) {
-      await User.findByIdAndUpdate(report.targetUser, { role: 'banned' });
+      await User.findByIdAndUpdate(report.targetUser, { role: 'banned', isBanned: true, refreshToken: null });
+      const io = req.app.get('io') || global.io;
+      if (io) {
+        io.to(report.targetUser.toString()).emit('auth:banned', { message: 'Your account has been banned' });
+        io.in(report.targetUser.toString()).disconnectSockets(true);
+      }
     }
 
     report.status = 'resolved';

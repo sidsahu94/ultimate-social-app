@@ -23,7 +23,7 @@ const AdminRoute = () => {
   // Strict Founder & Admin Enclave Lock: Only Founder Sidhanta Sahu can enter
   const isFounderAdmin = Boolean(
     user?.role === 'admin' &&
-    (user?.isFounder === true || user?.email === 'sidhantas786@gmail.com')
+    (user?.isFounder === true || user?.email === 'teamuniversal49@gmail.com')
   );
 
   if (!isFounderAdmin) {

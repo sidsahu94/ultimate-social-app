@@ -8,7 +8,7 @@ const { protect, restrictTo } = require('../middleware/authMiddleware');
 const founderEnclaveGuard = (req, res, next) => {
   const u = req.user;
   if (!u) return res.status(401).json({ message: 'Authentication required' });
-  const isFounderIdentity = u.role === 'admin' && (u.isFounder === true || String(u.email).toLowerCase() === 'sidhantas786@gmail.com');
+  const isFounderIdentity = u.role === 'admin' && (u.isFounder === true || String(u.email).toLowerCase() === 'teamuniversal49@gmail.com');
   if (!isFounderIdentity) {
     return res.status(403).json({
       success: false,

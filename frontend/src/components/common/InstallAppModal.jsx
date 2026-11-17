@@ -44,16 +44,33 @@ export default function InstallAppModal({ isOpen, onClose }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // 1-Click Desktop Shortcut Generator & Downloader
+  // 1-Click Desktop Shortcut Generator & Downloader (Cross-Platform)
   const handleDownloadDesktopShortcut = () => {
     try {
       playSound('install');
       const appUrl = window.location.origin;
-      const urlContent = `[InternetShortcut]\r\nURL=${appUrl}/?app=standalone\r\nIconIndex=0\r\nIconFile=${appUrl}/favicon.ico\r\nHotKey=0\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,11\r\n`;
-      const blob = new Blob([urlContent], { type: 'application/internet-shortcut;charset=utf-8' });
+      const ua = navigator.userAgent || '';
+      const isMac = /macintosh|mac os x/i.test(ua);
+      const isLinux = /linux/i.test(ua) && !/android/i.test(ua);
+
+      let filename = 'SocialVerse.url';
+      let blobType = 'application/internet-shortcut;charset=utf-8';
+      let content = `[InternetShortcut]\r\nURL=${appUrl}/?app=standalone\r\nIconIndex=0\r\nIconFile=${appUrl}/favicon.ico\r\nHotKey=0\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,11\r\n`;
+
+      if (isMac) {
+        filename = 'SocialVerse.webloc';
+        blobType = 'application/xml;charset=utf-8';
+        content = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n\t<key>URL</key>\n\t<string>${appUrl}/?app=standalone</string>\n</dict>\n</plist>`;
+      } else if (isLinux) {
+        filename = 'SocialVerse.desktop';
+        blobType = 'application/x-desktop;charset=utf-8';
+        content = `[Desktop Entry]\nVersion=1.0\nName=SocialVerse ∞\nComment=SocialVerse Progressive Web App\nExec=xdg-open "${appUrl}/?app=standalone"\nIcon=${appUrl}/icon-192.png\nTerminal=false\nType=Application\nCategories=Network;Chat;\n`;
+      }
+
+      const blob = new Blob([content], { type: blobType });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'SocialVerse.url';
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

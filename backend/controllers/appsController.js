@@ -173,6 +173,37 @@ exports.getAnalytics = async (req, res) => {
     const totalLikes = likesAgg[0]?.total || 0;
     const followerCount = user?.followers?.length || 0;
 
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const sevenDayStats = await Post.aggregate([
+      {
+        $match: {
+          user: user._id,
+          createdAt: { $gte: sevenDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          likes: { $sum: { $ifNull: ["$likesCount", 0] } },
+          views: { $sum: { $ifNull: ["$views", 0] } },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const statsMap = new Map(sevenDayStats.map(s => [s._id, s]));
+    const chartData = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toISOString().split('T')[0];
+      const entry = statsMap.get(dateKey);
+      chartData.push(entry ? (entry.likes + entry.views || entry.count) : 0);
+    }
+
     res.json({
       success: true,
       data: {
@@ -182,7 +213,7 @@ exports.getAnalytics = async (req, res) => {
           likes: totalLikes,
           engagement: postCount > 0 ? `${(totalLikes / postCount).toFixed(1)} avg` : '0',
         },
-        chartData: [10, 25, 15, 30, 45, 60, totalLikes],
+        chartData,
       },
     });
   } catch (e) {

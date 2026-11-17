@@ -23,7 +23,7 @@ exports.createPollPost = async (req, res) => {
           text, 
           count: 0 // Initialize count to 0
         })),
-        expiresAt: expiresAt ? new Date(expiresAt) : null
+        expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }
     });
 

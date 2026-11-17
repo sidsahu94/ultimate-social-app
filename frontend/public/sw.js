@@ -1,18 +1,18 @@
 // frontend/public/sw.js
 self.addEventListener('push', function(event) {
-  const data = event.data.json();
+  const data = event.data ? event.data.json() : {};
   
-  self.registration.showNotification(data.title, {
-    body: data.body,
-    icon: '/pwa-192x192.png', // Ensure this exists in public/
-    badge: '/masked-icon.svg',
-    data: { url: data.url }
+  self.registration.showNotification(data.title || 'SocialVerse ∞', {
+    body: data.body || '',
+    icon: '/icon-192.png',
+    badge: '/logo.svg',
+    data: { url: data.url || '/' }
   });
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
-    self.clients.openWindow(event.notification.data.url || '/')
+    self.clients.openWindow(event.notification?.data?.url || '/')
   );
 });

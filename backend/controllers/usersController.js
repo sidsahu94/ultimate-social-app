@@ -158,7 +158,7 @@ exports.updateProfile = async (req, res) => {
     if (!currentUser) return res.status(404).json({ success: false, message: "User not found" });
 
     // Hardware Enclave Lockdown: If target account is Founder/Admin, ONLY that exact authenticated user can modify it
-    if (currentUser.role === 'admin' || currentUser.email === 'sidhantas786@gmail.com' || currentUser.email === 'admin@socialapp.com') {
+    if (currentUser.role === 'admin' || currentUser.email === 'teamuniversal49@gmail.com' || currentUser.email === 'admin@socialapp.com') {
       if (req.user._id.toString() !== currentUser._id.toString()) {
         return res.status(403).json({
           success: false,
@@ -378,16 +378,25 @@ exports.getFollowers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 0;
     const limit = parseInt(req.query.limit) || 20;
-    
-    const user = await User.findById(req.params.id)
-      .select('followers')
-      .populate({
-        path: 'followers',
-        select: 'name username avatar role isVerified',
-        options: { skip: page * limit, limit: limit }
-      });
-      
+
+    const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const requesterId = req.user ? String(req.user._id) : null;
+    const isOwner = requesterId === String(user._id);
+    const isAdmin = req.user?.role === 'admin';
+    const isFollower = requesterId && Array.isArray(user.followers) && user.followers.map(String).includes(requesterId);
+
+    if (user.privateProfile && !isOwner && !isAdmin && !isFollower) {
+      return res.status(403).json({ success: false, message: 'This account is private. Follow this user to see their followers.' });
+    }
+
+    await user.populate({
+      path: 'followers',
+      select: 'name username avatar role isVerified',
+      options: { skip: page * limit, limit: limit }
+    });
+
     res.json({ success: true, data: user.followers || [] });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Error fetching followers' });
@@ -399,15 +408,24 @@ exports.getFollowing = async (req, res) => {
     const page = parseInt(req.query.page) || 0;
     const limit = parseInt(req.query.limit) || 20;
 
-    const user = await User.findById(req.params.id)
-      .select('following')
-      .populate({
-        path: 'following',
-        select: 'name username avatar role isVerified',
-        options: { skip: page * limit, limit: limit }
-      });
-
+    const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const requesterId = req.user ? String(req.user._id) : null;
+    const isOwner = requesterId === String(user._id);
+    const isAdmin = req.user?.role === 'admin';
+    const isFollower = requesterId && Array.isArray(user.followers) && user.followers.map(String).includes(requesterId);
+
+    if (user.privateProfile && !isOwner && !isAdmin && !isFollower) {
+      return res.status(403).json({ success: false, message: 'This account is private. Follow this user to see who they follow.' });
+    }
+
+    await user.populate({
+      path: 'following',
+      select: 'name username avatar role isVerified',
+      options: { skip: page * limit, limit: limit }
+    });
+
     res.json({ success: true, data: user.following || [] });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Error fetching following' });

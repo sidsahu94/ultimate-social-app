@@ -69,3 +69,9 @@ exports.otpLimiter = createLimiter({
   max: 5,
   message: 'Too many OTP attempts',
 });
+
+exports.aiLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: 'AI Studio rate limit reached. Please wait 15 minutes before composing again.',
+});

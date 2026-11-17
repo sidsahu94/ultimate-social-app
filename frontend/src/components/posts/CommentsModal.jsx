@@ -129,7 +129,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
                 audioUrl = upRes.data?.url || upRes.data?.data?.url;
             }
 
-            const res = await API.post(`/comments/${postId}`, { 
+            const res = await API.post(`/comments/${cleanPostId}`, { 
                 text: content, 
                 audio: audioUrl 
             });

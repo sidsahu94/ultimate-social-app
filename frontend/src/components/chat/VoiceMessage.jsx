@@ -74,68 +74,93 @@ export default function VoiceMessage({ src, isMe }) {
   };
 
   return (
-    <div className={`flex min-w-[200px] items-center gap-3 p-2 ${isMe ? 'flex-row-reverse' : ''}`}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          togglePlay();
-        }}
-        className={`grid h-10 w-10 place-items-center rounded-full shadow-md transition-transform active:scale-90 ${
-          isMe
-            ? 'bg-white text-[#1D4ED8] shadow-[0_0_12px_rgba(255,255,255,0.4)]'
-            : 'bg-gradient-to-tr from-[#1D4ED8] to-[#00F2FE] text-white shadow-sapphireGlow'
-        }`}
-      >
-        {playing ? <FaPause size={12} /> : <FaPlay size={12} className="ml-0.5" />}
-      </button>
+    <div className="flex flex-col gap-1.5 w-full">
+      <div className={`flex min-w-[200px] items-center gap-3 p-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePlay();
+          }}
+          className={`grid h-10 w-10 place-items-center rounded-full shadow-md transition-transform active:scale-90 ${
+            isMe
+              ? 'bg-white text-[#1D4ED8] shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+              : 'bg-gradient-to-tr from-[#1D4ED8] to-[#00F2FE] text-white shadow-sapphireGlow'
+          }`}
+        >
+          {playing ? <FaPause size={12} /> : <FaPlay size={12} className="ml-0.5" />}
+        </button>
 
-      <div className="flex-1">
-        <div className="mb-1 flex h-6 items-center gap-[2px] opacity-90">
-          {Array.from({ length: 18 }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-1 rounded-full transition-all duration-300 ${
-                isMe ? 'bg-white' : 'bg-gradient-to-t from-[#0F766E] to-[#00F2FE]'
-              }`}
-              style={{
-                height: playing ? `${25 + ((i * 13) % 70)}%` : '30%',
-                opacity: i / 18 < progress / 100 ? 1 : 0.4,
-              }}
-            />
-          ))}
+        <div className="flex-1">
+          <div className="mb-1 flex h-6 items-center gap-[2px] opacity-90">
+            {Array.from({ length: 18 }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-1 rounded-full transition-all duration-300 ${
+                  isMe ? 'bg-white' : 'bg-gradient-to-t from-[#0F766E] to-[#00F2FE]'
+                }`}
+                style={{
+                  height: playing ? `${25 + ((i * 13) % 70)}%` : '30%',
+                  opacity: i / 18 < progress / 100 ? 1 : 0.4,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={toggleTranscript}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition active:scale-90 flex items-center gap-1 ${
+              showTranscript
+                ? 'border-[#D4AF37] text-[#F4D49A] bg-[#D4AF37]/20'
+                : isMe
+                ? 'border-white/30 text-white bg-white/10 hover:bg-white/20'
+                : 'border-white/15 text-[#CBD5E1]/70 bg-[#070B14]/80 hover:bg-white/10'
+            }`}
+            title="AI Neural Speech-to-Text Transcription"
+          >
+            <FaBrain size={10} className={showTranscript ? "text-[#F4D49A]" : ""} />
+            <span>AI</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleSpeed}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition active:scale-90 ${
+              isMe 
+                ? 'border-white/30 text-white bg-white/10 hover:bg-white/20' 
+                : 'border-white/15 text-[#00F2FE] bg-[#070B14]/80 hover:bg-white/10'
+            }`}
+            title="Toggle playback speed"
+          >
+            {speed}x
+          </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        <button
-          type="button"
-          onClick={toggleTranscript}
-          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition active:scale-90 flex items-center gap-1 ${
-            showTranscript
-              ? 'border-[#D4AF37] text-[#F4D49A] bg-[#D4AF37]/20'
-              : isMe
-              ? 'border-white/30 text-white bg-white/10 hover:bg-white/20'
-              : 'border-white/15 text-[#CBD5E1]/70 bg-[#070B14]/80 hover:bg-white/10'
-          }`}
-          title="AI Neural Speech-to-Text Transcription"
-        >
-          <FaBrain size={10} className={showTranscript ? "text-[#F4D49A]" : ""} />
-          <span>AI</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={toggleSpeed}
-          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition active:scale-90 ${
-            isMe 
-              ? 'border-white/30 text-white bg-white/10 hover:bg-white/20' 
-              : 'border-white/15 text-[#00F2FE] bg-[#070B14]/80 hover:bg-white/10'
-          }`}
-          title="Toggle playback speed"
-        >
-          {speed}x
-        </button>
-      </div>
+      {showTranscript && (
+        <div className={`text-xs px-3 py-2 rounded-xl border backdrop-blur-md transition-all ${
+          isMe
+            ? 'bg-white/10 border-white/20 text-white'
+            : 'bg-[#070B14]/90 border-white/10 text-[#CBD5E1]'
+        }`}>
+          <div className="flex items-center gap-1.5 text-[10px] text-[#00F2FE] font-mono font-bold mb-1">
+            <FaBrain size={11} className="text-[#00F2FE]" />
+            <span>AI Neural Transcription:</span>
+          </div>
+          {transcribing ? (
+            <div className="flex items-center gap-2 text-white/60 italic text-[11px]">
+              <div className="w-3 h-3 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin" />
+              <span>Transcribing voice note...</span>
+            </div>
+          ) : (
+            <p className="italic text-[11px] leading-relaxed">
+              {transcriptText || "Voice message recorded."}
+            </p>
+          )}
+        </div>
+      )}
 
       <audio ref={audioRef} src={src} className="hidden" />
     </div>

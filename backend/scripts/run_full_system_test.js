@@ -73,7 +73,7 @@ async function runSuite() {
     );
 
     // TEST 3: Founder Identity Assertion
-    const founder = await User.findOne({ email: 'sidhantas786@gmail.com' });
+    const founder = await User.findOne({ email: 'teamuniversal49@gmail.com' });
     recordTest(
       'FOUNDER_ADMIN_EXISTS',
       !!founder && founder.role === 'admin',
@@ -83,12 +83,12 @@ async function runSuite() {
 
     // TEST 4: Security RBAC - Strict Founder Enclave Guard Logic
     const fakeAdmin = { email: 'hacker@example.com', username: 'hacker', role: 'admin' };
-    const founderUser = { email: 'sidhantas786@gmail.com', username: 'sidsahu', role: 'admin' };
+    const founderUser = { email: 'teamuniversal49@gmail.com', username: 'sidsahu', role: 'admin' };
     const normalUser = { email: 'user@example.com', username: 'normal', role: 'user' };
 
     const checkAccess = (u) => {
       const isFounderIdentity = (
-        u.email === 'sidhantas786@gmail.com' ||
+        u.email === 'teamuniversal49@gmail.com' ||
         u.email === 'admin@socialapp.com' ||
         u.username === 'sidsahu'
       );

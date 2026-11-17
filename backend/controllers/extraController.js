@@ -84,10 +84,46 @@ exports.voice = async (req, res) => {
   }
 };
 exports.insights = async (req, res) => {
-  res.json({
-    dates: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-    views: [5, 8, 9, 20, 15],
-  });
+  try {
+    const Post = require('../models/Post');
+    const userId = req.user?._id;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const matchQuery = { createdAt: { $gte: sevenDaysAgo } };
+    if (userId) matchQuery.user = userId;
+
+    const dailyStats = await Post.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          views: { $sum: { $ifNull: ["$views", 0] } }
+        }
+      }
+    ]);
+
+    const statsMap = new Map(dailyStats.map(s => [s._id, s.views]));
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dates = [];
+    const views = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toISOString().split('T')[0];
+      dates.push(dayNames[d.getDay()]);
+      views.push(statsMap.get(dateKey) || 0);
+    }
+
+    res.json({ dates, views });
+  } catch (err) {
+    res.json({
+      dates: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      views: [0, 0, 0, 0, 0, 0, 0]
+    });
+  }
 };
 
 // Toggle save/bookmark

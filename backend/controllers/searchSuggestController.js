@@ -2,7 +2,34 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 
-const searchCache = new Map();
+class BoundedLruCache {
+  constructor(maxSize = 500, ttlMs = 30000) {
+    this.maxSize = maxSize;
+    this.ttlMs = ttlMs;
+    this.map = new Map();
+  }
+  get(key) {
+    const item = this.map.get(key);
+    if (!item) return null;
+    if (Date.now() - item.timestamp > this.ttlMs) {
+      this.map.delete(key);
+      return null;
+    }
+    this.map.delete(key);
+    this.map.set(key, item);
+    return item;
+  }
+  set(key, value) {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.maxSize) {
+      const oldestKey = this.map.keys().next().value;
+      this.map.delete(oldestKey);
+    }
+    this.map.set(key, value);
+  }
+}
+const searchCache = new BoundedLruCache(500, 30000);
 
 exports.suggestions = async (req, res) => {
   try {

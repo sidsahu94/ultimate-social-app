@@ -2,10 +2,14 @@
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || 'dfgavtwbn';
+const API_KEY = process.env.CLOUDINARY_API_KEY || '348871324186356';
+const API_SECRET = process.env.CLOUDINARY_API_SECRET || 'jP1VxeTjdTq2V7DRVxDJUdoyPgM';
+
 cloudinary.config({
-	cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-	api_key: process.env.CLOUDINARY_API_KEY,
-	api_secret: process.env.CLOUDINARY_API_SECRET,
+	cloud_name: CLOUD_NAME,
+	api_key: API_KEY,
+	api_secret: API_SECRET,
 	secure: true,
 });
 
@@ -33,11 +37,6 @@ const safeUnlink = (path) => {
  */
 const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 	new Promise((resolve, reject) => {
-		if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-			// Do not unlink so local fallback can serve the file
-			return reject(new Error('CLOUDINARY env not configured'));
-		}
-
 		const maxAttempts = Number(process.env.CLOUDINARY_UPLOAD_RETRIES || 3);
 		let attempt = 0;
 
@@ -68,9 +67,6 @@ const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 
 const uploadsStream = (readableStream, folder = 'ultimate_social', opts = {}) =>
 	new Promise((resolve, reject) => {
-		if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-			return reject(new Error('CLOUDINARY env not configured'));
-		}
 		const options = Object.assign({ folder, resource_type: 'auto' }, opts);
 		const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
 			if (error) return reject(error);

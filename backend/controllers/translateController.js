@@ -3,17 +3,19 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 
 exports.translate = async (req,res)=>{
   try {
-    const { text, to = 'en' } = req.body;
-    if (!text) return res.json({ text:'' });
+    const { text, to, targetLang } = req.body;
+    const target = to || targetLang || 'en';
+    if (!text) return res.json({ text:'', translatedText: '' });
     const LT = process.env.LT_URL || 'https://libretranslate.de';
     const r = await fetch(`${LT}/translate`, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ q:text, source:'auto', target:to, format:'text' })
+      body: JSON.stringify({ q:text, source:'auto', target, format:'text' })
     });
     const data = await r.json();
-    res.json({ text: data.translatedText || text });
+    const result = data.translatedText || text;
+    res.json({ text: result, translatedText: result });
   } catch (e) {
-    res.json({ text: req.body.text });
+    res.json({ text: req.body.text || '', translatedText: req.body.text || '' });
   }
 };

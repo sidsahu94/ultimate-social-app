@@ -100,7 +100,7 @@ API.interceptors.response.use(
         window._lastApiErrorTime = now;
         window.dispatchEvent(
           new CustomEvent('api:error', {
-            detail: 'Server is syncing data. Your request will process shortly.',
+            detail: 'Connecting to server... Your request will process automatically.',
           })
         );
       }

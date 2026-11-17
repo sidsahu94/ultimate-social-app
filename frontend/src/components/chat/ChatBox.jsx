@@ -291,6 +291,18 @@ export default function ChatBox({ chatId, onBack }) {
     return 0;
   };
 
+  const handleScroll = () => {
+    if (!listRef.current || loadingMore) return;
+    if (listRef.current.scrollTop < 60 && messages.length >= 20) {
+      const prevScrollHeight = listRef.current.scrollHeight;
+      loadOlderMessages().then((count) => {
+        if (count > 0 && listRef.current) {
+          listRef.current.scrollTop = listRef.current.scrollHeight - prevScrollHeight;
+        }
+      });
+    }
+  };
+
   const handleTyping = (e) => {
     setText(e.target.value);
     socket.emit('typing', { chatId });
@@ -606,8 +618,20 @@ export default function ChatBox({ chatId, onBack }) {
         <PinnedMessage messages={pinnedMessages} onUnpin={handlePinAction} />
       </div>
 
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4">
+      <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-4">
         <div className="mx-auto max-w-4xl space-y-2">
+          {messages.length >= 20 && (
+            <div className="text-center py-2">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={loadingMore}
+                className="text-xs text-[#00F2FE]/80 hover:text-[#00F2FE] px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition cursor-pointer disabled:opacity-40"
+              >
+                {loadingMore ? 'Loading earlier messages...' : 'Load Earlier Messages'}
+              </button>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div className="py-16 text-center text-sm text-[#CBD5E1]/50">
               No messages yet. Say hello.

@@ -51,8 +51,12 @@ exports.updateReport = async (req, res) => {
         
         // A) Ban User
         if (action === 'ban' && report.targetUser) {
-            await User.findByIdAndUpdate(report.targetUser, { role: 'banned' });
-            // Optional: Create system notification for the user (if they can still read them)
+            await User.findByIdAndUpdate(report.targetUser, { role: 'banned', isBanned: true, refreshToken: null });
+            const io = req.app.get('io') || global.io;
+            if (io) {
+              io.to(report.targetUser.toString()).emit('auth:banned', { message: 'Your account has been banned' });
+              io.in(report.targetUser.toString()).disconnectSockets(true);
+            }
         }
         
         // B) Hide/Flag Post

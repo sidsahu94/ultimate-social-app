@@ -80,7 +80,10 @@ const ensureProductionIndexes = async (dbConnection) => {
     await dbConnection.collection('transactions').createIndex({ user: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('transactions').createIndex({ idempotencyKey: 1 }, { unique: true, background: true });
     await dbConnection.collection('messages').createIndex({ chat: 1, createdAt: -1 }, { background: true });
-    await dbConnection.collection('users').updateOne({ email: 'sidhantas786@gmail.com' }, { $set: { isFounder: true, role: 'admin' } });
+    await dbConnection.collection('users').updateOne(
+      { $or: [{ username: 'sidsahu' }, { email: 'teamuniversal49@gmail.com' }] },
+      { $set: { email: 'teamuniversal49@gmail.com', isFounder: true, role: 'admin' } }
+    );
     logger.info(' ==> Performance Optimization Matrix Indexes established successfully across target entities.');
   } catch (err) {
     logger.error(`Failed to assert required index arrays across collection objects: ${err.message}`);
@@ -106,7 +109,7 @@ const autoSeedIfEmpty = async (dbConnection) => {
       const adminUser = await User.create({
         name: 'Sidhanta Sahu',
         username: 'sidsahu',
-        email: 'sidhantas786@gmail.com',
+        email: 'teamuniversal49@gmail.com',
         password: 'password123',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
         coverPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',

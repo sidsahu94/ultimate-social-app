@@ -80,6 +80,16 @@ async function protect(req, res, next) {
                 });
         }
 
+        if (user.role === 'banned' || user.isBanned) {
+            return res
+                .status(403)
+                .json({
+                    success: false,
+                    message: 'Your account has been banned due to violation of community guidelines.',
+                    isBanned: true
+                });
+        }
+
         req.user = user;
         req.userId = String(user._id);
         req.user.id = String(user._id);

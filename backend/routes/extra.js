@@ -37,7 +37,7 @@ router.get('/reels', extraController.getReels);
 router.get('/shop/items', extraController.getShopItems);
 
 // Submit Support / Incident Report
-router.post('/report', optionalAuth, async (req, res) => {
+router.post('/report', protect, async (req, res) => {
   try {
     const Report = require('../models/Report');
     const { reason, details, targetUser, targetPost } = req.body;
@@ -45,16 +45,7 @@ router.post('/report', optionalAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Reason is required' });
     }
 
-    let reporterId = req.user?._id;
-    if (!reporterId) {
-      const User = require('../models/User');
-      const admin = await User.findOne({ role: 'admin' });
-      reporterId = admin?._id;
-    }
-
-    if (!reporterId) {
-      return res.status(400).json({ success: false, message: 'Cannot file report without active user identity' });
-    }
+    const reporterId = req.user._id;
 
     const report = await Report.create({
       reporter: reporterId,

@@ -4,17 +4,23 @@ const router = express.Router();
 const axios = require('axios');
 
 // IMPORTANT: Whitelist remains strict for security.
-// 🔥 FIX: Use exact hostnames to prevent subdomain bypass (e.g. images.unsplash.com.attacker.com)
+// 🔥 Strict image CDN whitelist: user-upload relays like Dropbox & Imgur removed
 const ALLOWED_HOSTS = [
     'res.cloudinary.com',
     'images.unsplash.com',       // Required for Seed Data
     'plus.unsplash.com',         // Required for Unsplash
     'loremflickr.com',           // Required for Faker/Seed Data
-    'cloudflare-ipfs.com',       // Common for avatars
     'avatars.githubusercontent.com',
     'lh3.googleusercontent.com', // Google Auth avatars
-    'dl.dropboxusercontent.com',
-    'i.imgur.com', 
+];
+
+const ALLOWED_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml',
+    'image/avif'
 ];
 
 router.get('/image', async (req, res) => {
@@ -31,19 +37,25 @@ router.get('/image', async (req, res) => {
             return res.status(403).json({ message: 'Host not allowed' });
         }
 
-        // 2. Fetch the external image as a stream
-        // We set 'Authorization: undefined' to prevent passing our API token to external hosts
+        // 2. Fetch the external image as a stream with strict 5MB limit
         const r = await axios.get(url, { 
             responseType: 'stream', 
-            timeout: 20000,
+            timeout: 15000,
+            maxContentLength: 5 * 1024 * 1024,
+            maxBodyLength: 5 * 1024 * 1024,
             headers: {
                 Authorization: undefined 
             }
         });
 
-        // 3. Set necessary headers for the client
-        const contentType = r.headers['content-type'] || 'image/jpeg';
-        res.setHeader('Content-Type', contentType);
+        // 3. Strict Content-Type verification
+        const rawContentType = (r.headers['content-type'] || '').toLowerCase().split(';')[0].trim();
+        if (!ALLOWED_MIME_TYPES.includes(rawContentType)) {
+            console.error(`Proxy rejected: Content-Type ${rawContentType} not an allowed image MIME`);
+            return res.status(415).json({ message: 'Invalid content type. Only verified image streams permitted.' });
+        }
+
+        res.setHeader('Content-Type', rawContentType);
         res.setHeader('Access-Control-Allow-Origin', '*'); 
         
         // Pass through caching headers if available

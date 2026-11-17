@@ -171,8 +171,21 @@ exports.tipReel = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot tip your own reel' });
     }
 
-    const sender = await User.findById(userId);
+    const pin = req.body.pin;
+    const sender = await User.findById(userId).select('+walletPin wallet');
     const senderBalance = Number(sender?.wallet?.balance || 0);
+
+    if (amount >= 5 || sender?.walletPin) {
+      if (!pin) {
+        return res.status(403).json({ success: false, message: 'Wallet PIN required for tips of 5 coins or more' });
+      }
+      const bcrypt = require('bcryptjs');
+      const isPinValid = sender.walletPin ? await bcrypt.compare(String(pin), sender.walletPin) : false;
+      if (!isPinValid) {
+        return res.status(401).json({ success: false, message: 'Incorrect Wallet PIN' });
+      }
+    }
+
     if (senderBalance < amount) {
       return res.status(400).json({
         success: false,
@@ -180,12 +193,15 @@ exports.tipReel = async (req, res) => {
       });
     }
 
-    // Debit sender
-    const updatedSender = await User.findByIdAndUpdate(
-      userId,
+    // Atomic debit sender
+    const updatedSender = await User.findOneAndUpdate(
+      { _id: userId, 'wallet.balance': { $gte: amount } },
       { $inc: { 'wallet.balance': -amount, 'wallet.totalSent': amount } },
       { new: true }
     );
+    if (!updatedSender) {
+      return res.status(400).json({ success: false, message: 'Insufficient balance or concurrent transaction' });
+    }
 
     // Credit creator if not demo
     let creatorName = reel?.user?.name || 'Creator';

@@ -83,7 +83,7 @@ export default function StoryEditor({ file, onClose, onPosted }) {
   };
 
   const content = (
-    <div className="fixed inset-0 bg-black flex flex-col select-none overflow-hidden touch-none" style={{ zIndex: 9999999 }}>
+    <div className="fixed inset-0 w-screen h-[100dvh] bg-black flex flex-col select-none overflow-hidden touch-none" style={{ zIndex: 9999999 }}>
       {/* Top Bar with Typography, Color Swatches, and Instant Share Action */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-30 bg-gradient-to-b from-black/90 via-black/60 to-transparent" style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top, 1.25rem))' }}>
         <button 

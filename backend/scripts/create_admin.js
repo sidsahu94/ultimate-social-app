@@ -7,7 +7,7 @@ const User = require('../models/User');
 const createAdmin = async () => {
   await mongoose.connect(process.env.MONGO_URI);
   
-  const email = process.env.ADMIN_EMAIL || 'sidhantas786@gmail.com';
+  const email = process.env.ADMIN_EMAIL || 'teamuniversal49@gmail.com';
   const password = process.env.ADMIN_PASSWORD || 'admin123';
   
   // Check if exists

@@ -31,7 +31,7 @@ exports.checkMaintenance = async (req, res, next) => {
   if (cachedMaintenance) {
     // If request has authenticated user who is founder, allow bypass
     const u = req.user;
-    if (u && u.role === 'admin' && (u.isFounder || u.email === 'sidhantas786@gmail.com')) {
+    if (u && u.role === 'admin' && (u.isFounder || u.email === 'teamuniversal49@gmail.com')) {
       return next();
     }
 

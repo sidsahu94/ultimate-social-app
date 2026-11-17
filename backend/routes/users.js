@@ -64,8 +64,8 @@ router.post('/accept-request/:id', protect, userController.acceptFollowRequest);
 router.post('/decline-request/:id', protect, userController.declineFollowRequest);
 
 // Get Lists
-router.get('/:id/followers', userController.getFollowers);
-router.get('/:id/following', userController.getFollowing);
+router.get('/:id/followers', optionalAuth, userController.getFollowers);
+router.get('/:id/following', optionalAuth, userController.getFollowing);
 router.put('/pin', protect, userController.pinPost); 
 
 // ==========================================

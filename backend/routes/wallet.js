@@ -18,25 +18,32 @@ router.get('/pin/status', protect, wallet.checkPinStatus);
 // Daily Bonus Route
 router.post('/claim-daily-bonus', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const lastClaimed = user.lastDailyBonus ? new Date(new Date(user.lastDailyBonus).getFullYear(), new Date(user.lastDailyBonus).getMonth(), new Date(user.lastDailyBonus).getDate()).getTime() : null;
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const BONUS_AMOUNT = 50;
 
-    if (lastClaimed === today) {
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: req.user._id,
+        $or: [
+          { lastDailyBonus: null },
+          { lastDailyBonus: { $exists: false } },
+          { lastDailyBonus: { $lt: todayStart } }
+        ]
+      },
+      {
+        $inc: { 'wallet.balance': BONUS_AMOUNT },
+        $set: { lastDailyBonus: now }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
       return res.status(400).json({ error: 'Bonus already claimed today.' });
     }
 
-    const BONUS_AMOUNT = 50;
-    const currentBal = (user.wallet && typeof user.wallet.balance === 'number') ? user.wallet.balance : 0;
-    const newBal = currentBal + BONUS_AMOUNT;
-
-    user.wallet = user.wallet || {};
-    user.wallet.balance = newBal;
-    user.lastDailyBonus = now;
-    await user.save();
+    const user = updatedUser;
+    const newBal = updatedUser.wallet?.balance || 0;
 
     const Transaction = require('../models/Transaction');
     Transaction.create({

@@ -79,7 +79,7 @@ const seedData = async () => {
     {
       name: 'Sidhanta Sahu',
       username: 'sidsahu',
-      email: 'sidhantas786@gmail.com',
+      email: 'teamuniversal49@gmail.com',
       password: hashedPassword,
       avatar: CURATED_AVATARS[0],
       coverPhoto: CURATED_PHOTOS[0],

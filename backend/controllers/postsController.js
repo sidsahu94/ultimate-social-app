@@ -28,6 +28,27 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 
 const { uploads, deleteFile } = require('../utils/cloudinary');
+
+const redactPaywalledPost = (postDoc, currentUserId) => {
+  if (!postDoc) return postDoc;
+  const p = postDoc.toObject ? postDoc.toObject() : { ...postDoc };
+  if (!p.isPaywalled) return p;
+
+  const authorId = String(p.user?._id || p.user || '');
+  const requesterId = currentUserId ? String(currentUserId) : '';
+  const isAuthor = requesterId && authorId === requesterId;
+  const isUnlocked = requesterId && Array.isArray(p.unlockedBy) && p.unlockedBy.some(u => String(u?._id || u) === requesterId);
+
+  if (!isAuthor && !isUnlocked) {
+    p.images = [];
+    p.videos = [];
+    p.mediaUrl = null;
+    p.isLocked = true;
+  } else {
+    p.isLocked = false;
+  }
+  return p;
+};
 const createNotification = require('../utils/notify');
 
 const fs = require('fs');
@@ -53,14 +74,10 @@ const extractPublicId = (url) => {
 // ---------------------------------------------------
 const safeUploadToCloudinary = async (filePath) => {
     try {
-        if (!process.env.CLOUDINARY_CLOUD_NAME) {
-            throw new Error('CLOUDINARY env not configured');
-        }
-
         const res = await uploads(filePath);
 
         try {
-            fs.unlinkSync(filePath);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         } catch (e) {}
 
         return { url: res.secure_url };
@@ -282,9 +299,10 @@ exports.getFeed = async (req, res) => {
             }
         }
 
+        const sanitizedPosts = finalPosts.map(p => redactPaywalledPost(p, userId));
         res.json({
             success: true,
-            data: finalPosts,
+            data: sanitizedPosts,
             nextCursorDate,
             nextCursorId
         });
@@ -441,8 +459,14 @@ exports.deletePost = async (req, res) => {
       return res.status(403).json({ message: "Not authorized to delete this post" });
     }
 
-    // Delete DB record FIRST
-    await post.deleteOne();
+    // Delete DB record and orphaned relations
+    const PollVote = require('../models/PollVote');
+    await Promise.all([
+      post.deleteOne(),
+      Comment.deleteMany({ post: postId }),
+      PollVote.deleteMany({ postId: postId }),
+      Saved.updateMany({ posts: postId }, { $pull: { posts: postId } })
+    ]);
     res.json({ success: true, message: "Post deleted successfully" });
 
     // 🔥 FIX: Ensure we read from post.images and post.videos, not post.media
@@ -529,7 +553,8 @@ exports.getPostById = async (req, res) => {
       });
 
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-    return res.json({ success: true, data: post });
+    const requesterId = req.user ? req.user._id : null;
+    return res.json({ success: true, data: redactPaywalledPost(post, requesterId) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Error getting post' });
   }

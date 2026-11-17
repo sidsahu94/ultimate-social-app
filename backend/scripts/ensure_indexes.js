@@ -85,7 +85,7 @@ async function buildIndexes() {
     }),
     safeCreateIndex(Post.collection, { score: -1, createdAt: -1 }, { name: 'score_createdAt_desc' }),
     safeCreateIndex(Post.collection, { hashtags: 1, createdAt: -1 }, { name: 'hashtags_createdAt_desc' }),
-    safeCreateIndex(Post.collection, { content: 'text', hashtags: 'text', mentions: 'text' }, { name: 'post_text_search' }),
+    safeCreateIndex(Post.collection, { content: 'text', hashtags: 'text' }, { name: 'post_text_search' }),
 
     // Comments
     safeCreateIndex(Comment.collection, { post: 1, createdAt: -1 }, { name: 'post_createdAt_desc' }),
