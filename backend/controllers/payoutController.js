@@ -5,107 +5,68 @@ const Payout = require("../models/Payout");
 const User = require("../models/User");
 
 exports.create = async (req, res) => {
-
-  const session =
-    await mongoose.startSession();
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (_) {
+    session = null;
+  }
+  const sessionOpts = session ? { session } : {};
 
   try {
+    const amount = Number(req.body.amount);
+    const { method = "manual", details } = req.body;
 
-    const amount =
-      Number(req.body.amount);
-
-    const {
-      method = "manual",
-      details
-    } = req.body;
-
-    if (
-      !Number.isFinite(amount) ||
-      amount < 10
-    ) {
-      return res.status(400).json({
-        message:
-          "Minimum withdrawal is 10 coins"
-      });
+    if (!Number.isFinite(amount) || amount < 10) {
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(400).json({ message: "Minimum withdrawal is 10 coins" });
     }
 
-    let payout;
-
-    await session.withTransaction(
-      async () => {
-
-        const user =
-          await User.findById(
-            req.user._id
-          ).session(session);
-
-        if (!user) {
-          throw new Error(
-            "User not found"
-          );
-        }
-
-        if (
-          user.wallet.balance <
-          amount
-        ) {
-          throw new Error(
-            "Insufficient wallet balance"
-          );
-        }
-
-        user.wallet.balance -= amount;
-
-        await user.save({
-          session
-        });
-
-        payout =
-          await Payout.create(
-            [
-              {
-                creator:
-                  req.user._id,
-
-                amount,
-
-                method,
-
-                note:
-                  details ||
-                  "Withdrawal Request",
-
-                status:
-                  "pending"
-              }
-            ],
-            { session }
-          );
-      }
+    // Atomic balance deduction with balance guard
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: req.user._id, "wallet.balance": { $gte: amount } },
+      { $inc: { "wallet.balance": -amount, "wallet.totalSent": amount } },
+      { ...sessionOpts, new: true }
     );
 
-    return res
-      .status(201)
-      .json(payout[0]);
+    if (!updatedUser) {
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(400).json({ message: "Insufficient wallet balance" });
+    }
 
+    const payoutList = await Payout.create(
+      [
+        {
+          creator: req.user._id,
+          amount,
+          method,
+          note: details || "Withdrawal Request",
+          status: "pending"
+        }
+      ],
+      sessionOpts
+    );
+
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    return res.status(201).json(payoutList[0]);
   } catch (err) {
-
-    const msg =
-      err.message ||
-      "Server error processing payout";
-
-    return res
-      .status(
-        msg.includes("balance")
-          ? 400
-          : 500
-      )
-      .json({
-        message: msg
-      });
-
-  } finally {
-    session.endSession();
+    if (session) {
+      try { await session.abortTransaction(); } catch (_) {}
+      session.endSession();
+    }
+    const msg = err.message || "Server error processing payout";
+    return res.status(msg.includes("balance") ? 400 : 500).json({ message: msg });
   }
 };
 

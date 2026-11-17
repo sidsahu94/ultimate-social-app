@@ -74,6 +74,13 @@ const PostSchema = new Schema(
       default: 0,
     },
 
+    reactions: [
+      {
+        user: { type: Schema.Types.ObjectId, ref: 'User' },
+        emoji: { type: String, default: '❤️' }
+      }
+    ],
+
     commentsCount: {
       type: Number,
       default: 0,

@@ -195,6 +195,7 @@ export default function Stories() {
                 type="file"
                 accept="image/*,video/*"
                 className="absolute inset-0 opacity-0 cursor-pointer z-30"
+                onClick={(e) => { e.target.value = null; }}
                 onChange={handleFileSelect}
                 title="Add to Your Story"
               />

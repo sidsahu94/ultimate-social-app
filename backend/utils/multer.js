@@ -17,8 +17,12 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // 🔥 FIXED: Throw Error on invalid type instead of silent fail
-  if (file.mimetype.startsWith('image') || file.mimetype.startsWith('video')) {
+  // 🔥 Accept images and videos by mimetype or filename extension
+  if (
+    file.mimetype.startsWith('image') ||
+    file.mimetype.startsWith('video') ||
+    /\.(jpg|jpeg|png|webp|gif|bmp|heic|mp4|mov|webm|avi|mkv)$/i.test(file.originalname)
+  ) {
     cb(null, true);
   } else {
     cb(new Error('Invalid file type. Only images and videos are allowed.'), false);

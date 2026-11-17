@@ -511,6 +511,11 @@ exports.votePoll = async (req, res) => {
     if (!message) return res.status(404).json({ message: 'Message not found' });
     if (message.type !== 'poll') return res.status(400).json({ message: 'Not a poll' });
 
+    const chat = await Chat.findById(message.chat).select('participants');
+    if (!chat || !ensureParticipant(chat, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden: You are not a member of this chat' });
+    }
+
     message.pollOptions = (message.pollOptions || []).map((opt) => ({
       ...opt.toObject?.() || opt,
       votes: (opt.votes || []).filter((id) => String(id) !== String(req.user._id)),

@@ -83,9 +83,9 @@ export default function StoryEditor({ file, onClose, onPosted }) {
   };
 
   const content = (
-    <div className="fixed inset-0 z-[99999] bg-black flex flex-col select-none overflow-hidden touch-none">
+    <div className="fixed inset-0 bg-black flex flex-col select-none overflow-hidden touch-none" style={{ zIndex: 9999999 }}>
       {/* Top Bar with Typography, Color Swatches, and Instant Share Action */}
-      <div className="absolute top-0 left-0 right-0 p-4 pt-5 flex justify-between items-center z-30 bg-gradient-to-b from-black/85 via-black/40 to-transparent">
+      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-30 bg-gradient-to-b from-black/90 via-black/60 to-transparent" style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top, 1.25rem))' }}>
         <button 
           type="button"
           onClick={onClose} 
@@ -145,16 +145,27 @@ export default function StoryEditor({ file, onClose, onPosted }) {
           <div className="w-10 h-10 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin" />
         )}
         
-        {/* Caption Input Overlay */}
-        <div className="absolute bottom-24 sm:bottom-28 w-full px-6 text-center z-20">
+        {/* Caption Input & Direct Action Overlay */}
+        <div className="absolute bottom-24 sm:bottom-28 w-full px-4 text-center z-20 flex items-center justify-center gap-2 max-w-lg mx-auto left-0 right-0">
           <input 
             ref={captionRef}
             value={caption}
             onChange={e => setCaption(e.target.value)}
             placeholder="Add a caption..."
-            className={`bg-black/60 text-white p-3.5 rounded-2xl w-full max-w-md mx-auto text-center outline-none placeholder-white/50 backdrop-blur-md border border-white/15 shadow-2xl text-sm sm:text-base ${FONT_STYLES[fontIndex]}`}
+            className={`bg-black/70 text-white p-3.5 rounded-2xl flex-1 text-center outline-none placeholder-white/50 backdrop-blur-md border border-white/20 shadow-2xl text-sm sm:text-base ${FONT_STYLES[fontIndex]}`}
             style={{ color: color }}
           />
+          {/* Quick Floating Share Action */}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handlePost}
+            className="h-12 px-4 rounded-2xl bg-gradient-to-r from-[#00F2FE] via-[#10B981] to-[#D4AF37] text-[#04070D] font-extrabold flex items-center justify-center gap-1.5 shadow-xl hover:scale-105 active:scale-95 transition cursor-pointer disabled:opacity-50 shrink-0"
+            title="Post story"
+          >
+            <FaPaperPlane size={13} />
+            <span className="text-xs font-black">{loading ? '...' : 'Post'}</span>
+          </button>
         </div>
       </div>
 

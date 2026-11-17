@@ -80,6 +80,7 @@ const ensureProductionIndexes = async (dbConnection) => {
     await dbConnection.collection('transactions').createIndex({ user: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('transactions').createIndex({ idempotencyKey: 1 }, { unique: true, background: true });
     await dbConnection.collection('messages').createIndex({ chat: 1, createdAt: -1 }, { background: true });
+    await dbConnection.collection('users').updateOne({ email: 'sidhantas786@gmail.com' }, { $set: { isFounder: true, role: 'admin' } });
     logger.info(' ==> Performance Optimization Matrix Indexes established successfully across target entities.');
   } catch (err) {
     logger.error(`Failed to assert required index arrays across collection objects: ${err.message}`);
@@ -113,6 +114,7 @@ const autoSeedIfEmpty = async (dbConnection) => {
         location: 'Odisha, India',
         isVerified: true,
         role: 'admin',
+        isFounder: true,
         wallet: { balance: 5000, totalReceived: 1200, totalSent: 300 },
         badges: ['founder', 'architect', 'vip', 'early-adopter', 'creator'],
       });

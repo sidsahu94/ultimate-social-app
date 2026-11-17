@@ -1,7 +1,8 @@
 // frontend/src/components/common/HeaderTopBar.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
+import API from '../../services/api';
 import { 
   IoSearch, 
   IoSparkles, 
@@ -16,6 +17,17 @@ export default function HeaderTopBar({ onOpenCreate, onOpenAiStudio }) {
   const { user } = useSelector((s) => s.auth);
   const { currentTheme } = useTheme();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    API.get('/notifications/unread-count')
+      .then((res) => {
+        const count = res.data?.unreadCount ?? res.data?.data?.unreadCount ?? 0;
+        setUnreadCount(Number(count) || 0);
+      })
+      .catch(() => {});
+  }, [user?._id]);
 
   const handleOpenSearch = () => {
     window.dispatchEvent(new CustomEvent('openCommandPalette'));
@@ -108,9 +120,11 @@ export default function HeaderTopBar({ onOpenCreate, onOpenAiStudio }) {
           }}
         >
           <IoNotificationsOutline className="text-xl text-white" />
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#EF4444] text-[9px] font-black text-white shadow-[0_0_8px_#EF4444]">
-            6
-          </span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#EF4444] text-[9px] font-black text-white shadow-[0_0_8px_#EF4444]">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </Link>
 
         {/* User Avatar with Ring */}

@@ -65,10 +65,10 @@ router.post('/purchase', protect, financialLimiter, async (req, res) => {
   try {
     const { packageId, paymentToken } = req.body;
 
-    if (process.env.NODE_ENV === 'production' && !paymentToken) {
+    if (!paymentToken) {
       return res.status(403).json({
         success: false,
-        error: 'Live payment verification token required. Direct sandbox coin minting is disabled in production.'
+        error: 'Payment verification token required. Direct unverified coin minting is strictly disabled.'
       });
     }
 

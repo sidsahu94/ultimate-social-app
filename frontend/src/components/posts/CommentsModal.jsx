@@ -60,7 +60,7 @@ const CommentsModal = ({ postId, isOpen, onClose }) => {
             socket.off('comment:created', onNewComment);
             socket.off('comment:deleted', onDeleteComment);
         };
-    }, [postId, post, myId]); 
+    }, [cleanPostId, myId]); 
 
     const loadComments = async (isReset = false) => {
         const p = isReset ? 0 : page;

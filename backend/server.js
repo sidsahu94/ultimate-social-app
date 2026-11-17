@@ -166,6 +166,9 @@ app.use(cookieParser());
 app.use(hpp());
 app.use(xss());
 
+const { checkMaintenance } = require('./middleware/maintenanceMiddleware');
+app.use(checkMaintenance);
+
 app.use(requestLogger);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get(['/health', '/api/health', '/api/v1/health'], (req, res) => {
@@ -247,6 +250,10 @@ socketService(io);
 // Mediasoup WebRTC Router initialization (graceful fallback if native binary unavailable)
 const { initializeMediasoup } = require('./services/mediasoup');
 initializeMediasoup().catch((err) => logger.warn(`Mediasoup initialization notice: ${err.message}`));
+
+// --- BACKGROUND CRON WORKERS ---
+require('./cron/storyCleanup');
+require('./cron/publish');
 
 // --- ROUTES MANAGEMENT ---
 const apiRouter = express.Router();

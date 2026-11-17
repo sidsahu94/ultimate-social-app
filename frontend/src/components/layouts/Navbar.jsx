@@ -263,39 +263,47 @@ export default function Navbar() {
             </Link>
           )}
 
-          {/* Gamification Level 8 Card */}
-          {user && (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-black/40 p-3 shadow-inner">
-              <div className="flex items-center justify-between text-xs font-bold text-white">
-                <span className="flex items-center gap-1.5 text-[#F59E0B]">
-                  <FaCrown size={12} className="text-[#F59E0B]" /> Level 8
-                </span>
-                <span className="font-mono text-[11px] text-[#CBD5E1]/80 font-medium">
-                  8,420 / 10,000 XP
-                </span>
-              </div>
+          {/* Gamification Level & Dynamic XP Card */}
+          {user && (() => {
+            const level = user.level || 1;
+            const xp = user.xp || 0;
+            const nextLevelXp = level * 1000;
+            const currentLevelProgress = xp % 1000;
+            const progressPct = Math.min(100, Math.max(8, Math.round((currentLevelProgress / 1000) * 100)));
 
-              {/* Glowing XP Progress Bar */}
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: '84.2%' }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className="relative h-full rounded-full shadow-md overflow-hidden"
-                  style={{
-                    background: `linear-gradient(90deg, ${currentTheme.color}, ${currentTheme.accent})`,
-                    boxShadow: `0 0 12px ${currentTheme.accent}`,
-                  }}
-                >
+            return (
+              <div className="mt-3 rounded-2xl border border-white/10 bg-black/40 p-3 shadow-inner">
+                <div className="flex items-center justify-between text-xs font-bold text-white">
+                  <span className="flex items-center gap-1.5 text-[#F59E0B]">
+                    <FaCrown size={12} className="text-[#F59E0B]" /> Level {level}
+                  </span>
+                  <span className="font-mono text-[11px] text-[#CBD5E1]/80 font-medium">
+                    {xp.toLocaleString()} / {nextLevelXp.toLocaleString()} XP
+                  </span>
+                </div>
+
+                {/* Glowing XP Progress Bar */}
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
                   <motion.div
-                    animate={{ x: ['-100%', '200%'] }}
-                    transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
-                    className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"
-                  />
-                </motion.div>
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPct}%` }}
+                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                    className="relative h-full rounded-full shadow-md overflow-hidden"
+                    style={{
+                      background: `linear-gradient(90deg, ${currentTheme.color}, ${currentTheme.accent})`,
+                      boxShadow: `0 0 12px ${currentTheme.accent}`,
+                    }}
+                  >
+                    <motion.div
+                      animate={{ x: ['-100%', '200%'] }}
+                      transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+                      className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"
+                    />
+                  </motion.div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Scrollable Nav Items */}

@@ -1,11 +1,12 @@
 // frontend/src/components/layouts/RightSidebar.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { IoFlame, IoCalendarOutline, IoPeopleOutline, IoArrowForward, IoCheckmark } from 'react-icons/io5';
 import SocialAiWidget from '../home/SocialAiWidget';
 import CreateWithAiCard from '../home/CreateWithAiCard';
 import { useTheme } from '../../contexts/ThemeProvider';
 import { useToast } from '../ui/ToastProvider';
+import API from '../../services/api';
 
 export default function RightSidebar() {
   const { currentTheme } = useTheme();
@@ -14,15 +15,7 @@ export default function RightSidebar() {
   const [joinedEvent, setJoinedEvent] = useState(false);
   const [followingMap, setFollowingMap] = useState({});
 
-  const toggleFollow = (userId) => {
-    setFollowingMap((prev) => {
-      const next = !prev[userId];
-      addToast(next ? 'Followed user' : 'Unfollowed user', { type: 'info' });
-      return { ...prev, [userId]: next };
-    });
-  };
-
-  const trendingTopics = [
+  const [trendingTopics, setTrendingTopics] = useState([
     {
       tag: '#IndiaTechSummit',
       count: '142K posts',
@@ -38,9 +31,9 @@ export default function RightSidebar() {
       count: '276K posts',
       img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80',
     },
-  ];
+  ]);
 
-  const suggestedUsers = [
+  const [suggestedUsers, setSuggestedUsers] = useState([
     {
       id: 'sugg_aarav',
       name: 'Aarav Deshmukh',
@@ -53,7 +46,64 @@ export default function RightSidebar() {
       mutuals: '8 mutual friends',
       avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
     },
-  ];
+  ]);
+
+  useEffect(() => {
+    // 1. Fetch live trending topics
+    API.get('/posts/trending')
+      .then((res) => {
+        const posts = res.data?.data || res.data || [];
+        if (Array.isArray(posts) && posts.length > 0) {
+          const tagMap = {};
+          posts.forEach(p => {
+            (p.hashtags || []).forEach(tag => {
+              const clean = '#' + tag.replace('#', '');
+              tagMap[clean] = (tagMap[clean] || 0) + (p.likesCount || (p.likes || []).length || 1);
+            });
+          });
+          const sorted = Object.entries(tagMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4)
+            .map(([tag, count], i) => ({
+              tag,
+              count: `${count * 10} posts`,
+              img: posts[i]?.images?.[0] || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80'
+            }));
+          if (sorted.length > 0) setTrendingTopics(sorted);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch live suggested users
+    API.get('/follow-suggest/suggest')
+      .then((res) => {
+        const users = res.data?.data || res.data || [];
+        if (Array.isArray(users) && users.length > 0) {
+          setSuggestedUsers(
+            users.slice(0, 3).map(u => ({
+              id: u._id,
+              name: u.name,
+              mutuals: u.bio ? u.bio.slice(0, 24) + '...' : 'Suggested for you',
+              avatar: u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleFollow = async (userId) => {
+    setFollowingMap((prev) => {
+      const next = !prev[userId];
+      return { ...prev, [userId]: next };
+    });
+    try {
+      await API.post(`/users/${userId}/follow`);
+      addToast(followingMap[userId] ? 'Unfollowed user' : 'Followed user', { type: 'info' });
+    } catch {
+      setFollowingMap((prev) => ({ ...prev, [userId]: !prev[userId] }));
+    }
+  };
 
   return (
     <aside className="flex flex-col gap-5 w-full max-w-[340px] pb-10">

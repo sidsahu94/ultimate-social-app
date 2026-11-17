@@ -165,7 +165,7 @@ exports.updateProfile = async (req, res) => {
           message: 'Access Denied: Founder & Admin profile is hardware-locked. Unauthorized modifications are prohibited.',
         });
       }
-    } else if (req.user._id.toString() !== req.params.id.toString() && req.user.role !== 'admin') {
+    } else if (req.user._id.toString() !== currentUser._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 

@@ -1,9 +1,35 @@
 // frontend/src/components/posts/EditPostModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { motion } from 'framer-motion';
 import { useToast } from '../ui/ToastProvider';
 import { FaTimes, FaTrash, FaPlus } from 'react-icons/fa';
+
+function FilePreviewItem({ file, onRemove }) {
+  const [url, setUrl] = useState('');
+
+  useEffect(() => {
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [file]);
+
+  return (
+    <div className="relative w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border border-white/10 group">
+      {url && <img src={url} className="w-full h-full object-cover opacity-80" alt="preview" />}
+      <button 
+        type="button"
+        onClick={onRemove}
+        className="absolute top-1 right-1 bg-[#052E24] text-white p-1 rounded-full shadow-md hover:scale-110 transition cursor-pointer"
+      >
+        <FaTimes size={8} />
+      </button>
+    </div>
+  );
+}
 
 export default function EditPostModal({ isOpen, onClose, post, onUpdated }) {
   const [content, setContent] = useState(post?.content || '');
@@ -115,15 +141,7 @@ export default function EditPostModal({ isOpen, onClose, post, onUpdated }) {
                 </label>
 
                 {newFiles.map((f, i) => (
-                    <div key={i} className="relative w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border border-white/10 group">
-                        <img src={URL.createObjectURL(f)} className="w-full h-full object-cover opacity-80" alt="preview" />
-                        <button 
-                            onClick={() => removeNewFile(i)}
-                            className="absolute top-1 right-1 bg-[#052E24] text-white p-1 rounded-full shadow-md hover:scale-110 transition"
-                        >
-                            <FaTimes size={8} />
-                        </button>
-                    </div>
+                    <FilePreviewItem key={i} file={f} onRemove={() => removeNewFile(i)} />
                 ))}
             </div>
         </div>

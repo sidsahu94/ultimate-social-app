@@ -84,6 +84,11 @@ const userSchema = new mongoose.Schema(
       default: 'user'
     },
 
+    isFounder: {
+      type: Boolean,
+      default: false
+    },
+
     isVerified: {
       type: Boolean,
       default: false

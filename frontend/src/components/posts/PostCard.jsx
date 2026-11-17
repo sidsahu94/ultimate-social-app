@@ -497,7 +497,7 @@ const PostCard = forwardRef(({ post }, ref) => {
         )}
 
         {/* === POLL SECTION === */}
-        {Boolean(localPost.poll?.question && localPost.poll?.options?.length > 0) && (
+        {Boolean(localPost.poll?.question?.trim() && localPost.poll?.options?.some(o => o?.text?.trim())) && (
           <div className="pt-2 pb-2 relative z-10">
             <div className="p-4 bg-[#070B14] rounded-[20px] border border-[rgba(226,232,240,0.14)]">
               <p className="font-display font-semibold text-[#F8FAFC] mb-3 text-sm">

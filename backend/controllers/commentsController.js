@@ -46,6 +46,11 @@ exports.create = async (req, res) => {
       await Post.findByIdAndUpdate(post._id, { 
           $inc: { commentsCount: 1, score: 2 } 
       });
+    } else {
+      const Reel = require('../models/Reel');
+      await Reel.findByIdAndUpdate(post._id, {
+          $inc: { commentsCount: 1 }
+      });
     }
 
     // Populate user details for the frontend

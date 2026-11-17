@@ -19,31 +19,58 @@ exports.aiAvatar = async (req, res) => {
 exports.voice = async (req, res) => {
   try {
     const { chatId } = req.params;
-    const { url } = req.body; // Assuming your middleware uploads the file and passes the URL in req.body
-
-    if (!url) {
-      return res.status(400).json({ message: "Audio URL is required" });
-    }
 
     const chat = await Chat.findById(chatId);
     if (!chat) {
-       return res.status(404).json({ message: "Chat not found" });
+      return res.status(404).json({ message: "Chat not found" });
+    }
+
+    // Verify membership authorization
+    const isParticipant = (chat.participants || []).some(p => String(p) === String(req.user._id));
+    if (!isParticipant && req.user.role !== 'admin') {
+      return res.status(403).json({ message: "Forbidden: You are not a participant in this conversation." });
+    }
+
+    let audioUrl = req.body?.url;
+    if (!audioUrl && req.file) {
+      try {
+        const up = await cloud.uploads(req.file.path, 'voice');
+        audioUrl = up.secure_url || up.url;
+      } catch (uploadErr) {
+        audioUrl = `/uploads/${req.file.filename}`;
+      } finally {
+        if (req.file.path && fs.existsSync(req.file.path)) {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+      }
+    }
+
+    if (!audioUrl) {
+      return res.status(400).json({ message: "Audio file or URL is required" });
     }
 
     // 1. Create a proper Message document
     const newMessage = await Message.create({
       chat: chatId,
       sender: req.user._id,
-      audio: url,
+      audio: audioUrl,
       type: 'voice',
-      content: '🎤 Voice Message' // Fallback for UI that doesn't support audio players
+      content: '🎤 Voice Message'
     });
 
-    // 2. Update the Chat's lastMessage reference properly
-    await Chat.findByIdAndUpdate(chatId, {
-      lastMessage: newMessage._id,
-      $set: { updatedAt: Date.now() } 
-    });
+    await newMessage.populate('sender', 'name username avatar');
+
+    // 2. Update Chat's lastMessage
+    chat.lastMessage = newMessage._id;
+    chat.updatedAt = Date.now();
+    await chat.save();
+
+    // 3. Emit real-time socket events to conversation room
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.to(String(chatId)).emit('receiveMessage', newMessage);
+      io.to(String(chatId)).emit('message:new', newMessage);
+    }
 
     res.status(201).json({ 
       success: true, 
@@ -53,7 +80,7 @@ exports.voice = async (req, res) => {
 
   } catch (error) {
     console.error("Voice message error:", error);
-    res.status(500).json({ message: "Server error sending voice message" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 exports.insights = async (req, res) => {

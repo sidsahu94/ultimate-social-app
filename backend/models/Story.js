@@ -18,7 +18,6 @@ const StorySchema = new mongoose.Schema({
 
 // --- INDEXES ---
 StorySchema.index({ user: 1 });
-// Auto-delete stories after 24 hours (86400 seconds TTL Index)
-StorySchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+StorySchema.index({ expiresAt: 1 });
 
 module.exports = mongoose.model('Story', StorySchema);

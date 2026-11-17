@@ -107,10 +107,11 @@ exports.createPost = async (req, res) => {
         if (req.files && req.files.length) {
             for (const f of req.files) {
                 const result = await safeUploadToCloudinary(f.path);
-                if (f.mimetype?.startsWith('image')) {
-                    images.push(result.url);
-                } else if (f.mimetype?.startsWith('video')) {
+                const isVideo = f.mimetype?.startsWith('video') || /\.(mp4|mov|webm|avi|mkv)$/i.test(f.originalname || f.path);
+                if (isVideo) {
                     videos.push(result.url);
+                } else {
+                    images.push(result.url);
                 }
             }
         }
@@ -753,9 +754,31 @@ exports.getPostLikes = async (req, res) => {
 
 exports.reactPost = async (req, res) => {
   try {
-    res.json({ success: true });
+    const { id } = req.params;
+    const { emoji = '❤️' } = req.body;
+    const post = await Post.findById(id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+
+    if (!post.reactions) post.reactions = [];
+    const existingIndex = post.reactions.findIndex(r => String(r.user) === String(req.user._id));
+    if (existingIndex > -1) {
+      if (post.reactions[existingIndex].emoji === emoji) {
+        post.reactions.splice(existingIndex, 1);
+      } else {
+        post.reactions[existingIndex].emoji = emoji;
+      }
+    } else {
+      post.reactions.push({ user: req.user._id, emoji });
+    }
+    await post.save();
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.to('post:' + id).emit('post:reacted', { postId: id, reactions: post.reactions });
+    }
+    return res.json({ success: true, reactions: post.reactions });
   } catch (e) {
-    res.status(500).json({ success: false, message: 'Error' });
+    return res.status(500).json({ success: false, message: 'Error processing reaction' });
   }
 };
 

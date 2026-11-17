@@ -8,15 +8,11 @@ const { protect, restrictTo } = require('../middleware/authMiddleware');
 const founderEnclaveGuard = (req, res, next) => {
   const u = req.user;
   if (!u) return res.status(401).json({ message: 'Authentication required' });
-  const isFounderIdentity = (
-    u.email === 'sidhantas786@gmail.com' ||
-    u.email === 'admin@socialapp.com' ||
-    u.username === 'sidsahu'
-  );
-  if (u.role !== 'admin' || !isFounderIdentity) {
+  const isFounderIdentity = u.role === 'admin' && (u.isFounder === true || String(u.email).toLowerCase() === 'sidhantas786@gmail.com');
+  if (!isFounderIdentity) {
     return res.status(403).json({
       success: false,
-      message: 'Access Denied: Hardware Enclave Protection restricts administrative controls exclusively to Founder Sidhanta Sahu.'
+      message: 'Access Denied: Hardware Enclave Protection restricts administrative controls exclusively to verified Founder.'
     });
   }
   next();

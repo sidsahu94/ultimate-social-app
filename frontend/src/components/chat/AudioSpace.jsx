@@ -5,6 +5,8 @@ import { FaMicrophone, FaMicrophoneSlash, FaTimes, FaHeadphones, FaMusic, FaUser
 import UserAvatar from '../ui/UserAvatar';
 import { useSocket } from '../../contexts/SocketContext'; // Access global socket
 
+const VISUALIZER_HEIGHTS = [40, 75, 55, 90, 35, 80, 65, 95, 50, 85, 60, 70, 45, 90, 60];
+
 export default function AudioSpace() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -83,10 +85,10 @@ export default function AudioSpace() {
               <button onClick={() => setIsOpen(false)} className="bg-[#0A111E] p-2.5 rounded-full hover:bg-white/10 text-[#CBD5E1] border border-white/10 transition"><FaTimes /></button>
             </div>
 
-            {/* Visualizer Placeholder */}
+            {/* Visualizer */}
             <div className="flex items-center justify-center gap-1.5 h-8 mb-6 opacity-60">
                 {[...Array(15)].map((_, i) => (
-                    <div key={i} className="w-1 bg-gradient-to-t from-[#1D4ED8] to-[#00F2FE] rounded-full animate-music-bar" style={{ height: `${Math.random() * 100}%`, animationDelay: `${i * 0.1}s` }} />
+                    <div key={i} className="w-1 bg-gradient-to-t from-[#1D4ED8] to-[#00F2FE] rounded-full animate-music-bar" style={{ height: `${VISUALIZER_HEIGHTS[i % VISUALIZER_HEIGHTS.length]}%`, animationDelay: `${i * 0.1}s` }} />
                 ))}
             </div>
 

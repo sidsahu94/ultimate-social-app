@@ -248,19 +248,23 @@ exports.grantCoins = async (req, res) => {
   }
 };
 
-// Emergency Maintenance Platform Freeze Toggle
-let isMaintenanceActive = false;
+// Emergency Maintenance Platform Freeze Toggle (Persisted in DB & Enforced via Middleware)
+const { setMaintenanceState, getMaintenanceState } = require('../middleware/maintenanceMiddleware');
+
 exports.toggleMaintenance = async (req, res) => {
   try {
-    isMaintenanceActive = !isMaintenanceActive;
+    const currentState = await getMaintenanceState();
+    const newState = !currentState;
+    await setMaintenanceState(newState);
+
     const io = req.app.get('io') || global.io;
     if (io) {
-      io.emit('system:maintenance', { active: isMaintenanceActive });
+      io.emit('system:maintenance', { active: newState });
     }
     res.json({
       success: true,
-      maintenance: isMaintenanceActive,
-      message: isMaintenanceActive 
+      maintenance: newState,
+      message: newState 
         ? 'Platform Emergency Freeze ACTIVATED by Founder' 
         : 'Platform Operations NORMALIZED'
     });

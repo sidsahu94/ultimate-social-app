@@ -119,13 +119,16 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     if (type === 'image') {
       setFiles(selectedFiles);
 
-      // Create stable instant preview via FileReader
+      // Instant synchronous preview
+      try {
+        const instantUrl = URL.createObjectURL(file);
+        setPreviewUrl(instantUrl);
+      } catch (_) {}
+
+      // Resilient base64 FileReader fallback
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setPreviewUrl(ev.target.result);
-      };
-      reader.onerror = () => {
-        setPreviewUrl(URL.createObjectURL(file));
+        if (ev.target.result) setPreviewUrl(ev.target.result);
       };
       reader.readAsDataURL(file);
 
@@ -443,20 +446,31 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
                   }`}>
                     <button onClick={() => { setFiles([]); setPreviewUrl(null); }} className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full z-20 hover:bg-black/90 transition cursor-pointer"><FaTimes /></button>
                     {files[0]?.type?.includes('video') ? (
-                      <video src={previewUrl || URL.createObjectURL(files[0])} className="h-full w-full object-cover" controls />
+                      previewUrl ? (
+                        <video src={previewUrl} className="h-full w-full object-cover" controls />
+                      ) : (
+                        <div className="flex items-center justify-center h-full w-full"><div className="w-8 h-8 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin" /></div>
+                      )
                     ) : (
-                      <img 
-                        src={previewUrl || (files[0] ? URL.createObjectURL(files[0]) : '')} 
-                        className={`h-full w-full ${aspectRatio === '1:1' ? 'object-cover' : 'object-contain'} transition-all duration-300`}
-                        style={{ filter: filter }}
-                        alt="Selected preview"
-                        onError={(e) => {
-                          if (files[0] && !e.currentTarget.dataset.retried) {
-                            e.currentTarget.dataset.retried = 'true';
-                            e.currentTarget.src = URL.createObjectURL(files[0]);
-                          }
-                        }}
-                      />
+                      previewUrl ? (
+                        <img 
+                          src={previewUrl} 
+                          className={`h-full w-full ${aspectRatio === '1:1' ? 'object-cover' : 'object-contain'} transition-all duration-300`}
+                          style={{ filter: filter }}
+                          alt="Selected media preview"
+                          onError={(e) => {
+                            if (files[0] && !e.currentTarget.dataset.retried) {
+                              e.currentTarget.dataset.retried = 'true';
+                              try { e.currentTarget.src = URL.createObjectURL(files[0]); } catch (_) {}
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full w-full gap-2 text-white/50">
+                          <div className="w-8 h-8 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs">Loading preview...</span>
+                        </div>
+                      )
                     )}
                   </div>
                   {/* Filters */}
