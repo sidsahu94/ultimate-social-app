@@ -61,43 +61,59 @@ exports.getUserById = async (req, res) => {
 
     if (req.user) {
         const me = await User.findById(req.user._id).select('blockedUsers following role');
-        const targetUserDoc = await User.findById(targetId).select('blockedUsers');
+        const targetUserDoc = await User.findById(user._id).select('blockedUsers');
         
         if (targetUserDoc?.blockedUsers?.map(String).includes(String(req.user._id))) {
             return res.status(404).json({ success: false, message: 'User not found' }); 
         }
 
-        if (me.blockedUsers.map(String).includes(String(targetId))) {
+        if (me?.blockedUsers?.map(String).includes(String(user._id))) {
             user.isBlockedByMe = true;
         }
 
-        user.isFollowing = me.following.map(String).includes(String(user._id));
-        user.isMe = String(me._id) === String(user._id);
-
-        if (user.privateProfile && !user.isFollowing && !user.isMe && req.user.role !== 'admin') {
-             return res.json({
-                 success: true,
-                 data: {
-                     _id: user._id,
-                     name: user.name,
-                     avatar: user.avatar,
-                     isVerified: user.isVerified,
-                     isPrivateRestricted: true,
-                     privateProfile: true,
-                     followersCount: (user.followers || []).length,
-                     followingCount: (user.following || []).length,
-                     isFollowing: false,
-                     isMe: false
-                 }
-             });
-        }
+        user.isFollowing = me?.following?.map(String).includes(String(user._id)) || false;
+        user.isMe = String(req.user._id) === String(user._id);
     } else {
         user.isFollowing = false;
         user.isMe = false;
     }
 
+    if (user.privateProfile && !user.isFollowing && !user.isMe && req.user?.role !== 'admin') {
+         return res.json({
+             success: true,
+             data: {
+                 _id: user._id,
+                 name: user.name,
+                 username: user.username,
+                 avatar: user.avatar,
+                 isVerified: user.isVerified,
+                 isPrivateRestricted: true,
+                 privateProfile: true,
+                 followersCount: (user.followers || []).length,
+                 followingCount: (user.following || []).length,
+                 isFollowing: false,
+                 isMe: false
+             }
+         });
+    }
+
     user.followersCount = (user.followers || []).length;
     user.followingCount = (user.following || []).length;
+
+    // Sanitize sensitive personal data if viewing someone else's profile
+    if (!user.isMe && req.user?.role !== 'admin') {
+      delete user.email;
+      delete user.wallet;
+      delete user.walletPin;
+      delete user.geo;
+      delete user.pushSubscriptions;
+      delete user.blockedUsers;
+      delete user.closeFriends;
+      delete user.notificationSettings;
+      delete user.passkeyCredentials;
+      delete user.twoFactorAuth;
+      delete user.refreshToken;
+    }
 
     res.json({ success: true, data: user });
   } catch (e) {
@@ -263,7 +279,7 @@ exports.changePassword = async (req, res) => {
         return res.status(400).json({ success: false, message: 'New password must be 6+ chars' });
     }
 
-    user.password = await bcrypt.hash(newPassword, 12);
+    user.password = newPassword;
     await user.save();
     res.json({ success: true, message: 'Password updated' });
   } catch (e) {
@@ -422,6 +438,9 @@ exports.acceptFollowRequest = async (req, res) => {
   try {
     const fr = await FollowRequest.findById(req.params.id);
     if (!fr) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (String(fr.to) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to accept this request' });
+    }
 
     const me = await User.findById(req.user._id);
     const them = await User.findById(fr.from);
@@ -447,7 +466,13 @@ exports.acceptFollowRequest = async (req, res) => {
 
 exports.declineFollowRequest = async (req, res) => {
   try {
-    await FollowRequest.findByIdAndUpdate(req.params.id, { status: 'declined' });
+    const fr = await FollowRequest.findById(req.params.id);
+    if (!fr) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (String(fr.to) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to decline this request' });
+    }
+    fr.status = 'declined';
+    await fr.save();
     res.json({ success: true, message: 'Request declined' });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Error declining request' });

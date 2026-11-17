@@ -75,8 +75,10 @@ API.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // --- AUTOMATIC TRANSIENT ERROR RETRY (Render Cold Starts & Gateway Pauses) ---
-    const isTransient = !error.response || (error.response.status >= 500 && error.response.status <= 504);
+    // --- AUTOMATIC TRANSIENT ERROR RETRY (Idempotent GET/HEAD only - prevents duplicate mutations) ---
+    const method = (originalRequest?.method || 'get').toLowerCase();
+    const isIdempotentMethod = method === 'get' || method === 'head';
+    const isTransient = isIdempotentMethod && (!error.response || (error.response.status >= 502 && error.response.status <= 504));
     const isAuthRoute = originalRequest?.url && (
       originalRequest.url.includes('/auth/login') ||
       originalRequest.url.includes('/auth/refresh')

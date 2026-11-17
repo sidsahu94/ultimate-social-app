@@ -64,6 +64,13 @@ exports.validateEnv = () => {
   };
 
   if (env.NODE_ENV === 'production') {
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'ultimate_social_verse_master_auth_secret_key_2026') {
+      throw new Error('FATAL SECURITY ERROR: JWT_SECRET must be configured with a unique, secure secret in production environment variables.');
+    }
+    if (!process.env.JWT_REFRESH_SECRET || process.env.JWT_REFRESH_SECRET === 'ultimate_social_verse_master_refresh_secret_key_2026') {
+      throw new Error('FATAL SECURITY ERROR: JWT_REFRESH_SECRET must be configured with a unique, secure secret in production environment variables.');
+    }
+
     const missing = productionOnlyKeys.filter((key) => !String(process.env[key] || '').trim());
     if (missing.length > 0) {
       console.warn(`⚠️ Notice: Cloud features running in local/fallback mode: ${missing.join(', ')}`);

@@ -75,12 +75,13 @@ export default function SupportCenter() {
     setSending(true);
     try {
       // Submits as an incident / support ticket to the backend
-      await API.post('/extra/report', {
+      const res = await API.post('/extra/report', {
         reason: `[${ticket.category}] ${ticket.subject}`,
         details: ticket.message,
       });
       setSubmitted(true);
-      addToast('Support ticket logged successfully! Ticket ID #' + Math.floor(100000 + Math.random() * 900000), {
+      const ticketId = res.data?.ticketId ? String(res.data.ticketId).slice(-6).toUpperCase() : Math.floor(100000 + Math.random() * 900000);
+      addToast(`Support ticket #${ticketId} submitted successfully! Our team has queued it for review.`, {
         type: 'success',
       });
       setTicket({ category: 'General Inquiry', subject: '', message: '' });

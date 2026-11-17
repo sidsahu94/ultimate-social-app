@@ -42,7 +42,13 @@ const connectDatabase = async () => {
     }
   }
 
-  // Fallback: Start MongoMemoryServer for instant execution without cloud wait
+  // Fallback: In production, never silently fall back to an ephemeral in-memory database
+  if (process.env.NODE_ENV === 'production') {
+    logger.error('CRITICAL: Cannot connect to primary MongoDB URI. Ephemeral in-memory fallback is disabled in production.');
+    throw new Error('Database connection failed in production');
+  }
+
+  // Development Fallback: Start MongoMemoryServer for instant execution without cloud wait
   try {
     const { MongoMemoryServer } = require('mongodb-memory-server');
     logger.info('🚀 Launching Embedded In-Memory MongoDB Server...');
@@ -69,6 +75,8 @@ const connectDatabase = async () => {
 const ensureProductionIndexes = async (dbConnection) => {
   try {
     await dbConnection.collection('posts').createIndex({ hashtags: 1, createdAt: -1 }, { background: true });
+    await dbConnection.collection('users').createIndex({ email: 1 }, { unique: true, background: true });
+    await dbConnection.collection('users').createIndex({ username: 1 }, { unique: true, background: true });
     await dbConnection.collection('transactions').createIndex({ user: 1, createdAt: -1 }, { background: true });
     await dbConnection.collection('transactions').createIndex({ idempotencyKey: 1 }, { unique: true, background: true });
     await dbConnection.collection('messages').createIndex({ chat: 1, createdAt: -1 }, { background: true });
@@ -83,24 +91,12 @@ const autoSeedIfEmpty = async (dbConnection) => {
     const User = require('../models/User');
     const Post = require('../models/Post');
 
-    
-      // Assert Founder identity across admin records
-      await User.updateMany(
-        { $or: [{ email: 'admin@socialapp.com' }, { role: 'admin' }] },
-        {
-          $set: {
-            name: 'Sidhanta Sahu',
-            username: 'sidsahu',
-            bio: 'Founder & Chief Architect of SocialVerse ∞. Designing the next generation of luxury digital human connection.',
-            location: 'Odisha, India',
-            isVerified: true,
-            role: 'admin',
-            badges: ['founder', 'architect', 'vip', 'early-adopter', 'creator'],
-          }
-        }
-      );
+    // Only seed initial demonstration fixtures if database is completely empty and in non-production
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
 
-      const count = await User.countDocuments();
+    const count = await User.countDocuments();
     if (count === 0) {
       logger.info('🌱 Empty database detected. Auto-seeding initial master accounts & posts...');
       const salt = await bcrypt.genSalt(10);

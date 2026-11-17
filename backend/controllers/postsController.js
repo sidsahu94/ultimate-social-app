@@ -1,3 +1,25 @@
+
+function isPrivateIpAddress(ip) {
+  if (!ip) return true;
+  if (net.isIPv4(ip)) {
+    const p = ip.split('.').map(Number);
+    if (p[0] === 0 || p[0] === 127) return true;
+    if (p[0] === 10) return true;
+    if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true;
+    if (p[0] === 192 && p[1] === 168) return true;
+    if (p[0] === 169 && p[1] === 254) return true;
+    return false;
+  }
+  if (net.isIPv6(ip)) {
+    const l = ip.toLowerCase();
+    if (l === '::1' || l === '::' || l.startsWith('fe80:') || l.startsWith('fc') || l.startsWith('fd')) return true;
+    return false;
+  }
+  return true;
+}
+
+const dns = require('dns');
+const net = require('net');
 // backend/controllers/postsController.js
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
@@ -538,11 +560,12 @@ exports.updatePost = async (req, res) => {
     }
 
     if (req.body.imagesToRemove) {
-      const toRemove = Array.isArray(req.body.imagesToRemove) ? req.body.imagesToRemove : [req.body.imagesToRemove];
-      for (const url of toRemove) {
+      const rawRemove = Array.isArray(req.body.imagesToRemove) ? req.body.imagesToRemove : [req.body.imagesToRemove];
+      const legitimateRemove = rawRemove.filter(url => post.images.includes(url));
+      for (const url of legitimateRemove) {
         await deleteFile(url);
       }
-      post.images = post.images.filter(imgUrl => !toRemove.includes(imgUrl));
+      post.images = post.images.filter(imgUrl => !legitimateRemove.includes(imgUrl));
     }
 
     if (req.files?.length) {
@@ -739,8 +762,49 @@ exports.reactPost = async (req, res) => {
 exports.unfurlLink = async (req, res) => {
   try {
     const { url } = req.body;
-    if (!url) return res.status(400).json({ message: 'URL required' });
-    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Bot/1.0' }, timeout: 5000 });
+    if (!url || typeof url !== 'string') return res.status(400).json({ message: 'Valid URL required' });
+
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return res.status(400).json({ message: 'Invalid URL format' });
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).json({ message: 'Only HTTP and HTTPS URLs are permitted' });
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.local') ||
+      hostname === 'metadata.google.internal' ||
+      hostname === 'instance-data'
+    ) {
+      return res.status(400).json({ message: 'Restricted domain destination' });
+    }
+
+    try {
+      const records = await dns.promises.lookup(hostname, { all: true });
+      for (const rec of records) {
+        if (isPrivateIpAddress(rec.address)) {
+          return res.status(400).json({ message: 'Restricted IP address destination' });
+        }
+      }
+    } catch (dnsErr) {
+      return res.status(400).json({ message: 'Could not resolve domain name' });
+    }
+
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': 'SocialVerse-Bot/1.0 (SafeMetadataExtractor)' },
+      timeout: 4000,
+      maxContentLength: 1024 * 512,
+      maxRedirects: 3
+    });
+
     const $ = cheerio.load(data);
     const meta = {
       title: $('meta[property="og:title"]').attr('content') || $('title').text() || '',
@@ -748,9 +812,9 @@ exports.unfurlLink = async (req, res) => {
       image: $('meta[property="og:image"]').attr('content') || '',
       url: url
     };
-    res.json(meta);
+    return res.json(meta);
   } catch (err) {
-    res.json({ title: '', description: '', image: '' }); 
+    return res.json({ title: '', description: '', image: '', url: req.body?.url || '' });
   }
 };
 
@@ -875,7 +939,7 @@ exports.unlockPost = async (req, res) => {
         await Transaction.create([
             {
                 user: userId,
-                amount: -price,
+                amount: price,
                 type: 'debit',
                 description: 'Unlocked exclusive media from post #' + post._id,
                 idempotencyKey: txKey

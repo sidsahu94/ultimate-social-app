@@ -17,8 +17,9 @@ router.put('/like/:id', protect, reels.likeReel);
 // Tip creator on reel
 router.post('/:id/tip', protect, reels.tipReel);
 
-// View reel analytics
+// View reel analytics (supports both /:id/view and legacy /view/:id)
 router.post('/:id/view', protect, reels.viewReel);
+router.post('/view/:id', protect, reels.viewReel);
 
 // Delete reel
 router.delete('/:id', protect, reels.deleteReel);

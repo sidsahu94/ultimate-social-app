@@ -14,7 +14,7 @@ const isTransientError = (err) => {
 	const msg = (err.message || '').toLowerCase();
 	const code = err?.http_code || err?.status_code || err?.code || '';
 	if (typeof code === 'number' && code >= 500) return true;
-	if (/[timeout|timed out|request timeout|etimedout|econnreset|502|503|504]/i.test(msg)) return true;
+	if (/(timeout|timed out|request timeout|etimedout|econnreset|502|503|504)/i.test(msg)) return true;
 	if (String(code).includes('ECONN') || String(code).includes('ETIMEDOUT')) return true;
 	return false;
 };

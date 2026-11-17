@@ -243,15 +243,6 @@ exports.verifyOtp = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'User not found' });
   }
 
-  if (user.isVerified && !user.tempOtp) {
-    const { accessToken, refreshToken } = await createTokensAndSetCookie(user, req, res);
-    return res.json({
-      success: true,
-      message: 'Already verified',
-      data: { token: accessToken, refreshToken, user: sanitizeUser(user) },
-    });
-  }
-
   if (!user.tempOtp || !user.resetOtpExpires) {
     return res.status(400).json({ success: false, message: 'No pending OTP verification' });
   }
@@ -417,11 +408,11 @@ exports.refresh = asyncHandler(async (req, res) => {
 
   const hashedToken = hashText(refreshToken);
 
-  if (user.refreshToken && user.refreshToken !== hashedToken) {
+  if (!user.refreshToken || user.refreshToken !== hashedToken) {
     user.refreshToken = null;
     await user.save({ validateBeforeSave: false });
     clearAuthCookie(res);
-    return res.status(403).json({ success: false, message: 'Invalid refresh token (reuse detected)' });
+    return res.status(403).json({ success: false, message: 'Invalid or revoked refresh token' });
   }
 
   const currentFingerprint = getFingerprint(req);
@@ -509,12 +500,12 @@ exports.resetPassword = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid code' });
   }
 
-  user.password = await bcrypt.hash(String(newPassword || ''), 12);
+  user.password = String(newPassword || '');
   user.resetOtp = undefined;
   user.resetOtpExpires = undefined;
   user.refreshToken = null;
 
-  await user.save({ validateBeforeSave: false });
+  await user.save();
   clearAuthCookie(res);
 
   return res.json({ success: true, message: 'Password updated' });

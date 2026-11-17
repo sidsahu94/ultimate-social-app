@@ -36,6 +36,50 @@ router.get('/reels', extraController.getReels);
 // Shop Items (Public)
 router.get('/shop/items', extraController.getShopItems);
 
+// Submit Support / Incident Report
+router.post('/report', optionalAuth, async (req, res) => {
+  try {
+    const Report = require('../models/Report');
+    const { reason, details, targetUser, targetPost } = req.body;
+    if (!reason) {
+      return res.status(400).json({ success: false, message: 'Reason is required' });
+    }
+
+    let reporterId = req.user?._id;
+    if (!reporterId) {
+      const User = require('../models/User');
+      const admin = await User.findOne({ role: 'admin' });
+      reporterId = admin?._id;
+    }
+
+    if (!reporterId) {
+      return res.status(400).json({ success: false, message: 'Cannot file report without active user identity' });
+    }
+
+    const report = await Report.create({
+      reporter: reporterId,
+      targetUser: targetUser || undefined,
+      targetPost: targetPost || undefined,
+      reason: String(reason).slice(0, 300),
+      details: String(details || '').slice(0, 2000),
+      status: 'open'
+    });
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.emit('mod:new-report', report);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Support ticket logged successfully',
+      ticketId: report._id
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to create report', error: err.message });
+  }
+});
+
 // Incident Reports (Admin / Moderation)
 router.get('/reports', protect, restrictTo('admin'), async (req, res) => {
   try {

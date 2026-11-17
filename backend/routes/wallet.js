@@ -60,10 +60,18 @@ router.post('/claim-daily-bonus', protect, async (req, res) => {
 });
 
 
-// Coin Pack Purchasing Endpoint (Simulated Gateway with Idempotency)
+// Coin Pack Purchasing Endpoint (Secured with Package Verification and Atomic Balance Updates)
 router.post('/purchase', protect, financialLimiter, async (req, res) => {
   try {
-    const { packageId, amount, currency = 'USD' } = req.body;
+    const { packageId, paymentToken } = req.body;
+
+    if (process.env.NODE_ENV === 'production' && !paymentToken) {
+      return res.status(403).json({
+        success: false,
+        error: 'Live payment verification token required. Direct sandbox coin minting is disabled in production.'
+      });
+    }
+
     const coinPacks = {
       starter: { coins: 100, price: 1.99 },
       creator: { coins: 500, price: 7.99 },
@@ -71,16 +79,27 @@ router.post('/purchase', protect, financialLimiter, async (req, res) => {
       mogul: { coins: 3000, price: 29.99 },
     };
 
-    const selectedPack = coinPacks[packageId] || { coins: Number(amount) || 100, price: 1.99 };
+    if (!packageId || !coinPacks[packageId]) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid packageId. Must be one of: starter, creator, vip, mogul'
+      });
+    }
+
+    const selectedPack = coinPacks[packageId];
     const coinsToAdd = selectedPack.coins;
 
-    const user = await User.findById(req.user._id);
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $inc: {
+          'wallet.balance': coinsToAdd,
+          'wallet.totalReceived': coinsToAdd
+        }
+      },
+      { new: true }
+    );
     if (!user) return res.status(404).json({ error: 'User not found' });
-
-    user.wallet = user.wallet || { balance: 0, totalReceived: 0, totalSent: 0 };
-    user.wallet.balance = (user.wallet.balance || 0) + coinsToAdd;
-    user.wallet.totalReceived = (user.wallet.totalReceived || 0) + coinsToAdd;
-    await user.save();
 
     const Transaction = require('../models/Transaction');
     const idempotencyKey = `purchase:${user._id}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
@@ -88,19 +107,19 @@ router.post('/purchase', protect, financialLimiter, async (req, res) => {
       user: user._id,
       type: 'credit',
       amount: coinsToAdd,
-      description: `Purchased ${selectedPack.coins} SocialVerse Coins (${packageId || 'custom'})`,
+      description: `Purchased ${selectedPack.coins} SocialVerse Coins (${packageId})`,
       idempotencyKey,
     }).catch(() => {});
 
     const io = req.app.get('io') || global.io;
     if (io) {
-      io.to(String(user._id)).emit('wallet:update', { balance: user.wallet.balance });
+      io.to(String(user._id)).emit('wallet:update', { balance: user.wallet?.balance || 0 });
     }
 
     return res.status(200).json({
       success: true,
       message: `Successfully purchased ${coinsToAdd} coins!`,
-      balance: user.wallet.balance,
+      balance: user.wallet?.balance || 0,
       wallet: user.wallet,
     });
   } catch (err) {

@@ -117,8 +117,6 @@ app.use(helmet({
   }
 }));
 
-app.use(mongoSanitize());
-
 const globalApiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
 const uploadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
@@ -129,15 +127,22 @@ app.use(['/api/auth/login', '/api/v1/auth/login', '/api/auth/register', '/api/v1
 app.use(['/api/posts/upload', '/api/v1/posts/upload'], uploadLimiter);
 app.use(['/api/posts/feed', '/api/v1/posts/feed'], feedLimiter);
 
-const allowedOrigins = Array.isArray(config.ALLOWED_ORIGINS) ? config.ALLOWED_ORIGINS : [config.ALLOWED_ORIGINS];
+const defaultOrigins = [
+  'https://ultimate-social-app.vercel.app',
+  'https://ultimate-social-app.onrender.com'
+];
+const envOrigins = Array.isArray(config.ALLOWED_ORIGINS)
+  ? config.ALLOWED_ORIGINS
+  : (config.ALLOWED_ORIGINS ? String(config.ALLOWED_ORIGINS).split(',').map(s => s.trim()) : []);
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 
 const isOriginAllowed = (origin) => {
   if (!origin) return true;
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return true;
-  if (origin.endsWith('.vercel.app')) return true;
-  if (origin.endsWith('.onrender.com')) return true;
-  if (config.NODE_ENV !== 'production' || origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (config.NODE_ENV !== 'production') {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return true;
+    }
   }
   return false;
 };
@@ -156,6 +161,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(mongoSanitize());
 app.use(cookieParser());
 app.use(hpp());
 app.use(xss());
@@ -235,6 +241,7 @@ if (config.REDIS_URL) {
 }
 
 global.io = io;
+app.set('io', io);
 socketService(io);
 
 // Mediasoup WebRTC Router initialization (graceful fallback if native binary unavailable)

@@ -252,6 +252,7 @@ router.get(
 
 router.post(
   '/unfurl',
+  protect,
   unfurlLink
 );
 

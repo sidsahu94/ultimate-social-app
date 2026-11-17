@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Middleware
 const validate = require('../middleware/validate');
-const { authLimiter } = require('../middleware/rateLimit');
+const { authLimiter, otpLimiter, passwordResetLimiter } = require('../middleware/rateLimit');
 const { protect } = require('../middleware/authMiddleware');
 
 // Validators
@@ -39,7 +39,7 @@ router.post(
 // Verify OTP
 router.post(
   '/verify-otp',
-  authLimiter,
+  otpLimiter,
   validate(verifyOtpSchema),
   authController.verifyOtp
 );
@@ -70,7 +70,7 @@ router.post(
 // Request Password Reset
 router.post(
   '/request-reset',
-  authLimiter,
+  passwordResetLimiter,
   validate(requestResetSchema),
   authController.requestPasswordReset
 );
@@ -78,7 +78,7 @@ router.post(
 // Reset Password
 router.post(
   '/reset-password',
-  authLimiter,
+  passwordResetLimiter,
   validate(resetPasswordSchema),
   authController.resetPassword
 );

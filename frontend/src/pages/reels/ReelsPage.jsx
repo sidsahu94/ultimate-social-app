@@ -169,7 +169,7 @@ const ReelItem = ({ reel, isActive, toggleLike, onDelete }) => {
       const cleanId = reel._id ? String(reel._id).split('_loop_')[0] : reel._id;
       if (cleanId && !cleanId.startsWith("demo")) {
         viewTimer = setTimeout(() => {
-          API.post(`/reels/view/${cleanId}`).catch(() => {});
+          API.post(`/reels/${cleanId}/view`).catch(() => {});
         }, 3000);
       }
     } else if (videoRef.current) {

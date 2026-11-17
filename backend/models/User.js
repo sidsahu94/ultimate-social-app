@@ -103,6 +103,8 @@ const userSchema = new mongoose.Schema(
     lastAirdrop: { type: Date },
     lastDailyBonus: { type: Date },
     referralCode: { type: String },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referralBonusGiven: { type: Boolean, default: false },
 
     // --- Gamification & Social ---
     streak: {
@@ -165,7 +167,10 @@ const userSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: false },
       secret: { type: String }
     },
-    refreshToken: { type: String },
+    refreshToken: { type: String, select: false },
+    tempOtp: { type: String, select: false },
+    resetOtp: { type: String, select: false },
+    resetOtpExpires: { type: Date, select: false },
     googleId: { type: String, unique: true, sparse: true }, // Added sparse flag configuration for partial validation indexing on federated signups
     notificationSettings: {
       likes: { type: Boolean, default: true },
