@@ -35,3 +35,8 @@ Thumbs.db
 git_check.js
 patch_*.js
 test_*.js
+
+# AI Export Bundles (Prevent Secret Scanning push blocks while keeping local access)
+*CODEBASE_FOR_AI.md
+PROJECT_KNOWLEDGE_BASE_FOR_AI.md
+AI_EXPORT/

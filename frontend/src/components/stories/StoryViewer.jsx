@@ -1,5 +1,6 @@
 // frontend/src/components/stories/StoryViewer.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FaTimes, FaPause, FaPlay, FaTrash, FaPaperPlane, FaEye } from 'react-icons/fa';
 import { getImageUrl } from '../../utils/imageUtils';
 import API from '../../services/api';
@@ -203,8 +204,8 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose, onDele
     (activeStory.media && activeStory.media.match(/\.(mp4|webm)$/i));
   const isMine = String(activeStory.user?._id || activeStory.user || '') === String(myId || '');
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-[#04070D]/95 backdrop-blur-2xl flex items-center justify-center p-0 md:p-6 animate-fade-in">
+  const viewerModal = (
+    <div className="fixed inset-0 z-[99999] bg-[#04070D]/95 backdrop-blur-2xl flex items-center justify-center p-0 md:p-6 animate-fade-in">
       <div className="relative w-full h-full md:max-w-[420px] md:h-[90vh] md:rounded-[32px] overflow-hidden bg-[#070B14] border border-white/15 shadow-[0_25px_80px_rgba(0,0,0,0.9)] flex flex-col justify-between">
         
         {/* Progress Bars */}
@@ -467,4 +468,6 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose, onDele
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(viewerModal, document.body) : viewerModal;
 }

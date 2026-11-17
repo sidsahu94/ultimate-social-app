@@ -496,11 +496,16 @@ export default function ProfilePage() {
                         alt="Profile post"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80";
+                        }}
                       />
                     ) : (
-                      <div className="w-full h-full bg-[#04070D] p-3 flex items-center justify-center">
-                        <p className="text-white text-xs line-clamp-3 text-center">
-                          {post.content}
+                      <div className="w-full h-full bg-gradient-to-br from-[#0B1528] via-[#04070D] to-[#122238] p-3 flex flex-col items-center justify-center border border-white/5">
+                        <span className="text-xl mb-1">✨</span>
+                        <p className="text-white text-xs font-medium line-clamp-3 text-center">
+                          {post.content || "SocialVerse Thought"}
                         </p>
                       </div>
                     )}

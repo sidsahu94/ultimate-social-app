@@ -34,7 +34,7 @@ const safeUnlink = (path) => {
 const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 	new Promise((resolve, reject) => {
 		if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-			safeUnlink(filePath);
+			// Do not unlink so local fallback can serve the file
 			return reject(new Error('CLOUDINARY env not configured'));
 		}
 
@@ -57,9 +57,8 @@ const uploads = (filePath, folder = 'ultimate_social', opts = {}) =>
 					return setTimeout(tryOnce, delay);
 				}
 
-				// Final failure
+				// Final failure: preserve file so local filesystem fallback can serve it
 				console.error('Cloudinary upload failed (final):', err && (err.message || err));
-                safeUnlink(filePath); // Failure cleanup
 				return reject(err || new Error('Cloudinary upload failed'));
 			});
 		};

@@ -32,6 +32,16 @@ API.interceptors.request.use(
         }
       }
     }
+    // Allow browser / XMLHttpRequest to automatically set multipart/form-data boundary for FormData
+    if (config.data instanceof FormData) {
+      if (config.headers) {
+        delete config.headers['Content-Type'];
+        if (typeof config.headers.delete === 'function') {
+          config.headers.delete('Content-Type');
+        }
+      }
+    }
+
     if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
       for (const key of Object.keys(config.data)) {
         if (typeof config.data[key] === 'string' && config.data[key].includes('_loop_')) {

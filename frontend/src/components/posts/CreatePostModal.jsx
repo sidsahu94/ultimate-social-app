@@ -25,6 +25,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
   const [activeTab, setActiveTab] = useState('post'); 
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   
@@ -98,6 +99,7 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
         // Reset on close
         setText(''); 
         setFiles([]); 
+        setPreviewUrl(null);
         setPollQ(''); 
         setPollOpts(['','']); 
         setFilter(''); 
@@ -112,43 +114,46 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     const selectedFiles = Array.from(e.target.files);
     if (selectedFiles.length === 0) return;
 
+    const file = selectedFiles[0];
+
     if (type === 'image') {
-        setLoading(true);
-        try {
-            const file = selectedFiles[0];
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            img.crossOrigin = 'anonymous';
+      setFiles(selectedFiles);
 
-            const isUnsafe = await new Promise((resolve) => {
-                img.onload = async () => {
-                    try {
-                        const { checkImageSafety } = await import('../../utils/contentSafety');
-                        const result = await checkImageSafety(img);
-                        resolve(result);
-                    } catch (error) {
-                        console.error("NSFW Check Error", error);
-                        resolve(false);
-                    }
-                };
-                img.onerror = () => resolve(false);
-            });
+      // Create stable instant preview via FileReader
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPreviewUrl(ev.target.result);
+      };
+      reader.onerror = () => {
+        setPreviewUrl(URL.createObjectURL(file));
+      };
+      reader.readAsDataURL(file);
 
+      // Asynchronous non-blocking safety check
+      setLoading(true);
+      try {
+        const img = new Image();
+        img.onload = async () => {
+          try {
+            const { checkImageSafety } = await import('../../utils/contentSafety');
+            const isUnsafe = await checkImageSafety(img);
             if (isUnsafe) {
-                add("Image blocked: Contains inappropriate content.", { type: 'error' });
-                e.target.value = "";
-                setFiles([]);
-            } else {
-                setFiles(selectedFiles);
+              add("Image blocked: Contains inappropriate content.", { type: 'error' });
+              e.target.value = "";
+              setFiles([]);
+              setPreviewUrl(null);
             }
-        } catch (err) {
-            console.error("File processing error", err);
-            setFiles(selectedFiles); 
-        } finally {
-            setLoading(false);
-        }
+          } catch (_) {}
+          setLoading(false);
+        };
+        img.onerror = () => setLoading(false);
+        img.src = URL.createObjectURL(file);
+      } catch (_) {
+        setLoading(false);
+      }
     } else {
-        setFiles(selectedFiles);
+      setFiles(selectedFiles);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
 
@@ -222,10 +227,10 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
          
          for (const f of files) {
              const processed = await compressImage(f);
-             fd.append('media', processed);
+             fd.append('media', processed, f.name || 'image.jpg');
          }
 
-         await API.post('/posts', fd);
+         await API.post('/posts', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       }
 
       if (!isSaveDraft) {
@@ -436,15 +441,21 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
                   <div className={`relative w-full rounded-xl overflow-hidden border border-[rgba(226,232,240,0.14)] bg-black group ${
                     aspectRatio === '1:1' ? 'h-64 sm:h-72' : aspectRatio === '4:5' ? 'h-80 sm:h-96' : 'h-48 sm:h-56'
                   }`}>
-                    <button onClick={() => setFiles([])} className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full z-20 hover:bg-[#052E24] transition cursor-pointer"><FaTimes /></button>
-                    {files[0].type.includes('video') ? (
-                      <video src={URL.createObjectURL(files[0])} className="h-full w-full object-cover" controls />
+                    <button onClick={() => { setFiles([]); setPreviewUrl(null); }} className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full z-20 hover:bg-black/90 transition cursor-pointer"><FaTimes /></button>
+                    {files[0]?.type?.includes('video') ? (
+                      <video src={previewUrl || URL.createObjectURL(files[0])} className="h-full w-full object-cover" controls />
                     ) : (
                       <img 
-                        src={URL.createObjectURL(files[0])} 
+                        src={previewUrl || (files[0] ? URL.createObjectURL(files[0]) : '')} 
                         className={`h-full w-full ${aspectRatio === '1:1' ? 'object-cover' : 'object-contain'} transition-all duration-300`}
                         style={{ filter: filter }}
-                        alt="preview"
+                        alt="Selected preview"
+                        onError={(e) => {
+                          if (files[0] && !e.currentTarget.dataset.retried) {
+                            e.currentTarget.dataset.retried = 'true';
+                            e.currentTarget.src = URL.createObjectURL(files[0]);
+                          }
+                        }}
                       />
                     )}
                   </div>
