@@ -10,15 +10,24 @@ const logger = winston.createLogger({
 
 let memServer = null;
 
+const VERIFIED_ATLAS_URI = 'mongodb+srv://UltimateSocial:Ultimate123@socialo.8fcmyqk.mongodb.net/ultimate_social?retryWrites=true&w=majority&appName=Socialo';
+
 const connectDatabase = async () => {
   const configOptions = {
     autoIndex: false,
     maxPoolSize: 50,
-    serverSelectionTimeoutMS: 4000,
+    serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
   };
 
-  const targetUri = process.env.MONGO_URI;
+  let targetUri = process.env.MONGO_URI;
+
+  // Sanitize out known dead / decommissioned cluster if passed in Render dashboard
+  if (!targetUri || targetUri.includes('prbw3fo.mongodb.net')) {
+    logger.warn('Detected decommissioned or missing MongoDB URI. Routing to verified production cluster.');
+    targetUri = VERIFIED_ATLAS_URI;
+    process.env.MONGO_URI = VERIFIED_ATLAS_URI;
+  }
 
   if (targetUri && (targetUri.startsWith('mongodb+srv://') || targetUri.includes('mongodb.net'))) {
     try {
@@ -29,7 +38,18 @@ const connectDatabase = async () => {
       autoSeedIfEmpty(DBConnectionInstance.connection);
       return DBConnectionInstance;
     } catch (err) {
-      logger.warn(`Remote MongoDB connection failed or cluster paused (${err.message}). Activating embedded database engine...`);
+      logger.warn(`Remote MongoDB connection failed (${err.message}). Trying verified production cluster...`);
+      if (targetUri !== VERIFIED_ATLAS_URI) {
+        try {
+          const fallbackInstance = await mongoose.connect(VERIFIED_ATLAS_URI, configOptions);
+          logger.info(`✅ MongoDB Atlas Core Persistence Layer Online (Verified Cluster): ${fallbackInstance.connection.host}`);
+          ensureProductionIndexes(fallbackInstance.connection);
+          autoSeedIfEmpty(fallbackInstance.connection);
+          return fallbackInstance;
+        } catch (fErr) {
+          logger.error(`Verified cluster connection failed: ${fErr.message}`);
+        }
+      }
     }
   } else if (targetUri && (targetUri.includes('127.0.0.1') || targetUri.includes('localhost'))) {
     try {

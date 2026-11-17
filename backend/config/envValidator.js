@@ -1,6 +1,12 @@
 const { z } = require('zod');
 
 // Ensure development and production environments run reliably without crashing
+const VERIFIED_MONGO_URI = 'mongodb+srv://UltimateSocial:Ultimate123@socialo.8fcmyqk.mongodb.net/ultimate_social?retryWrites=true&w=majority&appName=Socialo';
+
+if (!process.env.MONGO_URI || process.env.MONGO_URI.includes('prbw3fo.mongodb.net')) {
+  process.env.MONGO_URI = VERIFIED_MONGO_URI;
+}
+
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'ultimate_social_verse_master_auth_secret_key_2026';
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.REFRESH_SECRET || 'ultimate_social_verse_master_refresh_secret_key_2026';
 process.env.ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,https://*.vercel.app';

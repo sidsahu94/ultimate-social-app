@@ -8,11 +8,18 @@ const csvToArray = (value, fallback = []) => {
     .filter(Boolean);
 };
 
+const VERIFIED_MONGO_URI = 'mongodb+srv://UltimateSocial:Ultimate123@socialo.8fcmyqk.mongodb.net/ultimate_social?retryWrites=true&w=majority&appName=Socialo';
+
+let resolvedMongoUri = process.env.MONGO_URI || VERIFIED_MONGO_URI;
+if (resolvedMongoUri.includes('prbw3fo.mongodb.net')) {
+  resolvedMongoUri = VERIFIED_MONGO_URI;
+}
+
 const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: Number.parseInt(process.env.PORT || '5000', 10),
 
-  MONGO_URI: process.env.MONGO_URI || '',
+  MONGO_URI: resolvedMongoUri,
   JWT_SECRET: process.env.JWT_SECRET || 'ultimate_social_verse_master_auth_secret_key_2026',
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || process.env.REFRESH_SECRET || 'ultimate_social_verse_master_refresh_secret_key_2026',
 
