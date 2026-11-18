@@ -324,9 +324,12 @@ function AppContent() {
               isOpen={openCreate}
               onClose={() => setOpenCreate(false)}
               initialData={createContent}
-              onPosted={() => {
+              onPosted={(createdPost) => {
                 setOpenCreate(false);
                 setCreateContent(null);
+                if (createdPost && createdPost._id) {
+                  window.dispatchEvent(new CustomEvent('post:created', { detail: createdPost }));
+                }
               }}
             />
           </Suspense>

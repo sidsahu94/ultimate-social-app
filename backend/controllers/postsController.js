@@ -158,7 +158,10 @@ exports.createPost = async (req, res) => {
             addXP(req.user._id, 50, io);
 
             if (io) {
-                // 🔥 FIX: Prevent global broadcast leak. Fetch author's followers and target them specifically.
+                // Emit to author so their live client feed receives the new post immediately
+                io.to(req.user._id.toString()).emit('post:created', post);
+
+                // Fetch author's followers and target them specifically
                 const authorData = await User.findById(req.user._id).select('followers');
                 if (authorData && authorData.followers) {
                     authorData.followers.forEach(followerId => {

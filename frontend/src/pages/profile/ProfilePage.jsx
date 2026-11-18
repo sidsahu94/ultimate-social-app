@@ -561,9 +561,11 @@ export default function ProfilePage() {
 
         {createPostOpen && (
           <CreatePostModal
-            open={createPostOpen}
+            isOpen={createPostOpen}
             onClose={() => setCreatePostOpen(false)}
-            onPostCreated={(p) => setPosts((prev) => [p, ...prev])}
+            onPosted={(p) => {
+              if (p) setPosts((prev) => [p, ...prev]);
+            }}
           />
         )}
 

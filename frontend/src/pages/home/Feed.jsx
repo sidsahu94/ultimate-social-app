@@ -181,7 +181,7 @@ export default function Feed() {
   
   const { user: currentUser } = useSelector((state) => state.auth);
 
-  const [posts, setPosts] = useState(SHOWCASE_POSTS);
+  const [posts, setPosts] = useState([]);
   const [feedType, setFeedType] = useState('forYou');
   const [cursorDate, setCursorDate] = useState(null); 
   const [cursorId, setCursorId] = useState(null);     
@@ -233,7 +233,8 @@ export default function Feed() {
       if (reset) {
         const seen = new Set();
         const combined = [];
-        for (const p of [...backendPosts, ...SHOWCASE_POSTS]) {
+        const pool = backendPosts.length > 0 ? backendPosts : SHOWCASE_POSTS;
+        for (const p of pool) {
           if (!seen.has(p._id)) {
             seen.add(p._id);
             combined.push(p);
@@ -308,32 +309,51 @@ export default function Feed() {
     load(true);
   }, []);
 
-  // --- REAL-TIME POST SOCKET LISTENER & NEW UPDATES BADGE ---
+  // --- REAL-TIME POST SOCKET & LOCAL EVENT LISTENER ---
   useEffect(() => {
-    if (!socket) return;
     const handleNewPost = (post) => {
-      if (getScrollPosition() < 120) {
-        setPosts((prev) => [post, ...prev.filter((p) => p._id !== post._id)]);
-      } else {
-        setNewUpdatesCount((prev) => prev + 1);
+      if (!post || !post._id) return;
+      const cleanNewId = String(post._id).split('_loop_')[0];
+      setPosts((prev) => {
+        const exists = prev.some((p) => String(p._id).split('_loop_')[0] === cleanNewId);
+        if (exists) return prev;
+        return [post, ...prev];
+      });
+      setNewUpdatesCount(0);
+      if (getScrollPosition() < 400) {
+        smoothScrollToTop(true);
       }
     };
-    socket.on('post:created', handleNewPost);
-    return () => socket.off('post:created', handleNewPost);
+
+    const handleCustomPostCreated = (e) => {
+      if (e.detail) {
+        handleNewPost(e.detail);
+      }
+    };
+
+    window.addEventListener('post:created', handleCustomPostCreated);
+    if (socket) socket.on('post:created', handleNewPost);
+
+    return () => {
+      window.removeEventListener('post:created', handleCustomPostCreated);
+      if (socket) socket.off('post:created', handleNewPost);
+    };
   }, []);
 
-  // --- PERIODIC BACKGROUND CHECK FOR FRESH UPDATES ---
+  // --- PERIODIC BACKGROUND CHECK FOR FRESH UPDATES (ID-MATCHED) ---
   useEffect(() => {
     const checkUpdates = async () => {
-      if (document.visibilityState !== 'visible' || !posts[0]?.createdAt) return;
+      if (document.visibilityState !== 'visible' || posts.length === 0) return;
       try {
         const res = await API.get('/posts/feed?limit=3');
         const latest = Array.isArray(res.data?.data) ? res.data.data : [];
-        if (latest.length > 0 && posts[0]?.createdAt) {
-          const latestServerTime = new Date(latest[0].createdAt).getTime();
-          const currentFirstTime = new Date(posts[0].createdAt).getTime();
-          if (latestServerTime > currentFirstTime) {
-            setNewUpdatesCount((prev) => Math.max(prev, latest.length));
+        if (latest.length > 0) {
+          const existingIds = new Set(posts.map((p) => String(p._id).split('_loop_')[0]));
+          const trulyNew = latest.filter((p) => !existingIds.has(String(p._id)));
+          if (trulyNew.length > 0) {
+            setNewUpdatesCount(trulyNew.length);
+          } else {
+            setNewUpdatesCount(0);
           }
         }
       } catch (_) {}
@@ -545,9 +565,14 @@ export default function Feed() {
           isOpen={openCreate} 
           onClose={() => setOpenCreate(false)} 
           initialTab={createInitialTab}
-          onPosted={() => {
+          onPosted={(createdPost) => {
             setOpenCreate(false);
-            load(true);
+            if (createdPost && createdPost._id) {
+              setPosts((prev) => [createdPost, ...prev.filter((p) => String(p._id) !== String(createdPost._id))]);
+              smoothScrollToTop(true);
+            } else {
+              load(true);
+            }
           }} 
         />
 

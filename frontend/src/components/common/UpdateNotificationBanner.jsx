@@ -10,34 +10,33 @@ export default function UpdateNotificationBanner() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    // 1. Check if previous user has an older version saved
-    const savedVersion = localStorage.getItem('socialverse_app_version');
-    if (!savedVersion || savedVersion !== APP_CURRENT_VERSION) {
-      const timer = setTimeout(() => setShowUpdate(true), 2500);
-      return () => clearTimeout(timer);
-    }
+    // 1. Mark current version without intrusive timers
+    try {
+      localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
+    } catch (_) {}
 
-    // 2. Listen to Service Worker updates
+    // 2. Listen to genuine Service Worker updates in the background without forcing reloads
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then((registration) => {
+        // If there's already a waiting worker and user hasn't dismissed this session
+        if (registration.waiting && !sessionStorage.getItem('dismissed_update')) {
+          setShowUpdate(true);
+        }
+
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              if (
+                newWorker.state === 'installed' && 
+                navigator.serviceWorker.controller && 
+                !sessionStorage.getItem('dismissed_update')
+              ) {
                 setShowUpdate(true);
               }
             });
           }
         });
-      });
-
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
       });
     }
   }, []);
@@ -45,9 +44,12 @@ export default function UpdateNotificationBanner() {
   const handleApplyUpdate = async () => {
     setIsUpdating(true);
     try {
-      localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
+      try {
+        localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
+        sessionStorage.setItem('dismissed_update', 'true');
+      } catch (_) {}
 
-      // Clear all old caches
+      // Clear old caches
       if ('caches' in window) {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map((name) => caches.delete(name)));
@@ -61,16 +63,19 @@ export default function UpdateNotificationBanner() {
         }
       }
 
-      // Hard reload with clean cache
-      window.location.reload(true);
+      // Smooth clean reload once
+      window.location.reload();
     } catch (err) {
       console.warn('Update apply fallback:', err);
-      window.location.reload(true);
+      window.location.reload();
     }
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
+    try {
+      localStorage.setItem('socialverse_app_version', APP_CURRENT_VERSION);
+      sessionStorage.setItem('dismissed_update', 'true');
+    } catch (_) {}
     setShowUpdate(false);
   };
 

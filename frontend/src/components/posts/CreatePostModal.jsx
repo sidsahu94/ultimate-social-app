@@ -21,7 +21,17 @@ const FILTERS = [
   { name: 'Warm', val: 'sepia(0.3) saturate(1.4)' },
 ];
 
-export default function CreatePostModal({ isOpen, onClose, onPosted, initialData, initialTab }) {
+export default function CreatePostModal({ 
+  isOpen: propIsOpen, 
+  open, 
+  onClose, 
+  onPosted, 
+  onPostCreated, 
+  initialData, 
+  initialTab 
+}) {
+  const isOpen = propIsOpen !== undefined ? propIsOpen : Boolean(open);
+  const notifyPosted = onPosted || onPostCreated;
   const [activeTab, setActiveTab] = useState('post'); 
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
@@ -201,15 +211,22 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
     try {
       const fd = new FormData();
 
+      let createdItem = null;
+
       if (activeTab === 'poll') {
         if (!pollQ || pollOpts.some(o => !o.trim())) throw new Error("Incomplete poll data");
-        await API.post('/polls', { question: pollQ, options: pollOpts });
+        const res = await API.post('/polls', { question: pollQ, options: pollOpts });
+        createdItem = res.data?.data || res.data;
+        if (createdItem && createdItem._id) {
+          window.dispatchEvent(new CustomEvent('post:created', { detail: createdItem }));
+        }
       } 
       else if (activeTab === 'reel') {
          if (files.length === 0) throw new Error("Video required for Reel");
          fd.append('video', files[0]);
          fd.append('caption', text);
-         await API.post('/reels/upload', fd);
+         const res = await API.post('/reels/upload', fd);
+         createdItem = res.data?.data || res.data;
       } 
       else {
          fd.append('content', text);
@@ -223,13 +240,17 @@ export default function CreatePostModal({ isOpen, onClose, onPosted, initialData
              fd.append('media', processed, f.name || 'image.jpg');
          }
 
-         await API.post('/posts', fd);
+         const res = await API.post('/posts', fd);
+         createdItem = res.data?.data || res.data;
+         if (createdItem && createdItem._id) {
+           window.dispatchEvent(new CustomEvent('post:created', { detail: createdItem }));
+         }
       }
 
       if (!isSaveDraft) {
         localStorage.removeItem('socialverse_draft_post');
       }
-      if (onPosted) onPosted();
+      if (notifyPosted) notifyPosted(createdItem);
       onClose();
       add(isSaveDraft ? 'Draft saved!' : 'Posted successfully!', { type: 'success' });
     } catch(err) {
